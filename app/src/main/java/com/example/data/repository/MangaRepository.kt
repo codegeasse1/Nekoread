@@ -368,7 +368,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
     private fun dexCacheDir(): File = File(app.cacheDir, "ext_dex")
 
     /** Persist source rows for a freshly-loaded extension and register its adapters in the registry. */
-    private fun registerExtensionSources(ext: ExtensionEntity, sources: List<Source>): Boolean {
+    private suspend fun registerExtensionSources(ext: ExtensionEntity, sources: List<Source>): Boolean {
         val rows = mutableListOf<ExtensionSourceEntity>()
         for (s in sources) {
             if (s !is HttpSource) continue // non-HTTP sources aren't browsable in-app yet

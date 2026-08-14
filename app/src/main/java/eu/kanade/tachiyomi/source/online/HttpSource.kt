@@ -80,7 +80,9 @@ abstract class HttpSource : CatalogueSource {
     abstract protected fun latestUpdatesParse(response: Response): MangasPage
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        client.newCall(mangaDetailsRequest(manga)).asObservableSuccess().map(::mangaDetailsParse)
+        client.newCall(mangaDetailsRequest(manga)).asObservableSuccess().map { response ->
+            mangaDetailsParse(response).apply { initialized = true }
+        }
 
     open fun mangaDetailsRequest(manga: SManga): Request =
         GET(getMangaUrl(manga), headers)
@@ -132,6 +134,19 @@ abstract class HttpSource : CatalogueSource {
             orig
         }
     }
+
+    override val supportsRelatedMangas: Boolean get() = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        throw UnsupportedOperationException("Related mangas are not supported")
+    }
+
+    open protected fun relatedMangaListRequest(manga: SManga): Request {
+        throw UnsupportedOperationException("Related mangas are not supported")
+    }
+
+    open protected fun relatedMangaListParse(response: Response): List<SManga> =
+        throw UnsupportedOperationException("Related mangas are not supported")
 
     open fun getMangaUrl(manga: SManga): String =
         if (manga.url.startsWith("http")) manga.url else baseUrl + manga.url
