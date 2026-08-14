@@ -293,6 +293,9 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         if (ext.apkUrl.isBlank()) return@withContext "This extension has no APK URL"
 
         val dest = apkFile(packageName)
+        // A previously-installed APK is stored read-only (so Android 14+ will load it); make it
+        // writable again so the download can overwrite it on reinstall.
+        if (dest.exists()) dest.setWritable(true)
         try {
             ExtensionNetwork.downloadApk(ext.apkUrl, dest)
         } catch (e: ExtensionNetworkException) {
@@ -317,6 +320,11 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
             db.extensionDao().updateExtensionInstallState(packageName, false, null, "Package mismatch")
             return@withContext "APK package (${info.packageName}) does not match index package ($packageName)"
         }
+
+        // Android 14+ refuses to load a dex/APK file that is writable
+        // ("Writable dex file '...' is not allowed."). The standard fix is to mark the file
+        // read-only before handing it to the class loader.
+        dest.setReadOnly()
 
         try {
             val sources = ExtensionDexLoader.loadApk(dest, dexCacheDir(), packageName)
@@ -352,6 +360,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
                 continue
             }
             try {
+                if (dest.exists()) dest.setReadOnly() // Android 14+ requires read-only dex files
                 val sources = ExtensionDexLoader.loadApk(dest, dexCacheDir(), ext.packageName)
                 val registered = registerExtensionSources(ext, sources)
                 if (!registered) {
