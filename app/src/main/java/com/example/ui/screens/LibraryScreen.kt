@@ -237,7 +237,7 @@ fun LibraryScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Explore Mihon & Aniyomi extensions, Asura Scans, Flame Comics & MangaDex to add your favorite Manhwa and Manga!",
+                        text = "Search the MangaDex catalog (via the Explore button) to add real manga and manhwa to your library.",
                         style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                         textAlign = TextAlign.Center
                     )

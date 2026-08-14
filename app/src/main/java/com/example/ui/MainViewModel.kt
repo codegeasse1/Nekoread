@@ -77,6 +77,62 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val extensionSources: StateFlow<List<ExtensionSourceEntity>> = repository.extensionSources
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Live catalog browsing state (real sources)
+    private val _catalogResults = MutableStateFlow<List<MangaEntity>>(emptyList())
+    val catalogResults: StateFlow<List<MangaEntity>> = _catalogResults.asStateFlow()
+
+    private val _catalogLoading = MutableStateFlow(false)
+    val catalogLoading: StateFlow<Boolean> = _catalogLoading.asStateFlow()
+
+    private val _catalogError = MutableStateFlow<String?>(null)
+    val catalogError: StateFlow<String?> = _catalogError.asStateFlow()
+
+    private val _catalogSourceName = MutableStateFlow("MangaDex")
+    val catalogSourceName: StateFlow<String> = _catalogSourceName.asStateFlow()
+
+    // Detail screen loading state
+    private val _detailLoading = MutableStateFlow(false)
+    val detailLoading: StateFlow<Boolean> = _detailLoading.asStateFlow()
+
+    private val _detailError = MutableStateFlow<String?>(null)
+    val detailError: StateFlow<String?> = _detailError.asStateFlow()
+
+    fun loadCatalog(sourceId: String = "mangadex", query: String = "", page: Int = 0) {
+        viewModelScope.launch {
+            _catalogSourceName.value = repository.sourceForManga("$sourceId:x").name
+            _catalogLoading.value = true
+            _catalogError.value = null
+            try {
+                _catalogResults.value = repository.searchCatalog(sourceId, query, page)
+            } catch (e: Exception) {
+                _catalogResults.value = emptyList()
+                _catalogError.value = e.message ?: "Failed to load catalog"
+            } finally {
+                _catalogLoading.value = false
+            }
+        }
+    }
+
+    fun clearCatalog() {
+        _catalogResults.value = emptyList()
+        _catalogError.value = null
+    }
+
+    fun loadMangaDetail(mangaId: String) {
+        viewModelScope.launch {
+            _detailLoading.value = true
+            _detailError.value = null
+            try {
+                repository.ensureMangaInDb(mangaId)
+                repository.loadChapters(mangaId)
+            } catch (e: Exception) {
+                _detailError.value = e.message ?: "Failed to load manga"
+            } finally {
+                _detailLoading.value = false
+            }
+        }
+    }
+
     fun setReaderMode(mode: ReaderMode) {
         _readerMode.value = mode
     }

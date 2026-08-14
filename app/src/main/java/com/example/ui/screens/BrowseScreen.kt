@@ -1,7 +1,6 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,20 +19,22 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -46,6 +47,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,8 +61,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
-import com.example.data.extension.ExtensionEngine
 import com.example.data.local.ExtensionRepoEntity
 import com.example.data.local.ExtensionSourceEntity
 import com.example.data.local.MangaEntity
@@ -68,6 +68,7 @@ import com.example.ui.MainViewModel
 import com.example.ui.components.MangaGridCard
 import com.example.ui.theme.NekoGoldBadge
 import com.example.ui.theme.NekoVioletPrimary
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,19 +83,22 @@ fun BrowseScreen(
     val extensionSources: List<ExtensionSourceEntity> by viewModel.extensionSources.collectAsStateWithLifecycle()
     val extensionRepos: List<ExtensionRepoEntity> by viewModel.extensionRepos.collectAsStateWithLifecycle()
 
+    val catalogResults: List<MangaEntity> by viewModel.catalogResults.collectAsStateWithLifecycle()
+    val catalogLoading: Boolean by viewModel.catalogLoading.collectAsStateWithLifecycle()
+    val catalogError: String? by viewModel.catalogError.collectAsStateWithLifecycle()
+    val catalogSourceName: String by viewModel.catalogSourceName.collectAsStateWithLifecycle()
+
     var searchQuery by remember { mutableStateOf("") }
-    var selectedGenre by remember { mutableStateOf("All") }
+    var activeSourceId by remember { mutableStateOf("mangadex") }
     var showAddRepoDialog by remember { mutableStateOf(false) }
     var repoUrlInput by remember { mutableStateOf("") }
     var repoNameInput by remember { mutableStateOf("") }
 
-    val genres = listOf("All", "System", "Action", "Fantasy", "Reincarnation", "Tower", "Romance", "Dungeon")
-
-    val catalogResults = remember(searchQuery, selectedGenre) {
-        ExtensionEngine.sampleCatalog.filter { manga ->
-            val matchesGenre = selectedGenre == "All" || manga.genres.contains(selectedGenre, ignoreCase = true)
-            val matchesQuery = searchQuery.isBlank() || manga.title.contains(searchQuery, ignoreCase = true) || manga.sourceName.contains(searchQuery, ignoreCase = true)
-            matchesGenre && matchesQuery
+    // Debounced real search against the active source.
+    LaunchedEffect(searchQuery, activeSourceId) {
+        if (selectedTabIndex == 1) {
+            delay(350)
+            viewModel.loadCatalog(activeSourceId, searchQuery)
         }
     }
 
@@ -118,7 +122,12 @@ fun BrowseScreen(
                     tabs.forEachIndexed { index, title ->
                         Tab(
                             selected = selectedTabIndex == index,
-                            onClick = { selectedTabIndex = index },
+                            onClick = {
+                                selectedTabIndex = index
+                                if (index == 1 && catalogResults.isEmpty() && !catalogLoading) {
+                                    viewModel.loadCatalog(activeSourceId, searchQuery)
+                                }
+                            },
                             text = { Text(title, fontWeight = FontWeight.Bold) },
                             modifier = Modifier.testTag("browse_tab_$index")
                         )
@@ -137,16 +146,20 @@ fun BrowseScreen(
                 0 -> SourcesTabContent(
                     sources = extensionSources,
                     onBrowseSource = { source ->
+                        activeSourceId = source.id
+                        searchQuery = ""
+                        viewModel.loadCatalog(source.id, "")
                         selectedTabIndex = 1
                     }
                 )
                 1 -> CatalogTabContent(
                     searchQuery = searchQuery,
                     onSearchQueryChange = { searchQuery = it },
-                    selectedGenre = selectedGenre,
-                    onGenreSelect = { selectedGenre = it },
-                    genres = genres,
                     results = catalogResults,
+                    isLoading = catalogLoading,
+                    error = catalogError,
+                    sourceName = catalogSourceName,
+                    onRetry = { viewModel.loadCatalog(activeSourceId, searchQuery) },
                     onMangaClick = onMangaClick
                 )
                 2 -> ReposTabContent(
@@ -175,7 +188,7 @@ fun BrowseScreen(
             text = {
                 Column {
                     Text(
-                        text = "Paste a custom Mihon / Aniyomi extension repository JSON URL to automatically fetch new manga & manhwa sources.",
+                        text = "Paste a custom Mihon / Aniyomi extension repository index URL.",
                         style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                     )
                     Spacer(modifier = Modifier.height(12.dp))
@@ -235,7 +248,7 @@ fun SourcesTabContent(
     ) {
         item {
             Text(
-                text = "Installed Mihon & Aniyomi Extensions (${sources.size})",
+                text = "Available Sources (${sources.size})",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.primary
             )
@@ -254,13 +267,21 @@ fun SourcesTabContent(
                         .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    AsyncImage(
-                        model = source.iconUrl,
-                        contentDescription = source.name,
+                    Box(
                         modifier = Modifier
                             .size(48.dp)
                             .clip(RoundedCornerShape(8.dp))
-                    )
+                            .background(NekoVioletPrimary),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = source.name.take(1),
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                    }
 
                     Spacer(modifier = Modifier.width(12.dp))
 
@@ -273,7 +294,7 @@ fun SourcesTabContent(
                             Spacer(modifier = Modifier.width(6.dp))
                             Icon(
                                 imageVector = Icons.Default.Verified,
-                                contentDescription = "Verified",
+                                contentDescription = "Working source",
                                 tint = NekoVioletPrimary,
                                 modifier = Modifier.size(16.dp)
                             )
@@ -283,6 +304,13 @@ fun SourcesTabContent(
 
                         Text(
                             text = "v${source.version} • ${source.lang.uppercase()} • ${source.sourceType}",
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        )
+
+                        Spacer(modifier = Modifier.height(2.dp))
+
+                        Text(
+                            text = "Live data from ${source.baseUrl}",
                             style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                         )
                     }
@@ -303,19 +331,19 @@ fun SourcesTabContent(
 fun CatalogTabContent(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
-    selectedGenre: String,
-    onGenreSelect: (String) -> Unit,
-    genres: List<String>,
     results: List<MangaEntity>,
+    isLoading: Boolean,
+    error: String?,
+    sourceName: String,
+    onRetry: () -> Unit,
     onMangaClick: (String) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        // Search & Genre Filter
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = onSearchQueryChange,
-                placeholder = { Text("Search across all sources...") },
+                placeholder = { Text("Search $sourceName...") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
@@ -332,44 +360,97 @@ fun CatalogTabContent(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(genres) { genre ->
-                    FilterChip(
-                        selected = selectedGenre == genre,
-                        onClick = { onGenreSelect(genre) },
-                        label = { Text(genre) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = CircleShape
+                ) {
+                    Text(
+                        text = if (searchQuery.isBlank()) "Latest from $sourceName" else "Results from $sourceName",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.onPrimaryContainer)
                     )
                 }
             }
         }
 
-        if (results.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(32.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "No manga or manhwa matching your filter",
-                    style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                )
+        when {
+            isLoading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Loading from $sourceName...",
+                            style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        )
+                    }
+                }
             }
-        } else {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 130.dp),
-                contentPadding = PaddingValues(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(results, key = { it.id }) { manga ->
-                    MangaGridCard(
-                        manga = manga,
-                        onClick = { onMangaClick(manga.id) }
+
+            error != null -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "Couldn't reach $sourceName",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = error,
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Button(onClick = onRetry) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Retry")
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Retry")
+                        }
+                    }
+                }
+            }
+
+            results.isEmpty() -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No manga found. Try a different search.",
+                        style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                     )
+                }
+            }
+
+            else -> {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 130.dp),
+                    contentPadding = PaddingValues(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(results, key = { it.id }) { manga ->
+                        MangaGridCard(
+                            manga = manga,
+                            onClick = { onMangaClick(manga.id) }
+                        )
+                    }
                 }
             }
         }

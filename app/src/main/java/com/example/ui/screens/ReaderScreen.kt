@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.NavigateNext
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -62,7 +63,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
-import com.example.data.extension.ExtensionEngine
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
 import com.example.ui.MainViewModel
@@ -94,8 +94,22 @@ fun ReaderScreen(
     val readerMode: ReaderMode by viewModel.readerMode.collectAsStateWithLifecycle()
     val readerBg: ReaderBg by viewModel.readerBg.collectAsStateWithLifecycle()
 
-    val pages = remember(manga.id, chapter.chapterNumber) {
-        ExtensionEngine.getChapterPages(manga.id, chapter.chapterNumber)
+    var pages by remember { mutableStateOf<List<String>?>(null) }
+    var pageError by remember { mutableStateOf<String?>(null) }
+    var pageLoading by remember { mutableStateOf(true) }
+    var retryKey by remember { mutableStateOf(0) }
+
+    LaunchedEffect(chapter.id, retryKey) {
+        pageLoading = true
+        pageError = null
+        try {
+            pages = viewModel.repository.getChapterPageUrls(chapter.id)
+        } catch (e: Exception) {
+            pageError = e.message ?: "Failed to load chapter pages"
+            pages = null
+        } finally {
+            pageLoading = false
+        }
     }
 
     val coroutineScope = rememberCoroutineScope()
@@ -116,22 +130,27 @@ fun ReaderScreen(
     // Paged Reader State
     val pagerState = rememberPagerState(
         initialPage = (chapter.lastPageRead - 1).coerceAtLeast(0),
-        pageCount = { pages.size }
+        pageCount = { pages?.size ?: 0 }
     )
 
     val currentPage by remember {
         derivedStateOf {
-            if (readerMode == ReaderMode.WEBTOON) {
-                (listState.firstVisibleItemIndex + 1).coerceAtMost(pages.size)
+            val total = pages?.size ?: 0
+            if (total == 0) {
+                0
+            } else if (readerMode == ReaderMode.WEBTOON) {
+                (listState.firstVisibleItemIndex + 1).coerceAtMost(total)
             } else {
-                (pagerState.currentPage + 1).coerceAtMost(pages.size)
+                (pagerState.currentPage + 1).coerceAtMost(total)
             }
         }
     }
 
     // Save reading progress on page change
     LaunchedEffect(currentPage) {
-        viewModel.saveProgress(manga.id, chapter.id, chapter.name, currentPage)
+        if (currentPage > 0) {
+            viewModel.saveProgress(manga.id, chapter.id, chapter.name, currentPage)
+        }
     }
 
     val prevChapter = remember(allChapters, chapter) {
@@ -153,73 +172,125 @@ fun ReaderScreen(
             }
             .testTag("reader_container")
     ) {
-        // Reader Content (Webtoon vs Paged)
-        if (readerMode == ReaderMode.WEBTOON) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                itemsIndexed(pages) { index, pageUrl ->
-                    AsyncImage(
-                        model = pageUrl,
-                        contentDescription = "Page ${index + 1}",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("reader_page_$index"),
-                        contentScale = ContentScale.FillWidth
-                    )
-                }
-
-                // Next Chapter Prompt Footer
-                item {
+        // Reader Content (loading / error / pages)
+        when {
+            pageLoading || pages == null -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator(color = contentTextColor)
+                        Text(
+                            text = "Loading pages...",
+                            style = MaterialTheme.typography.bodyMedium.copy(color = contentTextColor)
+                        )
+                    }
+                }
+            }
+
+            pageError != null -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        modifier = Modifier.padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text(
-                            text = "End of ${chapter.name}",
+                            text = "Couldn't load this chapter",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = contentTextColor
                             )
                         )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        if (nextChapter != null) {
-                            Button(
-                                onClick = { onChapterChange(nextChapter.id) },
-                                modifier = Modifier.testTag("next_chapter_button")
-                            ) {
-                                Text("Read Next: ${nextChapter.name}")
-                            }
-                        } else {
-                            Text(
-                                text = "You have caught up with the latest released chapter!",
-                                style = MaterialTheme.typography.bodySmall.copy(color = contentTextColor.copy(alpha = 0.7f))
-                            )
+                        Text(
+                            text = pageError ?: "",
+                            style = MaterialTheme.typography.bodySmall.copy(color = contentTextColor.copy(alpha = 0.7f)),
+                            maxLines = 3
+                        )
+                        Button(onClick = { retryKey++ }) {
+                            Text("Retry")
                         }
                     }
                 }
             }
-        } else {
-            HorizontalPager(
-                state = pagerState,
-                reverseLayout = readerMode == ReaderMode.RIGHT_TO_LEFT,
-                modifier = Modifier.fillMaxSize()
-            ) { pageIndex ->
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    AsyncImage(
-                        model = pages[pageIndex],
-                        contentDescription = "Page ${pageIndex + 1}",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Fit
-                    )
+
+            else -> {
+                val pageList = pages!!
+                if (readerMode == ReaderMode.WEBTOON) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        itemsIndexed(pageList) { index, pageUrl ->
+                            AsyncImage(
+                                model = pageUrl,
+                                contentDescription = "Page ${index + 1}",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("reader_page_$index"),
+                                contentScale = ContentScale.FillWidth
+                            )
+                        }
+
+                        // Next Chapter Prompt Footer
+                        item {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(32.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "End of ${chapter.name}",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = contentTextColor
+                                    )
+                                )
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                if (nextChapter != null) {
+                                    Button(
+                                        onClick = { onChapterChange(nextChapter.id) },
+                                        modifier = Modifier.testTag("next_chapter_button")
+                                    ) {
+                                        Text("Read Next: ${nextChapter.name}")
+                                    }
+                                } else {
+                                    Text(
+                                        text = "You have caught up with the latest released chapter!",
+                                        style = MaterialTheme.typography.bodySmall.copy(color = contentTextColor.copy(alpha = 0.7f))
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    HorizontalPager(
+                        state = pagerState,
+                        reverseLayout = readerMode == ReaderMode.RIGHT_TO_LEFT,
+                        modifier = Modifier.fillMaxSize()
+                    ) { pageIndex ->
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AsyncImage(
+                                model = pageList[pageIndex],
+                                contentDescription = "Page ${pageIndex + 1}",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -307,7 +378,7 @@ fun ReaderScreen(
                         }
 
                         Text(
-                            text = "Page $currentPage / ${pages.size}",
+                            text = "Page $currentPage / ${pages?.size ?: 0}",
                             style = MaterialTheme.typography.labelLarge.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
@@ -339,7 +410,7 @@ fun ReaderScreen(
                                 }
                             }
                         },
-                        valueRange = 1f..pages.size.toFloat(),
+                        valueRange = 1f..(pages?.size ?: 1).coerceAtLeast(1).toFloat(),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("reader_page_slider")

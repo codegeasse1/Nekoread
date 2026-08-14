@@ -19,6 +19,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -174,13 +175,21 @@ fun MainAppScreen(viewModel: MainViewModel) {
                 arguments = listOf(navArgument("mangaId") { type = NavType.StringType })
             ) { backStackEntry ->
                 val mangaId = backStackEntry.arguments?.getString("mangaId") ?: ""
+                LaunchedEffect(mangaId) {
+                    viewModel.loadMangaDetail(mangaId)
+                }
                 val mangaState by viewModel.repository.getMangaFlow(mangaId).collectAsStateWithLifecycle(initialValue = null)
                 val chaptersState by viewModel.repository.getChaptersFlow(mangaId).collectAsStateWithLifecycle(initialValue = emptyList())
+                val detailLoading by viewModel.detailLoading.collectAsStateWithLifecycle()
+                val detailError by viewModel.detailError.collectAsStateWithLifecycle()
 
                 MangaDetailScreen(
                     viewModel = viewModel,
                     manga = mangaState,
                     chapters = chaptersState,
+                    isLoading = detailLoading,
+                    loadError = detailError,
+                    onRetry = { viewModel.loadMangaDetail(mangaId) },
                     onBackClick = { navController.popBackStack() },
                     onChapterClick = { chapterId ->
                         navController.navigate("reader/$mangaId/$chapterId")

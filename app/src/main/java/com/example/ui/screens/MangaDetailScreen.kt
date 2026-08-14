@@ -26,12 +26,14 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -76,13 +78,43 @@ fun MangaDetailScreen(
     viewModel: MainViewModel,
     manga: MangaEntity?,
     chapters: List<ChapterEntity>,
+    isLoading: Boolean,
+    loadError: String?,
+    onRetry: () -> Unit,
     onBackClick: () -> Unit,
     onChapterClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (manga == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Manga details not found.")
+            when {
+                isLoading -> {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("Loading manga details...")
+                    }
+                }
+                loadError != null -> {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "Couldn't load this manga",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = loadError,
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        )
+                        Button(onClick = onRetry) {
+                            Text("Retry")
+                        }
+                    }
+                }
+                else -> Text("Manga details not found.")
+            }
         }
         return
     }
@@ -345,18 +377,34 @@ fun MangaDetailScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "${chapters.size} Chapters",
+                        text = when {
+                            isLoading -> "Loading chapters..."
+                            loadError != null && chapters.isEmpty() -> "Failed to load chapters"
+                            else -> "${chapters.size} Chapters"
+                        },
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                     )
 
-                    IconButton(
-                        onClick = { isSortAscending = !isSortAscending },
-                        modifier = Modifier.testTag("sort_chapters_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Sort,
-                            contentDescription = "Sort Chapters"
-                        )
+                    if (loadError != null && chapters.isEmpty()) {
+                        IconButton(
+                            onClick = onRetry,
+                            modifier = Modifier.testTag("retry_chapters_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Retry"
+                            )
+                        }
+                    } else {
+                        IconButton(
+                            onClick = { isSortAscending = !isSortAscending },
+                            modifier = Modifier.testTag("sort_chapters_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Sort,
+                                contentDescription = "Sort Chapters"
+                            )
+                        }
                     }
                 }
             }
