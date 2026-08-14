@@ -77,17 +77,18 @@ jobs:
 
           git fetch origin build || true
           if git rev-parse --verify origin/build > /dev/null 2>&1; then
-            git checkout build
+            git switch build
           else
-            git checkout --orphan build
+            git switch --orphan build
           fi
+          git rm -rf --quiet . || true
 
           if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
             cp app/build/outputs/apk/debug/app-debug.apk Nekoread-debug.apk
-            rm -f build-error.log
+            rm -f gradle-build.log build-error.log
           else
             cp gradle-build.log build-error.log
-            rm -f Nekoread-debug.apk
+            rm -f gradle-build.log
           fi
 
           cat > README.md <<'EOF'

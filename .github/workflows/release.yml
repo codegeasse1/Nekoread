@@ -106,9 +106,9 @@ jobs:
 
           git fetch origin build || true
           if git rev-parse --verify origin/build > /dev/null 2>&1; then
-            git checkout build
+            git switch build
           else
-            git checkout --orphan build
+            git switch --orphan build
           fi
 
           cp app/build/outputs/apk/release/app-release.apk "Nekoread-$VERSION.apk"
