@@ -25,30 +25,31 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -61,6 +62,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -70,13 +72,24 @@ import com.example.data.local.ExtensionRepoEntity
 import com.example.data.local.ExtensionSourceEntity
 import com.example.data.local.MangaEntity
 import com.example.ui.MainViewModel
+import com.example.ui.components.GlassCard
+import com.example.ui.components.GlassSearchBar
 import com.example.ui.components.MangaGridCard
+import com.example.ui.components.MangaListCard
+import com.example.ui.theme.GlassCardBorder
+import com.example.ui.theme.GlassSurface
 import com.example.ui.theme.NekoGoldBadge
 import com.example.ui.theme.NekoVioletPrimary
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private const val TAB_SOURCES = 0
+private const val TAB_GLOBAL = 1
+private const val TAB_CATALOG = 2
+private const val TAB_EXTENSIONS = 3
+private const val TAB_REPOS = 4
 
 private fun formatTimestamp(ts: Long): String =
     if (ts <= 0L) "Never fetched"
@@ -85,15 +98,24 @@ private fun formatTimestamp(ts: Long): String =
 private fun isMangaDexBacked(source: ExtensionSourceEntity): Boolean =
     source.baseUrl.contains("mangadex.org")
 
+private fun contentWarningLabel(cw: String): String? = when (cw) {
+    "CONTENT_WARNING_SAFE" -> "Safe"
+    "CONTENT_WARNING_SUGGESTIVE" -> "Suggestive"
+    "CONTENT_WARNING_EROTICA" -> "Erotica"
+    "CONTENT_WARNING_PORN" -> "Porn"
+    else -> cw.ifBlank { null }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BrowseScreen(
     viewModel: MainViewModel,
     onMangaClick: (String) -> Unit,
+    onOpenWebView: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var selectedTabIndex by remember { mutableStateOf(0) }
-    val tabs = listOf("Sources", "Catalog", "Extensions", "Repos")
+    var selectedTabIndex by remember { mutableStateOf(TAB_SOURCES) }
+    val tabs = listOf("Sources", "Global", "Catalog", "Extensions", "Repos")
 
     val extensionSources: List<ExtensionSourceEntity> by viewModel.extensionSources.collectAsStateWithLifecycle()
     val extensionRepos: List<ExtensionRepoEntity> by viewModel.extensionRepos.collectAsStateWithLifecycle()
@@ -106,8 +128,15 @@ fun BrowseScreen(
     val catalogError: String? by viewModel.catalogError.collectAsStateWithLifecycle()
     val catalogSourceName: String by viewModel.catalogSourceName.collectAsStateWithLifecycle()
 
+    val globalResults: List<MangaEntity> by viewModel.globalResults.collectAsStateWithLifecycle()
+    val globalLoading: Boolean by viewModel.globalLoading.collectAsStateWithLifecycle()
+    val globalError: String? by viewModel.globalError.collectAsStateWithLifecycle()
+    val globalSearchedSources: Int by viewModel.globalSearchedSources.collectAsStateWithLifecycle()
+
     var searchQuery by remember { mutableStateOf("") }
+    var globalQuery by remember { mutableStateOf("") }
     var activeSourceId by remember { mutableStateOf("") }
+    var activeSourceBaseUrl by remember { mutableStateOf("") }
     var showAddRepoDialog by remember { mutableStateOf(false) }
     var repoUrlInput by remember { mutableStateOf("") }
     var repoNameInput by remember { mutableStateOf("") }
@@ -126,20 +155,34 @@ fun BrowseScreen(
 
     // Debounced real search against the active source.
     LaunchedEffect(searchQuery, activeSourceId) {
-        if (selectedTabIndex == 1 && activeSourceId.isNotBlank()) {
+        if (selectedTabIndex == TAB_CATALOG && activeSourceId.isNotBlank()) {
             delay(350)
             viewModel.loadCatalog(activeSourceId, searchQuery)
+        }
+    }
+
+    // Debounced global search across every installed source.
+    LaunchedEffect(globalQuery) {
+        if (selectedTabIndex == TAB_GLOBAL) {
+            if (globalQuery.isBlank()) {
+                viewModel.clearGlobalSearch()
+            } else {
+                delay(400)
+                viewModel.globalSearch(globalQuery)
+            }
         }
     }
 
     val repoNameById: Map<String, String> = extensionRepos.associate { it.id to it.name }
 
     Scaffold(
+        containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0),
         topBar = {
-            Column {
+            Column(modifier = Modifier.background(GlassSurface)) {
                 TopAppBar(
                     windowInsets = WindowInsets(0),
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                     title = {
                         Text(
                             text = "Browse & Extensions",
@@ -151,7 +194,7 @@ fun BrowseScreen(
 
                 ScrollableTabRow(
                     selectedTabIndex = selectedTabIndex,
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = Color.Transparent,
                     edgePadding = 8.dp
                 ) {
                     tabs.forEachIndexed { index, title ->
@@ -159,7 +202,9 @@ fun BrowseScreen(
                             selected = selectedTabIndex == index,
                             onClick = {
                                 selectedTabIndex = index
-                                if (index == 1 && activeSourceId.isNotBlank() && catalogResults.isEmpty() && !catalogLoading) {
+                                if (index == TAB_CATALOG && activeSourceId.isNotBlank() &&
+                                    catalogResults.isEmpty() && !catalogLoading
+                                ) {
                                     viewModel.loadCatalog(activeSourceId, searchQuery)
                                 }
                             },
@@ -168,6 +213,7 @@ fun BrowseScreen(
                         )
                     }
                 }
+                HorizontalDivider(color = GlassCardBorder)
             }
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -179,34 +225,47 @@ fun BrowseScreen(
                 .padding(innerPadding)
         ) {
             when (selectedTabIndex) {
-                0 -> SourcesTabContent(
+                TAB_SOURCES -> SourcesTabContent(
                     sources = extensionSources.filter { it.isInstalled },
                     onBrowseSource = { source ->
                         activeSourceId = source.id
+                        activeSourceBaseUrl = source.baseUrl
                         searchQuery = ""
                         viewModel.loadCatalog(source.id, "")
-                        selectedTabIndex = 1
-                    }
+                        selectedTabIndex = TAB_CATALOG
+                    },
+                    onOpenWebView = onOpenWebView
                 )
-                1 -> CatalogTabContent(
+                TAB_GLOBAL -> GlobalSearchTabContent(
+                    query = globalQuery,
+                    onQueryChange = { globalQuery = it },
+                    results = globalResults,
+                    isLoading = globalLoading,
+                    error = globalError,
+                    searchedSources = globalSearchedSources,
+                    onMangaClick = onMangaClick
+                )
+                TAB_CATALOG -> CatalogTabContent(
                     searchQuery = searchQuery,
                     onSearchQueryChange = { searchQuery = it },
                     results = catalogResults,
                     isLoading = catalogLoading,
                     error = catalogError,
                     sourceName = catalogSourceName,
+                    sourceBaseUrl = activeSourceBaseUrl,
                     hasSource = activeSourceId.isNotBlank(),
                     onRetry = { viewModel.loadCatalog(activeSourceId, searchQuery) },
-                    onMangaClick = onMangaClick
+                    onMangaClick = onMangaClick,
+                    onOpenWebView = onOpenWebView
                 )
-                2 -> ExtensionsTabContent(
+                TAB_EXTENSIONS -> ExtensionsTabContent(
                     extensions = extensions,
                     repoNameById = repoNameById,
                     busyKey = opBusy,
                     onInstall = { viewModel.installExtension(it) },
                     onUninstall = { viewModel.uninstallExtension(it) }
                 )
-                3 -> ReposTabContent(
+                TAB_REPOS -> ReposTabContent(
                     repos = extensionRepos,
                     busyKey = opBusy,
                     onAddRepoClick = { showAddRepoDialog = true },
@@ -350,112 +409,284 @@ fun AddRepoDialog(
 @Composable
 fun SourcesTabContent(
     sources: List<ExtensionSourceEntity>,
-    onBrowseSource: (ExtensionSourceEntity) -> Unit
+    onBrowseSource: (ExtensionSourceEntity) -> Unit,
+    onOpenWebView: (String) -> Unit
 ) {
-    LazyColumn(
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.fillMaxSize()
-    ) {
-        item {
+    var query by remember { mutableStateOf("") }
+    val filtered = remember(sources, query) {
+        if (query.isBlank()) sources
+        else sources.filter {
+            it.name.contains(query, ignoreCase = true) ||
+                it.lang.contains(query, ignoreCase = true) ||
+                it.baseUrl.contains(query, ignoreCase = true)
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            GlassSearchBar(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = "Search sources..."
+            )
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Available Sources (${sources.size})",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                text = "Available Sources (${filtered.size} of ${sources.size})",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.primary
             )
         }
 
         if (sources.isEmpty()) {
-            item {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(
                     text = "No sources installed. Go to the Extensions tab, install an extension, then its sources appear here to browse.",
-                    style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                    textAlign = TextAlign.Center
                 )
             }
+            return@Column
         }
 
-        items(sources, key = { it.id }) { source ->
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                modifier = Modifier
+        LazyColumn(
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            items(filtered, key = { it.id }) { source ->
+                GlassCard(modifier = Modifier
                     .fillMaxWidth()
                     .testTag("source_card_${source.id}")
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (source.iconUrl.isNotBlank()) {
-                        AsyncImage(
-                            model = source.iconUrl,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(NekoVioletPrimary),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = source.name.take(1),
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold
-                                )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (source.iconUrl.isNotBlank()) {
+                            AsyncImage(
+                                model = source.iconUrl,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(8.dp))
                             )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = source.name,
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            if (isMangaDexBacked(source)) {
-                                Icon(
-                                    imageVector = Icons.Default.Verified,
-                                    contentDescription = "Working source",
-                                    tint = NekoVioletPrimary,
-                                    modifier = Modifier.size(16.dp)
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(NekoVioletPrimary),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = source.name.take(1),
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(2.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
 
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = source.name,
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                if (isMangaDexBacked(source)) {
+                                    Icon(
+                                        imageVector = Icons.Default.Verified,
+                                        contentDescription = "Working source",
+                                        tint = NekoVioletPrimary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(2.dp))
+
+                            Text(
+                                text = "v${source.version} • ${source.lang.uppercase()}${if (source.isNsfw) " • NSFW" else ""}",
+                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            )
+
+                            Spacer(modifier = Modifier.height(2.dp))
+
+                            Text(
+                                text = if (isMangaDexBacked(source)) "Live data from MangaDex" else source.baseUrl,
+                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        // Cloudflare / site verification: open the source in the in-app WebView
+                        IconButton(
+                            onClick = { onOpenWebView(source.baseUrl) },
+                            modifier = Modifier.testTag("source_webview_${source.id}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Language,
+                                contentDescription = "Cloudflare / site verification",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
+                        Button(
+                            onClick = { onBrowseSource(source) },
+                            modifier = Modifier.testTag("browse_source_${source.id}")
+                        ) {
+                            Text("Browse")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun GlobalSearchTabContent(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    results: List<MangaEntity>,
+    isLoading: Boolean,
+    error: String?,
+    searchedSources: Int,
+    onMangaClick: (String) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            GlassSearchBar(
+                value = query,
+                onValueChange = onQueryChange,
+                placeholder = "Search all installed sources (e.g. \"reincarnate\")..."
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (query.isNotBlank() && searchedSources > 0) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = CircleShape
+                    ) {
                         Text(
-                            text = "v${source.version} • ${source.lang.uppercase()}${if (source.isNsfw) " • NSFW" else ""}",
-                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        )
-
-                        Spacer(modifier = Modifier.height(2.dp))
-
-                        Text(
-                            text = if (isMangaDexBacked(source)) "Live data from MangaDex" else source.baseUrl,
-                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            text = "Searching $searchedSources sources",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
                         )
                     }
-
                     Spacer(modifier = Modifier.width(8.dp))
+                }
+                if (query.isNotBlank() && !isLoading && error == null) {
+                    Text(
+                        text = "${results.size} results",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+                }
+            }
+        }
 
-                    Button(
-                        onClick = { onBrowseSource(source) },
-                        modifier = Modifier.testTag("browse_source_${source.id}")
-                    ) {
-                        Text("Browse")
+        when {
+            query.isBlank() -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = NekoVioletPrimary,
+                            modifier = Modifier.size(40.dp)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Search manga, manhwa and manhua by title across every installed source at once.",
+                            style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+
+            isLoading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Searching all installed sources...",
+                            style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        )
+                    }
+                }
+            }
+
+            error != null -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = error,
+                        style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.error),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+
+            results.isEmpty() -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No manga found for \"$query\". Try a different title.",
+                        style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+
+            else -> {
+                LazyColumn(
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(results, key = { it.id }) { manga ->
+                        MangaListCard(
+                            manga = manga,
+                            onClick = { onMangaClick(manga.id) }
+                        )
                     }
                 }
             }
@@ -471,9 +702,11 @@ fun CatalogTabContent(
     isLoading: Boolean,
     error: String?,
     sourceName: String,
+    sourceBaseUrl: String,
     hasSource: Boolean,
     onRetry: () -> Unit,
-    onMangaClick: (String) -> Unit
+    onMangaClick: (String) -> Unit,
+    onOpenWebView: (String) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         if (!hasSource) {
@@ -494,7 +727,7 @@ fun CatalogTabContent(
                     Text(
                         text = "Pick a source from the Sources tab to browse it here.",
                         style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        textAlign = TextAlign.Center
                     )
                 }
             }
@@ -502,22 +735,10 @@ fun CatalogTabContent(
         }
 
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            OutlinedTextField(
+            GlassSearchBar(
                 value = searchQuery,
                 onValueChange = onSearchQueryChange,
-                placeholder = { Text("Search $sourceName...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { onSearchQueryChange("") }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear")
-                        }
-                    }
-                },
-                singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("catalog_search_bar")
+                placeholder = "Search $sourceName..."
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -532,6 +753,18 @@ fun CatalogTabContent(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.onPrimaryContainer)
                     )
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                if (sourceBaseUrl.isNotBlank()) {
+                    TextButton(onClick = { onOpenWebView(sourceBaseUrl) }) {
+                        Icon(
+                            imageVector = Icons.Default.Language,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Cloudflare check")
+                    }
                 }
             }
         }
@@ -574,12 +807,20 @@ fun CatalogTabContent(
                             text = error,
                             style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                             maxLines = 3,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center
                         )
                         Button(onClick = onRetry) {
                             Icon(Icons.Default.Refresh, contentDescription = "Retry")
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Retry")
+                        }
+                        if (sourceBaseUrl.isNotBlank()) {
+                            OutlinedButton(onClick = { onOpenWebView(sourceBaseUrl) }) {
+                                Icon(Icons.Default.Language, contentDescription = null)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Verify in WebView (Cloudflare)")
+                            }
                         }
                     }
                 }
@@ -627,164 +868,168 @@ fun ExtensionsTabContent(
     onInstall: (String) -> Unit,
     onUninstall: (String) -> Unit
 ) {
-    LazyColumn(
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.fillMaxSize()
-    ) {
-        item {
-            Column {
-                Text(
-                    text = "Extensions (${extensions.size})",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Install an extension to add its sources to the Sources tab. " +
-                        "Each extension is downloaded from its repo and loaded in-app before installing.",
-                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                )
-            }
+    var query by remember { mutableStateOf("") }
+    val filtered = remember(extensions, query) {
+        if (query.isBlank()) extensions
+        else extensions.filter {
+            it.name.contains(query, ignoreCase = true) ||
+                it.packageName.contains(query, ignoreCase = true)
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            GlassSearchBar(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = "Search ${extensions.size} extensions..."
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Extensions (${filtered.size} of ${extensions.size}) — install to add its sources",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.primary
+            )
         }
 
         if (extensions.isEmpty()) {
-            item {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(
-                    text = "No extensions loaded. Add a repository first (Extension Repos tab), or " +
-                        "refresh the built-in repos — the list will populate from the real repo index.",
-                    style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    text = "No extensions loaded. Add a repository first (Repos tab), or refresh the built-in repos — the list will populate from the real repo index.",
+                    style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                    textAlign = TextAlign.Center
                 )
             }
+            return@Column
         }
 
-        items(extensions, key = { it.packageName }) { ext ->
-            val repoName = repoNameById[ext.repoId] ?: "Custom Repo"
-            val isBusy = busyKey == "install_${ext.packageName}" || busyKey == "uninstall_${ext.packageName}"
+        LazyColumn(
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            items(filtered, key = { it.packageName }) { ext ->
+                val repoName = repoNameById[ext.repoId] ?: "Custom Repo"
+                val isBusy = busyKey == "install_${ext.packageName}" || busyKey == "uninstall_${ext.packageName}"
+                val cwLabel = contentWarningLabel(ext.contentWarning)
 
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                modifier = Modifier
+                GlassCard(modifier = Modifier
                     .fillMaxWidth()
                     .testTag("extension_card_${ext.packageName}")
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (ext.iconUrl.isNotBlank()) {
-                            AsyncImage(
-                                model = ext.iconUrl,
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (ext.nsfw) NekoGoldBadge else NekoVioletPrimary),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = ext.name.take(1),
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (ext.iconUrl.isNotBlank()) {
+                                AsyncImage(
+                                    model = ext.iconUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(RoundedCornerShape(8.dp))
                                 )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (ext.nsfw) NekoGoldBadge else NekoVioletPrimary),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = ext.name.take(1),
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                }
                             }
-                        }
 
-                        Spacer(modifier = Modifier.width(12.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
 
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = ext.name,
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    if (ext.nsfw) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Surface(
+                                            color = NekoGoldBadge,
+                                            shape = RoundedCornerShape(4.dp)
+                                        ) {
+                                            Text(
+                                                text = "NSFW",
+                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                                style = MaterialTheme.typography.labelSmall.copy(color = Color.White)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(2.dp))
+
                                 Text(
-                                    text = ext.name,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    text = "v${ext.versionName} (${ext.versionCode}) • $repoName${cwLabel?.let { " • $it" } ?: ""}",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                                if (ext.nsfw) {
-                                    Spacer(modifier = Modifier.width(6.dp))
+
+                                if (ext.isInstalled) {
+                                    Spacer(modifier = Modifier.height(2.dp))
                                     Surface(
-                                        color = NekoGoldBadge,
+                                        color = MaterialTheme.colorScheme.primaryContainer,
                                         shape = RoundedCornerShape(4.dp)
                                     ) {
                                         Text(
-                                            text = "NSFW",
-                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                                            style = MaterialTheme.typography.labelSmall.copy(color = Color.White)
+                                            text = "Installed${if (ext.installError != null) " • Error" else ""}",
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = if (ext.installError != null) MaterialTheme.colorScheme.error
+                                                else MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
                                         )
                                     }
                                 }
-                            }
 
-                            Spacer(modifier = Modifier.height(2.dp))
-
-                            Text(
-                                text = "v${ext.versionName} (${ext.versionCode}) • $repoName",
-                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-
-                            if (ext.contentWarning.isNotBlank()) {
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = ext.contentWarning,
-                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-
-                            if (ext.isInstalled) {
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Surface(
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    shape = RoundedCornerShape(4.dp)
-                                ) {
+                                if (ext.installError != null && !ext.isInstalled) {
+                                    Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = "Installed${if (ext.installError != null) " • Error" else ""}",
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            color = if (ext.installError != null) MaterialTheme.colorScheme.error
-                                            else MaterialTheme.colorScheme.onPrimaryContainer
-                                        )
+                                        text = ext.installError,
+                                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.error),
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
 
-                            if (ext.installError != null && !ext.isInstalled) {
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = ext.installError,
-                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.error),
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
+                            Spacer(modifier = Modifier.width(8.dp))
 
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        if (isBusy) {
-                            CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
-                        } else if (ext.isInstalled) {
-                            OutlinedButton(
-                                onClick = { onUninstall(ext.packageName) },
-                                modifier = Modifier.testTag("uninstall_${ext.packageName}")
-                            ) {
-                                Text("Uninstall")
-                            }
-                        } else {
-                            Button(
-                                onClick = { onInstall(ext.packageName) },
-                                modifier = Modifier.testTag("install_${ext.packageName}")
-                            ) {
-                                Text("Install")
+                            if (isBusy) {
+                                CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
+                            } else if (ext.isInstalled) {
+                                OutlinedButton(
+                                    onClick = { onUninstall(ext.packageName) },
+                                    modifier = Modifier.testTag("uninstall_${ext.packageName}")
+                                ) {
+                                    Text("Uninstall")
+                                }
+                            } else {
+                                Button(
+                                    onClick = { onInstall(ext.packageName) },
+                                    modifier = Modifier.testTag("install_${ext.packageName}")
+                                ) {
+                                    Text("Install")
+                                }
                             }
                         }
                     }
@@ -852,11 +1097,9 @@ fun ReposTabContent(
         items(repos, key = { it.id }) { repo ->
             val repoBusy = busyKey == "repo_refresh_${repo.id}" || busyKey == "repo_delete_${repo.id}"
 
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("repo_card_${repo.id}")
+            GlassCard(modifier = Modifier
+                .fillMaxWidth()
+                .testTag("repo_card_${repo.id}")
             ) {
                 Row(
                     modifier = Modifier

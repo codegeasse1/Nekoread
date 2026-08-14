@@ -20,6 +20,9 @@ import com.example.data.source.TachiyomiHttpSourceAdapter
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -101,6 +104,28 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         val manga = SourceRegistry.source(fullMangaId.substringBefore(":")).getDetails(fullMangaId)
         db.mangaDao().insertManga(manga)
     }
+
+    /**
+     * Global search: run [query] against every currently-loaded extension source in parallel and
+     * merge the results. A failing source is skipped (its results are simply absent) so one broken
+     * extension never blocks the whole search. Results are capped per source to keep the list sane.
+     */
+    suspend fun searchAllInstalledSources(query: String, perSource: Int = 20): List<MangaEntity> =
+        withContext(Dispatchers.IO) {
+            if (query.isBlank()) return@withContext emptyList()
+            val adapters = ExtensionDexLoader.loaded
+            coroutineScope {
+                adapters.map { adapter ->
+                    async(Dispatchers.IO) {
+                        try {
+                            adapter.search(query.trim(), 1).take(perSource)
+                        } catch (e: Throwable) {
+                            emptyList()
+                        }
+                    }
+                }.awaitAll().flatten().distinctBy { it.id }
+            }
+        }
 
     /** Fetch and persist the real chapter list for a manga. Returns true if new chapters were stored. */
     suspend fun loadChapters(fullMangaId: String, force: Boolean = false): Boolean = withContext(Dispatchers.IO) {

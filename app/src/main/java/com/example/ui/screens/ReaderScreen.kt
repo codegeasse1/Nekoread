@@ -35,11 +35,13 @@ import androidx.compose.material.icons.filled.NavigateNext
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -80,6 +82,7 @@ fun ReaderScreen(
     allChapters: List<ChapterEntity>,
     onBackClick: () -> Unit,
     onChapterChange: (String) -> Unit,
+    onOpenWebView: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (manga == null || chapter == null) {
@@ -162,6 +165,13 @@ fun ReaderScreen(
         allChapters.sortedBy { it.chapterNumber }.firstOrNull { it.chapterNumber > chapter.chapterNumber }
     }
 
+    // Source's base URL (for the Cloudflare / site-verification WebView button).
+    val sourceBaseUrl = remember(manga) {
+        if (manga == null) "" else runCatching {
+            viewModel.repository.sourceForManga(manga.id).baseUrl
+        }.getOrDefault("")
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -215,8 +225,18 @@ fun ReaderScreen(
                             style = MaterialTheme.typography.bodySmall.copy(color = contentTextColor.copy(alpha = 0.7f)),
                             maxLines = 3
                         )
-                        Button(onClick = { retryKey++ }) {
-                            Text("Retry")
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { retryKey++ }) {
+                                Text("Retry")
+                            }
+                            if (sourceBaseUrl.isNotBlank()) {
+                                OutlinedButton(
+                                    onClick = { onOpenWebView(sourceBaseUrl) },
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = contentTextColor)
+                                ) {
+                                    Text("Verify in WebView")
+                                }
+                            }
                         }
                     }
                 }
@@ -304,7 +324,7 @@ fun ReaderScreen(
             modifier = Modifier.align(Alignment.TopCenter)
         ) {
             Surface(
-                color = Color.Black.copy(alpha = 0.85f),
+                color = Color(0xD9161926),
                 contentColor = Color.White
             ) {
                 TopAppBar(
@@ -355,7 +375,7 @@ fun ReaderScreen(
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
             Surface(
-                color = Color.Black.copy(alpha = 0.85f),
+                color = Color(0xD9161926),
                 contentColor = Color.White
             ) {
                 Column(

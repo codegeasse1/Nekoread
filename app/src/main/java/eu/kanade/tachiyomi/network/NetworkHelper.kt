@@ -22,6 +22,8 @@ class NetworkHelper(context: Context) {
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .callTimeout(90, TimeUnit.SECONDS)
+        // Shared cookie store with the in-app Cloudflare-verification WebView.
+        .cookieJar(WebViewCookieJar())
         .addInterceptor { chain ->
             val request = chain.request().newBuilder()
                 .header("User-Agent", defaultUserAgentProvider())

@@ -67,6 +67,7 @@ fun UpdatesHistoryScreen(
     val tabs = listOf("History", "Updates")
 
     Scaffold(
+        containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0),
         topBar = {
             Column {

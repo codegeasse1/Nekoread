@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
 import com.example.data.local.CategoryEntity
 import com.example.data.local.ChapterEntity
+import com.example.data.extension.ExtensionDexLoader
 import com.example.data.local.ExtensionRepoEntity
 import com.example.data.local.ExtensionSourceEntity
 import com.example.data.local.ExtensionEntity
@@ -116,6 +117,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _catalogSourceName = MutableStateFlow("")
     val catalogSourceName: StateFlow<String> = _catalogSourceName.asStateFlow()
 
+    // Global search across all installed sources
+    private val _globalResults = MutableStateFlow<List<MangaEntity>>(emptyList())
+    val globalResults: StateFlow<List<MangaEntity>> = _globalResults.asStateFlow()
+
+    private val _globalLoading = MutableStateFlow(false)
+    val globalLoading: StateFlow<Boolean> = _globalLoading.asStateFlow()
+
+    private val _globalError = MutableStateFlow<String?>(null)
+    val globalError: StateFlow<String?> = _globalError.asStateFlow()
+
+    private val _globalSearchedSources = MutableStateFlow(0)
+    val globalSearchedSources: StateFlow<Int> = _globalSearchedSources.asStateFlow()
+
     // Detail screen loading state
     private val _detailLoading = MutableStateFlow(false)
     val detailLoading: StateFlow<Boolean> = _detailLoading.asStateFlow()
@@ -143,6 +157,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun clearCatalog() {
         _catalogResults.value = emptyList()
         _catalogError.value = null
+    }
+
+    fun globalSearch(query: String) {
+        val q = query.trim()
+        if (q.isBlank()) {
+            _globalResults.value = emptyList()
+            _globalSearchedSources.value = 0
+            _globalError.value = null
+            return
+        }
+        viewModelScope.launch {
+            _globalLoading.value = true
+            _globalError.value = null
+            _globalSearchedSources.value = ExtensionDexLoader.loaded.size
+            try {
+                _globalResults.value = repository.searchAllInstalledSources(q)
+            } catch (e: Throwable) {
+                _globalResults.value = emptyList()
+                _globalError.value = e.message ?: "Global search failed"
+            } finally {
+                _globalLoading.value = false
+            }
+        }
+    }
+
+    fun clearGlobalSearch() {
+        _globalResults.value = emptyList()
+        _globalSearchedSources.value = 0
+        _globalError.value = null
     }
 
     fun loadMangaDetail(mangaId: String) {

@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -42,6 +43,7 @@ import coil.compose.AsyncImage
 import com.example.data.local.MangaEntity
 import com.example.ui.theme.SleekGoldBadge
 import com.example.ui.theme.SleekVioletPrimary
+import com.example.ui.theme.GlassCardBorder
 
 @Composable
 fun MangaGridCard(
@@ -59,7 +61,8 @@ fun MangaGridCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        border = BorderStroke(1.dp, GlassCardBorder),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column {
             Box(
@@ -239,7 +242,9 @@ fun MangaListCard(
             .testTag("manga_list_item_${manga.id}"),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
-        )
+        ),
+        border = BorderStroke(1.dp, GlassCardBorder),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             modifier = Modifier

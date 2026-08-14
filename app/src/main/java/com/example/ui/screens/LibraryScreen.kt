@@ -79,6 +79,7 @@ fun LibraryScreen(
     val categories: List<CategoryEntity> by viewModel.categories.collectAsStateWithLifecycle()
 
     Scaffold(
+        containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0),
         topBar = {
             Column {

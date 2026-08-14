@@ -27,7 +27,10 @@ private val DarkColorScheme = darkColorScheme(
     surfaceVariant = DarkSurfaceVariant,
     onSurfaceVariant = TextSecondaryDark,
     outline = DarkBorder,
-    outlineVariant = DarkSurfaceHighlight
+    outlineVariant = DarkSurfaceHighlight,
+    error = Color(0xFFFF6B6B),
+    surfaceTint = Color.Transparent,
+    scrim = GlassScrim
 )
 
 private val LightColorScheme = lightColorScheme(

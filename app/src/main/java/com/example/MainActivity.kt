@@ -1,12 +1,19 @@
 package com.example
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CollectionsBookmark
 import androidx.compose.material.icons.filled.Explore
@@ -21,7 +28,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -39,6 +50,13 @@ import com.example.ui.screens.MangaDetailScreen
 import com.example.ui.screens.ReaderScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.UpdatesHistoryScreen
+import com.example.ui.screens.WebViewScreen
+import com.example.ui.theme.BgGradientBottom
+import com.example.ui.theme.BgGradientMid
+import com.example.ui.theme.BgGradientTop
+import com.example.ui.theme.GlassCardBorder
+import com.example.ui.theme.GlowCyan
+import com.example.ui.theme.GlowViolet
 import com.example.ui.theme.NekoReadTheme
 
 class MainActivity : ComponentActivity() {
@@ -50,7 +68,35 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             NekoReadTheme {
-                MainAppScreen(viewModel = viewModel)
+                // Ambient gradient + glow blobs behind the whole app: the translucent
+                // glass surfaces on top pick up these colors for the frosted look.
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(BgGradientTop, BgGradientMid, BgGradientBottom)
+                                )
+                            )
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(380.dp)
+                            .offset(x = (-110).dp, y = (-80).dp)
+                            .background(GlowViolet, CircleShape)
+                            .blur(90.dp)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(440.dp)
+                            .align(Alignment.BottomEnd)
+                            .offset(x = 80.dp, y = 100.dp)
+                            .background(GlowCyan, CircleShape)
+                            .blur(120.dp)
+                    )
+                    MainAppScreen(viewModel = viewModel)
+                }
             }
         }
     }
@@ -89,12 +135,20 @@ fun MainAppScreen(viewModel: MainViewModel) {
     val libraryManga by viewModel.libraryManga.collectAsStateWithLifecycle()
     val historyManga by viewModel.readingHistory.collectAsStateWithLifecycle()
 
+    fun openWebView(url: String) {
+        navController.navigate("webview/${Uri.encode(url)}")
+    }
+
     Scaffold(
+        containerColor = Color.Transparent,
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 6.dp
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                    tonalElevation = 0.dp,
+                    modifier = Modifier
+                        .border(width = 1.dp, color = GlassCardBorder)
+                        .testTag("bottom_nav")
                 ) {
                     bottomNavScreens.forEach { screen ->
                         NavigationBarItem(
@@ -162,7 +216,8 @@ fun MainAppScreen(viewModel: MainViewModel) {
                     viewModel = viewModel,
                     onMangaClick = { mangaId ->
                         navController.navigate("manga_detail/$mangaId")
-                    }
+                    },
+                    onOpenWebView = { url -> openWebView(url) }
                 )
             }
 
@@ -221,7 +276,19 @@ fun MainAppScreen(viewModel: MainViewModel) {
                         navController.navigate("reader/$mangaId/$newChapterId") {
                             popUpTo("reader/$mangaId/$chapterId") { inclusive = true }
                         }
-                    }
+                    },
+                    onOpenWebView = { url -> openWebView(url) }
+                )
+            }
+
+            composable(
+                route = "webview/{url}",
+                arguments = listOf(navArgument("url") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val url = Uri.decode(backStackEntry.arguments?.getString("url") ?: "")
+                WebViewScreen(
+                    url = url,
+                    onBackClick = { navController.popBackStack() }
                 )
             }
         }
