@@ -54,13 +54,15 @@ jobs:
       - name: Build debug APK
         run: |
           set +e
-          ./gradlew :app:assembleDebug --no-daemon --no-configuration-cache --stacktrace > gradle-build.log 2>&1
+          ./gradlew :app:assembleDebug --no-daemon --no-configuration-cache --info --stacktrace > gradle-build.log 2>&1
           EXIT=$?
           set -e
+          echo "=== compose/compiler classpath ==="
+          grep -nE "kotlin-compose-compiler-plugin|kotlin-compiler-embeddable|Xplugin=|pluginClasspath|getPluginId|KotlinVersion|ComposePluginRegistrar" gradle-build.log | head -50 || true
           echo "=== compile errors (e: lines) ==="
           grep -n "e: " gradle-build.log | head -80 || true
           echo "=== build log tail ==="
-          tail -n 60 gradle-build.log
+          tail -n 40 gradle-build.log
           exit $EXIT
 
       - name: Upload APK as workflow artifact
