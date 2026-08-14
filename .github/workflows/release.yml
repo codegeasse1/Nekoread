@@ -104,16 +104,39 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+          # Stash the APK, remove untracked build junk that would collide with
+          # files the build branch tracks, then switch and drop the branch's files.
+          cp app/build/outputs/apk/release/app-release.apk /tmp/nekoread-release.apk
+          rm -rf .kotlin app/build .gradle build gradle-build.log build-error.log debug.keystore Nekoread-debug.apk Nekoread-*.apk
+
           git fetch origin build || true
           if git rev-parse --verify origin/build > /dev/null 2>&1; then
             git switch build
           else
             git switch --orphan build
           fi
+          git rm -rf --quiet . || true
 
-          cp app/build/outputs/apk/release/app-release.apk "Nekoread-$VERSION.apk"
+          cp /tmp/nekoread-release.apk "Nekoread-$VERSION.apk"
 
-          git add -A
+          cat > README.md <<'EOF'
+          # Nekoread — automatic builds
+
+          This branch holds APK files produced by GitHub Actions. Install by downloading
+          the `.apk` onto your Android device and opening it (allow "install from unknown sources").
+
+          - `Nekoread-debug.apk` — latest debug build from `main`. Auto-updated on every push.
+          - `build-error.log` — present when the latest build failed (contains the Gradle error).
+
+          Latest release APKs (if any) appear here too, but the official release downloads
+          are on the Releases page: https://github.com/codegeasse1/Nekoread/releases
+
+          The debug APK is signed with a throwaway debug key. If you want a release you can
+          actually update in-place, use a proper release from the Releases page (built with
+          the real signing key).
+          EOF
+
+          git add "Nekoread-$VERSION.apk" README.md
           git commit -m "release: v$VERSION (from ${{ github.sha }})" --allow-empty
           git push --force origin build
         env:

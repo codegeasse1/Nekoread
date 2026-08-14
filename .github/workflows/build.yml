@@ -116,6 +116,7 @@ jobs:
           the real signing key).
           EOF
 
-          git add -A
+          # Only the three files below belong on this branch; never commit build junk.
+          git add Nekoread-debug.apk build-error.log README.md
           git commit -m "build result for ${{ github.sha }} (${{ job.status }})" --allow-empty
           git push --force origin build
