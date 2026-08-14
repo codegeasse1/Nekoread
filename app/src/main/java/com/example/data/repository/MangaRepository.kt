@@ -113,8 +113,8 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
                 db.chapterDao().insertChapters(chapters)
                 return@withContext true
             }
-        } catch (e: Exception) {
-            // network failure — leave existing data (if any) and let the UI offer a retry
+        } catch (e: Throwable) {
+            // network failure or extension incompatibility — leave existing data (if any) and let the UI offer a retry
         }
         false
     }
@@ -329,13 +329,13 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         dest.setReadOnly()
 
         try {
-            val sources = ExtensionDexLoader.loadApk(dest, dexCacheDir(), packageName)
+            val sources = ExtensionDexLoader.loadApk(dest, dexCacheDir(), packageName, app)
             val registered = registerExtensionSources(ext, sources)
             if (!registered) {
                 db.extensionDao().updateExtensionInstallState(packageName, false, null, "No sources in extension")
                 return@withContext "Extension APK contained no browsable sources"
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             // Keep the downloaded APK so a reinstall doesn't need to re-download it.
             val msg = e.message ?: "unknown error"
             db.extensionDao().updateExtensionInstallState(packageName, false, null, msg)
@@ -363,12 +363,12 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
             }
             try {
                 if (dest.exists()) dest.setReadOnly() // Android 14+ requires read-only dex files
-                val sources = ExtensionDexLoader.loadApk(dest, dexCacheDir(), ext.packageName)
+                val sources = ExtensionDexLoader.loadApk(dest, dexCacheDir(), ext.packageName, app)
                 val registered = registerExtensionSources(ext, sources)
                 if (!registered) {
                     db.extensionDao().updateExtensionInstallState(ext.packageName, false, null, "No browsable sources in extension")
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 db.extensionDao().updateExtensionInstallState(ext.packageName, false, null, e.message)
             }
         }

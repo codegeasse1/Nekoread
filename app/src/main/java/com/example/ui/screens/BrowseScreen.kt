@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -43,8 +44,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -92,7 +93,7 @@ fun BrowseScreen(
     modifier: Modifier = Modifier
 ) {
     var selectedTabIndex by remember { mutableStateOf(0) }
-    val tabs = listOf("Sources", "Catalog", "Extensions", "Extension Repos")
+    val tabs = listOf("Sources", "Catalog", "Extensions", "Repos")
 
     val extensionSources: List<ExtensionSourceEntity> by viewModel.extensionSources.collectAsStateWithLifecycle()
     val extensionRepos: List<ExtensionRepoEntity> by viewModel.extensionRepos.collectAsStateWithLifecycle()
@@ -134,9 +135,11 @@ fun BrowseScreen(
     val repoNameById: Map<String, String> = extensionRepos.associate { it.id to it.name }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             Column {
                 TopAppBar(
+                    windowInsets = WindowInsets(0),
                     title = {
                         Text(
                             text = "Browse & Extensions",
@@ -146,9 +149,10 @@ fun BrowseScreen(
                     }
                 )
 
-                TabRow(
+                ScrollableTabRow(
                     selectedTabIndex = selectedTabIndex,
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    edgePadding = 8.dp
                 ) {
                     tabs.forEachIndexed { index, title ->
                         Tab(

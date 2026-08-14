@@ -126,12 +126,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun loadCatalog(sourceId: String = "", query: String = "", page: Int = 0) {
         if (sourceId.isBlank()) return
         viewModelScope.launch {
-            _catalogSourceName.value = repository.sourceForManga("$sourceId:x").name
             _catalogLoading.value = true
             _catalogError.value = null
             try {
+                _catalogSourceName.value = repository.sourceForManga("$sourceId:x").name
                 _catalogResults.value = repository.searchCatalog(sourceId, query, page)
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 _catalogResults.value = emptyList()
                 _catalogError.value = e.message ?: "Failed to load catalog"
             } finally {
@@ -152,7 +152,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 repository.ensureMangaInDb(mangaId)
                 repository.loadChapters(mangaId)
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 _detailError.value = e.message ?: "Failed to load manga"
             } finally {
                 _detailLoading.value = false
