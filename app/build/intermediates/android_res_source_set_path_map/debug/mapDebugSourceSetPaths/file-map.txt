@@ -1,8 +1,0 @@
-com.example.app-pngs-0 /home/runner/work/Nekoread/Nekoread/app/build/generated/res/pngs/debug
-com.example.app-res-1 /home/runner/work/Nekoread/Nekoread/app/build/generated/res/processDebugGoogleServices
-com.example.app-updated_navigation_xml-2 /home/runner/work/Nekoread/Nekoread/app/build/generated/updated_navigation_xml/debug
-com.example.app-packageDebugResources-3 /home/runner/work/Nekoread/Nekoread/app/build/intermediates/incremental/debug/packageDebugResources/merged.dir
-com.example.app-packageDebugResources-4 /home/runner/work/Nekoread/Nekoread/app/build/intermediates/incremental/debug/packageDebugResources/stripped.dir
-com.example.app-debug-5 /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_res/debug/mergeDebugResources
-com.example.app-debug-6 /home/runner/work/Nekoread/Nekoread/app/src/debug/res
-com.example.app-main-7 /home/runner/work/Nekoread/Nekoread/app/src/main/res
