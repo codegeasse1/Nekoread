@@ -33,7 +33,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch {
+            // Tachiyomi extensions need the shared network stack before any source is constructed.
+            eu.kanade.tachiyomi.network.NetworkHelper.init(getApplication())
             repository.initializeDefaultDataIfNeeded()
+            // Bring installed extensions' sources back online (their APKs stay in app storage).
+            repository.loadInstalledExtensions()
             // Refresh repo catalogs that have never been fetched (first launch / new repo).
             repository.refreshStaleRepos()
         }

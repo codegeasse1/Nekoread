@@ -24,7 +24,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -90,7 +89,6 @@ private fun isMangaDexBacked(source: ExtensionSourceEntity): Boolean =
 fun BrowseScreen(
     viewModel: MainViewModel,
     onMangaClick: (String) -> Unit,
-    onOpenWebView: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedTabIndex by remember { mutableStateOf(0) }
@@ -184,10 +182,6 @@ fun BrowseScreen(
                         searchQuery = ""
                         viewModel.loadCatalog(source.id, "")
                         selectedTabIndex = 1
-                    },
-                    onOpenWebView = { source ->
-                        val url = source.baseUrl.ifBlank { "https://mangadex.org" }
-                        onOpenWebView(url)
                     }
                 )
                 1 -> CatalogTabContent(
@@ -351,8 +345,7 @@ fun AddRepoDialog(
 @Composable
 fun SourcesTabContent(
     sources: List<ExtensionSourceEntity>,
-    onBrowseSource: (ExtensionSourceEntity) -> Unit,
-    onOpenWebView: (ExtensionSourceEntity) -> Unit
+    onBrowseSource: (ExtensionSourceEntity) -> Unit
 ) {
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
@@ -453,23 +446,11 @@ fun SourcesTabContent(
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    if (isMangaDexBacked(source)) {
-                        Button(
-                            onClick = { onBrowseSource(source) },
-                            modifier = Modifier.testTag("browse_source_${source.id}")
-                        ) {
-                            Text("Browse")
-                        }
-                    } else {
-                        OutlinedButton(onClick = { onOpenWebView(source) }) {
-                            Icon(
-                                imageVector = Icons.Default.OpenInNew,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Open in WebView")
-                        }
+                    Button(
+                        onClick = { onBrowseSource(source) },
+                        modifier = Modifier.testTag("browse_source_${source.id}")
+                    ) {
+                        Text("Browse")
                     }
                 }
             }

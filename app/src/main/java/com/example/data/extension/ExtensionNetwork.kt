@@ -261,7 +261,7 @@ object ExtensionNetwork {
             if (n == 4) buf else buf.copyOf(n)
         }
         val isZip = head.size == 4 && head[0] == 'P'.code.toByte() && head[1] == 'K'.code.toByte()
-        if (!isZip || destFile.length() < 50_000L) {
+        if (!isZip) {
             destFile.delete()
             throw ExtensionNetworkException("Downloaded file is not a valid APK")
         }

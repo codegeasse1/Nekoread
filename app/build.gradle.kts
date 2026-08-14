@@ -112,6 +112,13 @@ dependencies {
   implementation(libs.logging.interceptor)
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
+  // Tachiyomi-style extension engine (Tadami/Mihon compatible): these runtime libs are what
+  // loaded extension APKs link against.
+  implementation(libs.rxjava)
+  implementation(libs.rxandroid)
+  implementation(libs.jsoup)
+  implementation(libs.injekt.core)
+  implementation(libs.androidx.preference)
   // implementation(libs.play.services.location)
   implementation(libs.retrofit)
   testImplementation(libs.androidx.compose.ui.test.junit4)

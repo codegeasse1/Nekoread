@@ -39,7 +39,6 @@ import com.example.ui.screens.MangaDetailScreen
 import com.example.ui.screens.ReaderScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.UpdatesHistoryScreen
-import com.example.ui.screens.WebViewScreen
 import com.example.ui.theme.NekoReadTheme
 
 class MainActivity : ComponentActivity() {
@@ -163,23 +162,7 @@ fun MainAppScreen(viewModel: MainViewModel) {
                     viewModel = viewModel,
                     onMangaClick = { mangaId ->
                         navController.navigate("manga_detail/$mangaId")
-                    },
-                    onOpenWebView = { url ->
-                        navController.navigate("webview/${android.net.Uri.encode(url)}")
                     }
-                )
-            }
-
-            composable(
-                route = "webview/{url}",
-                arguments = listOf(navArgument("url") { type = NavType.StringType })
-            ) { backStackEntry ->
-                val rawUrl = backStackEntry.arguments?.getString("url") ?: ""
-                val url = android.net.Uri.decode(rawUrl)
-                WebViewScreen(
-                    url = url,
-                    title = "External Source",
-                    onBackClick = { navController.popBackStack() }
                 )
             }
 

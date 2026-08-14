@@ -1,5 +1,6 @@
 package com.example.data.source
 
+import com.example.data.extension.ExtensionDexLoader
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
 
@@ -33,5 +34,17 @@ object SourceRegistry {
         MangaDexSource.id to MangaDexSource
     )
 
-    fun source(id: String): MangaSource = sources[id] ?: MangaDexSource
+    /**
+     * Resolve a source by id. Extension ids ("ext_...") come from loaded extension APKs and are
+     * resolved through the [ExtensionDexLoader] registry; if an extension source is referenced but
+     * not loaded (e.g. the APK failed to load), throw so the UI surfaces the real problem instead
+     * of showing mislabeled data from another source.
+     */
+    fun source(id: String): MangaSource {
+        if (id.startsWith("ext_")) {
+            return ExtensionDexLoader.get(id)
+                ?: throw IllegalStateException("Extension source not loaded (id $id). Try reinstalling the extension.")
+        }
+        return sources[id] ?: MangaDexSource
+    }
 }

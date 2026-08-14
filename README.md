@@ -30,16 +30,21 @@ The **Extensions** and **Extension Repos** tabs are fully real, modeled after Mi
   count and "last updated" time come from the server, never from hardcoded numbers. Every repo can
   be deleted.
 - **Extensions** — install actually downloads the extension's real APK into app-private storage,
-  validates it like Mihon does (APK parses, package name matches the index, and the manifest
-  declares the `tachiyomi.extension` feature / `tachiyomi.extension.class` marker) and then
-  activates the extension's sources. Uninstall deletes the APK and its sources.
+  loads its dex against NekoRead's in-app Tachiyomi/Mihon source-api runtime, and brings its
+  sources online — the exact same mechanism Mihon/Tadami use. Uninstall deletes the APK and its
+  sources.
 - **Sources** — the built-in MangaDex source plus the sources that ship inside installed
-  extensions. Sources backed by `mangadex.org` are browsed through the app's real MangaDex
-  implementation (search → details → chapters → read, all in-app). Other sources open the real
-  site in an in-app WebView (Tadami-style), so you never leave the app.
+  extensions. **Every** source is browsed in-app through the real Tachiyomi extension engine:
+  search → catalog → details → chapters → read all run inside the app, exactly like Tadami
+  (no WebView, no leaving the app). A real extension (e.g. MangaDex from the keiyoushi repo)
+  produces results directly from its HTTP API.
 
 Files: `data/extension/ExtensionNetwork.kt` (repo index parsing + APK download),
-`data/extension/ExtensionEngine.kt` (defaults), plus the extension DAO / repository logic.
+`data/extension/ExtensionDexLoader.kt` (DexClassLoader → `ExtensionGenerated`),
+`data/source/TachiyomiHttpSourceAdapter.kt` (bridges loaded sources onto `MangaSource`),
+`data/extension/ExtensionEngine.kt` (defaults), the vendored `eu/kanade/tachiyomi/` source-api
+runtime (Source/HttpSource/network/model contracts the extension dexes link against), plus the
+extension DAO / repository logic.
 
 ## Adding a native source
 

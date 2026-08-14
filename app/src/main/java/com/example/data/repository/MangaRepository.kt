@@ -2,6 +2,7 @@ package com.example.data.repository
 
 import android.app.Application
 import android.content.pm.PackageManager
+import com.example.data.extension.ExtensionDexLoader
 import com.example.data.extension.ExtensionEngine
 import com.example.data.extension.ExtensionNetwork
 import com.example.data.extension.ExtensionNetworkException
@@ -15,6 +16,9 @@ import com.example.data.local.ExtensionSourceEntity
 import com.example.data.local.MangaEntity
 import com.example.data.source.MangaSource
 import com.example.data.source.SourceRegistry
+import com.example.data.source.TachiyomiHttpSourceAdapter
+import eu.kanade.tachiyomi.source.Source
+import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -278,13 +282,15 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
     }
 
     // ------------------------------------------------------------------------------------------
-    // Extension install / uninstall (real APK download + manifest validation)
+    // Extension install / uninstall (real APK download + dex load, like Tadami/Mihon)
     // ------------------------------------------------------------------------------------------
 
     /**
-     * Download the extension's APK into app-private storage, validate it is a real extension APK
-     * (package name matches the index + `tachiyomi.extension` manifest marker present) and activate
-     * its sources. Returns an error message on failure, or null on success.
+     * Download the extension's APK into app-private storage and load its dex against the in-app
+     * Tachiyomi source-api runtime. This is exactly what Tadami/Mihon do: a valid extension APK is
+     * one whose classes can actually be instantiated and talk to the sources it declares. The
+     * downloaded file is deleted and an error is reported if loading fails for any reason.
+     * Returns an error message on failure, or null on success.
      */
     suspend fun installExtension(packageName: String): String? = withContext(Dispatchers.IO) {
         val ext = db.extensionDao().getExtension(packageName) ?: return@withContext "Extension not found"
@@ -301,59 +307,94 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
             return@withContext "Download failed: ${e.message ?: "unknown error"}"
         }
 
-        // Validate against the real manifest, like Mihon/Tadami do.
+        // Sanity check against the real manifest when it's parseable. A package-name mismatch is
+        // fatal; an unparseable manifest is not — the definitive test below is whether the dex
+        // actually loads against the in-app runtime.
         val pm = app.packageManager
         val info = try {
             pm.getPackageArchiveInfo(dest.absolutePath, PackageManager.GET_META_DATA)
         } catch (e: Exception) {
             null
         }
-        if (info == null) {
-            dest.delete()
-            db.extensionDao().updateExtensionInstallState(packageName, false, null, "Not a valid APK")
-            return@withContext "Downloaded file could not be parsed as an APK"
-        }
-        if (info.packageName != packageName) {
+        if (info != null && info.packageName != packageName) {
             dest.delete()
             db.extensionDao().updateExtensionInstallState(packageName, false, null, "Package mismatch")
             return@withContext "APK package (${info.packageName}) does not match index package ($packageName)"
         }
-        val meta = info.applicationInfo?.metaData
-        val hasClassMarker = meta?.getString("tachiyomi.extension.class") != null
-        val hasFeatureMarker = info.reqFeatures?.any { it.name == "tachiyomi.extension" } == true
-        if (!hasClassMarker && !hasFeatureMarker) {
+
+        try {
+            val sources = ExtensionDexLoader.loadApk(dest, dexCacheDir(), packageName)
+            val registered = registerExtensionSources(ext, sources)
+            if (!registered) {
+                dest.delete()
+                db.extensionDao().updateExtensionInstallState(packageName, false, null, "No sources in extension")
+                return@withContext "Extension APK contained no browsable sources"
+            }
+        } catch (e: Exception) {
             dest.delete()
-            db.extensionDao().updateExtensionInstallState(packageName, false, null, "Not an extension APK")
-            return@withContext "Not a valid extension APK (missing tachiyomi.extension manifest marker)"
+            val msg = e.message ?: "unknown error"
+            db.extensionDao().updateExtensionInstallState(packageName, false, null, msg)
+            return@withContext "Couldn't load extension: $msg"
         }
 
         db.extensionDao().updateExtensionInstallState(packageName, true, ext.versionName, null)
-        activateSources(ext)
         null
     }
 
-    private suspend fun activateSources(ext: ExtensionEntity) {
-        val sources = ExtensionNetwork.parseSourcesJson(ext.sourcesJson)
-        val rows = sources.mapIndexed { index, s ->
-            val key = if (s.id.isNotBlank()) "${ext.packageName}:${s.id}" else "${ext.packageName}:${index}"
-            ExtensionSourceEntity(
-                id = key,
-                extensionPkg = ext.packageName,
-                repoId = ext.repoId,
-                name = s.name.ifBlank { ext.name },
-                version = ext.versionName,
-                lang = s.lang,
-                iconUrl = ext.iconUrl,
-                isInstalled = true,
-                isNsfw = ext.nsfw,
-                baseUrl = s.baseUrl,
-                sourceType = "MANGA",
-                sourceName = s.id
+    /**
+     * Load every installed extension's dex back into memory on app start (their sources are
+     * stateless HTTP clients, so re-instantiating is all that's needed). Called once at startup.
+     */
+    suspend fun loadInstalledExtensions() = withContext(Dispatchers.IO) {
+        val installed = db.extensionDao().getInstalledExtensionsOnce()
+        for (ext in installed) {
+            val dest = apkFile(ext.packageName)
+            if (!dest.exists()) {
+                db.extensionDao().updateExtensionInstallState(ext.packageName, false, null, "APK file missing")
+                continue
+            }
+            try {
+                val sources = ExtensionDexLoader.loadApk(dest, dexCacheDir(), ext.packageName)
+                val registered = registerExtensionSources(ext, sources)
+                if (!registered) {
+                    db.extensionDao().updateExtensionInstallState(ext.packageName, false, null, "No browsable sources in extension")
+                }
+            } catch (e: Exception) {
+                db.extensionDao().updateExtensionInstallState(ext.packageName, false, null, e.message)
+            }
+        }
+    }
+
+    private fun dexCacheDir(): File = File(app.cacheDir, "ext_dex")
+
+    /** Persist source rows for a freshly-loaded extension and register its adapters in the registry. */
+    private fun registerExtensionSources(ext: ExtensionEntity, sources: List<Source>): Boolean {
+        val rows = mutableListOf<ExtensionSourceEntity>()
+        for (s in sources) {
+            if (s !is HttpSource) continue // non-HTTP sources aren't browsable in-app yet
+            val adapter = TachiyomiHttpSourceAdapter(s, ext.packageName)
+            ExtensionDexLoader.register(adapter)
+            rows.add(
+                ExtensionSourceEntity(
+                    id = adapter.id,
+                    extensionPkg = ext.packageName,
+                    repoId = ext.repoId,
+                    name = adapter.name,
+                    version = ext.versionName,
+                    lang = adapter.lang,
+                    iconUrl = ext.iconUrl,
+                    isInstalled = true,
+                    isNsfw = ext.nsfw,
+                    baseUrl = adapter.baseUrl,
+                    sourceType = "MANGA",
+                    sourceName = adapter.id
+                )
             )
         }
         if (rows.isNotEmpty()) {
             db.extensionDao().insertSources(rows)
         }
+        return rows.isNotEmpty()
     }
 
     /** Remove an installed extension: delete its APK and deactivate its sources. */
@@ -362,6 +403,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
             return@withContext "Extension not found"
         }
         apkFile(packageName).delete()
+        ExtensionDexLoader.unregisterExtension(packageName)
         db.extensionDao().deleteSourcesByExtension(packageName)
         db.extensionDao().updateExtensionInstallState(packageName, false, null, null)
         null

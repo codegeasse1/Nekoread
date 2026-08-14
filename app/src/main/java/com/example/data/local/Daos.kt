@@ -114,6 +114,9 @@ interface ExtensionDao {
     @Query("SELECT * FROM extensions WHERE isInstalled = 1 ORDER BY name ASC")
     fun getInstalledExtensions(): Flow<List<ExtensionEntity>>
 
+    @Query("SELECT * FROM extensions WHERE isInstalled = 1 ORDER BY name ASC")
+    suspend fun getInstalledExtensionsOnce(): List<ExtensionEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertExtensions(extensions: List<ExtensionEntity>)
 
