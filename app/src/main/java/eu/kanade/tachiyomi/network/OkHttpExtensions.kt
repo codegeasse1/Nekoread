@@ -95,7 +95,7 @@ private suspend fun Call.await(callStack: Array<StackTraceElement>): Response {
             object : Callback {
                 override fun onResponse(call: Call, response: Response) {
                     continuation.resume(response) {
-                        response.body.close()
+                        response.body!!.close()
                     }
                 }
 
@@ -144,7 +144,7 @@ fun OkHttpClient.newCachelessCallWithProgress(request: Request, listener: Progre
         .addNetworkInterceptor { chain ->
             val originalResponse = chain.proceed(chain.request())
             originalResponse.newBuilder()
-                .body(ProgressResponseBody(originalResponse.body, listener))
+                .body(ProgressResponseBody(originalResponse.body!!, listener))
                 .build()
         }
         .build()
@@ -165,7 +165,7 @@ fun <T> decodeFromJsonResponse(
     response: Response,
     json: Json = defaultJsonParser,
 ): T {
-    return response.body.source().use {
+    return response.body!!.source().use {
         json.decodeFromBufferedSource(deserializer, it)
     }
 }

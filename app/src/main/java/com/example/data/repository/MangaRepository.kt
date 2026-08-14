@@ -590,11 +590,11 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
             val manga = mutableListOf<MangaEntity>()
             val chapters = mutableListOf<ChapterEntity>()
 
-            for (i in 0 until root.optJSONArray("categories")?.length() ?: 0) {
+            for (i in 0 until (root.optJSONArray("categories")?.length() ?: 0)) {
                 val o = root.optJSONArray("categories")!!.getJSONObject(i)
                 categories.add(CategoryEntity(o.getString("id"), o.getString("name"), o.getInt("sortOrder")))
             }
-            for (i in 0 until root.optJSONArray("repos")?.length() ?: 0) {
+            for (i in 0 until (root.optJSONArray("repos")?.length() ?: 0)) {
                 val o = root.optJSONArray("repos")!!.getJSONObject(i)
                 repos.add(
                     ExtensionRepoEntity(
@@ -604,7 +604,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
                     )
                 )
             }
-            for (i in 0 until root.optJSONArray("extensions")?.length() ?: 0) {
+            for (i in 0 until (root.optJSONArray("extensions")?.length() ?: 0)) {
                 val o = root.optJSONArray("extensions")!!.getJSONObject(i)
                 extensions.add(
                     ExtensionEntity(
@@ -618,7 +618,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
                     )
                 )
             }
-            for (i in 0 until root.optJSONArray("sources")?.length() ?: 0) {
+            for (i in 0 until (root.optJSONArray("sources")?.length() ?: 0)) {
                 val o = root.optJSONArray("sources")!!.getJSONObject(i)
                 sources.add(
                     ExtensionSourceEntity(
@@ -631,7 +631,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
                     )
                 )
             }
-            for (i in 0 until root.optJSONArray("manga")?.length() ?: 0) {
+            for (i in 0 until (root.optJSONArray("manga")?.length() ?: 0)) {
                 val o = root.optJSONArray("manga")!!.getJSONObject(i)
                 manga.add(
                     MangaEntity(
@@ -647,7 +647,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
                     )
                 )
             }
-            for (i in 0 until root.optJSONArray("chapters")?.length() ?: 0) {
+            for (i in 0 until (root.optJSONArray("chapters")?.length() ?: 0)) {
                 val o = root.optJSONArray("chapters")!!.getJSONObject(i)
                 chapters.add(
                     ChapterEntity(
