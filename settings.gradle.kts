@@ -19,8 +19,6 @@ dependencyResolutionManagement {
   repositories {
     google()
     mavenCentral()
-    // injekt-core for loaded Tachiyomi extensions (Tadami-style extension engine)
-    maven { url = uri("https://jitpack.io") }
   }
 }
 

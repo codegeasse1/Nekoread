@@ -117,7 +117,6 @@ dependencies {
   implementation(libs.rxjava)
   implementation(libs.rxandroid)
   implementation(libs.jsoup)
-  implementation(libs.injekt.core)
   implementation(libs.androidx.preference)
   // implementation(libs.play.services.location)
   implementation(libs.retrofit)
