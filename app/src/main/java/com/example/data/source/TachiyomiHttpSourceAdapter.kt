@@ -76,32 +76,35 @@ class TachiyomiHttpSourceAdapter(
 
     override suspend fun search(query: String, page: Int): List<MangaEntity> = withContext(Dispatchers.IO) {
         ext.fetchSearchManga(page, query, FilterList())
-            .blockingFirst()
+            .toBlocking()
+            .first()
             .mangas
             .map { it.toManga() }
     }
 
     override suspend fun latest(page: Int): List<MangaEntity> = withContext(Dispatchers.IO) {
         ext.fetchLatestUpdates(page)
-            .blockingFirst()
+            .toBlocking()
+            .first()
             .mangas
             .map { it.toManga() }
     }
 
     override suspend fun getDetails(fullMangaId: String): MangaEntity = withContext(Dispatchers.IO) {
-        ext.fetchMangaDetails(sm(mangaUrl(fullMangaId))).blockingFirst().toManga()
+        ext.fetchMangaDetails(sm(mangaUrl(fullMangaId))).toBlocking().first().toManga()
     }
 
     override suspend fun getChapters(fullMangaId: String): List<ChapterEntity> = withContext(Dispatchers.IO) {
         ext.fetchChapterList(sm(mangaUrl(fullMangaId)))
-            .blockingFirst()
+            .toBlocking()
+            .first()
             .map { it.toChapter(fullMangaId) }
     }
 
     override suspend fun getPageUrls(rawChapterId: String): List<String> = withContext(Dispatchers.IO) {
-        val pages = ext.fetchPageList(ch(rawChapterId)).blockingFirst()
+        val pages = ext.fetchPageList(ch(rawChapterId)).toBlocking().first()
         pages.map { page ->
-            page.imageUrl ?: ext.fetchImageUrl(page).blockingFirst()
+            page.imageUrl ?: ext.fetchImageUrl(page).toBlocking().first()
         }
     }
 }

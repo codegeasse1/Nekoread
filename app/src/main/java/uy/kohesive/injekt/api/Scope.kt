@@ -59,19 +59,19 @@ open class InjektScope(val registrar: InjektRegistrar) : InjektRegistrar by regi
 }
 
 abstract class LocalScoped(protected val localScope: InjektScope) {
-    inline fun <reified T: Any> injectLazy(): Lazy<T> {
+    fun <reified T: Any> injectLazy(): Lazy<T> {
         return localScope.injectLazy()
     }
 
-    inline fun <reified T: Any> injectValue(): Lazy<T> {
+    fun <reified T: Any> injectValue(): Lazy<T> {
         return localScope.injectValue()
     }
 
-    inline fun <reified T: Any> injectLazy(key: Any): Lazy<T> {
+    fun <reified T: Any> injectLazy(key: Any): Lazy<T> {
         return localScope.injectLazy(key)
     }
 
-    inline fun <reified T: Any> injectValue(key: Any): Lazy<T> {
+    fun <reified T: Any> injectValue(key: Any): Lazy<T> {
         return localScope.injectValue(key)
     }
 
