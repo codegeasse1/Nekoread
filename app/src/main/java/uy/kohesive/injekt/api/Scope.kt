@@ -59,21 +59,17 @@ open class InjektScope(val registrar: InjektRegistrar) : InjektRegistrar by regi
 }
 
 abstract class LocalScoped(protected val localScope: InjektScope) {
-    fun <T: Any> injectLazy(): Lazy<T> {
-        return localScope.injectLazy()
-    }
+    @Suppress("UNCHECKED_CAST")
+    fun <T : Any> injectLazy(): Lazy<T> = localScope.injectLazy<Any>() as Lazy<T>
 
-    fun <T: Any> injectValue(): Lazy<T> {
-        return localScope.injectValue()
-    }
+    @Suppress("UNCHECKED_CAST")
+    fun <T : Any> injectValue(): Lazy<T> = localScope.injectValue<Any>() as Lazy<T>
 
-    fun <T: Any> injectLazy(key: Any): Lazy<T> {
-        return localScope.injectLazy(key)
-    }
+    @Suppress("UNCHECKED_CAST")
+    fun <T : Any> injectLazy(key: Any): Lazy<T> = localScope.injectLazy<Any>(key) as Lazy<T>
 
-    fun <T: Any> injectValue(key: Any): Lazy<T> {
-        return localScope.injectValue(key)
-    }
+    @Suppress("UNCHECKED_CAST")
+    fun <T : Any> injectValue(key: Any): Lazy<T> = localScope.injectValue<Any>(key) as Lazy<T>
 
     // injection of logger is intentionally not done, it could be from local scope, but more likely global so should be explicit or in descendant class.
 }
