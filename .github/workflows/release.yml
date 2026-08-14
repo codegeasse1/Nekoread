@@ -79,7 +79,7 @@ jobs:
         run: |
           VERSION="${INPUT_VERSION#v}"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          ./gradlew :app:assembleRelease -PversionCode=${{ github.run_number }} -PversionName="$VERSION" --no-daemon
+          ./gradlew :app:assembleRelease -PversionCode=${{ github.run_number }} -PversionName="$VERSION" --no-daemon --no-configuration-cache --stacktrace
         env:
           INPUT_VERSION: ${{ inputs.version }}
 

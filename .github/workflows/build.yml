@@ -2,6 +2,8 @@ name: Build Debug APK
 
 # Automatically builds the app on every push to `main` and makes the APK
 # downloadable from the `build` branch + the Actions artifacts.
+# On failure, the Gradle log is pushed to the build branch as build-error.log
+# so the failure is visible without Actions access.
 on:
   push:
     branches: ["main"]
@@ -50,16 +52,24 @@ jobs:
           fi
 
       - name: Build debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon
+        run: |
+          set +e
+          ./gradlew :app:assembleDebug --no-daemon --no-configuration-cache --stacktrace > gradle-build.log 2>&1
+          EXIT=$?
+          set -e
+          tail -n 80 gradle-build.log
+          exit $EXIT
 
       - name: Upload APK as workflow artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: Nekoread-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Push debug APK to the build branch
+      - name: Push result to the build branch
+        if: always()
         run: |
           set -e
           git config user.name "github-actions[bot]"
@@ -72,7 +82,13 @@ jobs:
             git checkout --orphan build
           fi
 
-          cp app/build/outputs/apk/debug/app-debug.apk Nekoread-debug.apk
+          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk Nekoread-debug.apk
+            rm -f build-error.log
+          else
+            cp gradle-build.log build-error.log
+            rm -f Nekoread-debug.apk
+          fi
 
           cat > README.md <<'EOF'
           # Nekoread — automatic builds
@@ -81,6 +97,7 @@ jobs:
           the `.apk` onto your Android device and opening it (allow "install from unknown sources").
 
           - `Nekoread-debug.apk` — latest debug build from `main`. Auto-updated on every push.
+          - `build-error.log` — present when the latest build failed (contains the Gradle error).
 
           Latest release APKs (if any) appear here too, but the official release downloads
           are on the Releases page: https://github.com/codegeasse1/Nekoread/releases
@@ -91,5 +108,5 @@ jobs:
           EOF
 
           git add -A
-          git commit -m "build: debug APK from ${{ github.sha }}" --allow-empty
+          git commit -m "build result for ${{ github.sha }} (${{ job.status }})" --allow-empty
           git push --force origin build
