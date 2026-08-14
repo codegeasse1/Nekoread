@@ -20,16 +20,31 @@ tap a chapter → the reader fetches real page URLs and renders them (webtoon / 
 Library, reading history, read-progress and categories all work against the Room database and are
 backed by the real source data once a manga has been browsed / added to the library.
 
-## Adding another source
+## Extensions (Mihon/Aniyomi/Tadami-style)
+
+The **Extensions** and **Extension Repos** tabs are fully real, modeled after Mihon/Aniyomi/Tadami:
+
+- **Repos** — add any extension repo by its index URL (or repo base URL — `index.json`,
+  `repo.json`, `index.min.json` and bare-array legacy formats are all auto-detected). Adding,
+  refreshing and deleting a repo actually fetches and parses the repo's real index; the extension
+  count and "last updated" time come from the server, never from hardcoded numbers. Every repo can
+  be deleted.
+- **Extensions** — install actually downloads the extension's real APK into app-private storage,
+  validates it like Mihon does (APK parses, package name matches the index, and the manifest
+  declares the `tachiyomi.extension` feature / `tachiyomi.extension.class` marker) and then
+  activates the extension's sources. Uninstall deletes the APK and its sources.
+- **Sources** — the built-in MangaDex source plus the sources that ship inside installed
+  extensions. Sources backed by `mangadex.org` are browsed through the app's real MangaDex
+  implementation; other sources open the real site in your browser.
+
+Files: `data/extension/ExtensionNetwork.kt` (repo index parsing + APK download),
+`data/extension/ExtensionEngine.kt` (defaults), plus the extension DAO / repository logic.
+
+## Adding a native source
 
 1. Implement `MangaSource` (mirror `MangaDexSource`) for the new provider.
 2. Register it in `SourceRegistry`.
-3. Add an entry to `ExtensionEngine.defaultSources` so it shows up in the Sources tab.
-
-Note: Mihon/Aniyomi-style extension repositories (`mihon-extensions`, `keiyoushi`, ...) ship
-installable APK extensions for many third-party (often scanlation) sites. Loading those is a
-large runtime feature and those sites are frequently against their ToS — NekoRead deliberately
-does not do that. Only sources with their own implementation in `data/source/` are real.
+3. Add a row to `ExtensionEngine.builtinSource`-style seeds so it shows up in the Sources tab.
 
 ## Build
 
