@@ -66,12 +66,12 @@ abstract class WebViewInterceptor(
     }
 
     private fun supportsWebView(): Boolean {
-        return try {
+        try {
             CookieManager.getInstance() // throws if WebView is missing
         } catch (e: Throwable) {
             return false
         }
-        context.packageManager.hasSystemFeature(PackageManager.FEATURE_WEBVIEW)
+        return context.packageManager.hasSystemFeature(PackageManager.FEATURE_WEBVIEW)
     }
 
     fun parseHeaders(headers: Headers): Map<String, String> {

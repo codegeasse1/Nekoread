@@ -35,7 +35,7 @@ class TachiyomiHttpSourceAdapter(
      */
     override val userAgent: String
         get() {
-            val extUa = runCatching { ext.headersBuilder().build()["User-Agent"] }.getOrNull()
+            val extUa = runCatching { ext.headers["User-Agent"] }.getOrNull()
             if (!extUa.isNullOrBlank()) return extUa
             return runCatching {
                 eu.kanade.tachiyomi.network.NetworkHelper.getInstance().defaultUserAgentProvider()
