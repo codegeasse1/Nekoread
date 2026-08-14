@@ -1,7 +1,5 @@
 package com.example.ui.screens
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,7 +59,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -93,6 +90,7 @@ private fun isMangaDexBacked(source: ExtensionSourceEntity): Boolean =
 fun BrowseScreen(
     viewModel: MainViewModel,
     onMangaClick: (String) -> Unit,
+    onOpenWebView: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedTabIndex by remember { mutableStateOf(0) }
@@ -117,7 +115,6 @@ fun BrowseScreen(
     var repoToDelete by remember { mutableStateOf<ExtensionRepoEntity?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
-    val context = LocalContext.current
 
     // Show operation results (repo add/refresh/delete, install errors) in a snackbar.
     LaunchedEffect(opMessage) {
@@ -188,11 +185,9 @@ fun BrowseScreen(
                         viewModel.loadCatalog(source.id, "")
                         selectedTabIndex = 1
                     },
-                    onOpenInBrowser = { source ->
+                    onOpenWebView = { source ->
                         val url = source.baseUrl.ifBlank { "https://mangadex.org" }
-                        context.startActivity(
-                            Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                        )
+                        onOpenWebView(url)
                     }
                 )
                 1 -> CatalogTabContent(
@@ -357,7 +352,7 @@ fun AddRepoDialog(
 fun SourcesTabContent(
     sources: List<ExtensionSourceEntity>,
     onBrowseSource: (ExtensionSourceEntity) -> Unit,
-    onOpenInBrowser: (ExtensionSourceEntity) -> Unit
+    onOpenWebView: (ExtensionSourceEntity) -> Unit
 ) {
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
@@ -466,14 +461,14 @@ fun SourcesTabContent(
                             Text("Browse")
                         }
                     } else {
-                        OutlinedButton(onClick = { onOpenInBrowser(source) }) {
+                        OutlinedButton(onClick = { onOpenWebView(source) }) {
                             Icon(
                                 imageVector = Icons.Default.OpenInNew,
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Website")
+                            Text("Open in WebView")
                         }
                     }
                 }

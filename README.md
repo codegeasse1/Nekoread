@@ -35,7 +35,8 @@ The **Extensions** and **Extension Repos** tabs are fully real, modeled after Mi
   activates the extension's sources. Uninstall deletes the APK and its sources.
 - **Sources** — the built-in MangaDex source plus the sources that ship inside installed
   extensions. Sources backed by `mangadex.org` are browsed through the app's real MangaDex
-  implementation; other sources open the real site in your browser.
+  implementation (search → details → chapters → read, all in-app). Other sources open the real
+  site in an in-app WebView (Tadami-style), so you never leave the app.
 
 Files: `data/extension/ExtensionNetwork.kt` (repo index parsing + APK download),
 `data/extension/ExtensionEngine.kt` (defaults), plus the extension DAO / repository logic.
