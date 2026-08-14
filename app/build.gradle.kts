@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.nekoread.manga"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = project.providers.gradleProperty("versionCode").map { it.toInt() }.getOrElse(1)
+    versionName = project.providers.gradleProperty("versionName").getOrElse("1.0")
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

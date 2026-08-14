@@ -36,6 +36,20 @@ does not do that. Only sources with their own implementation in `data/source/` a
 Open the project in Android Studio (API 24+, requires network access at runtime to reach
 `api.mangadex.org` / `uploads.mangadex.org` / the image CDN).
 
+## Automated builds & releases (GitHub Actions)
+
+- **Debug build (every push to `main`)** — `.github/workflows/build.yml` compiles the app and pushes
+  `Nekoread-debug.apk` to the **`build`** branch, and also attaches it to the run's artifacts.
+  Download it straight from: `https://github.com/codegeasse1/Nekoread/raw/build/Nekoread-debug.apk`
+- **Release** — go to the **Actions** tab → **Release APK** → **Run workflow**, enter a version
+  (e.g. `1.0.0`) and optional notes. It builds a signed release APK, creates a GitHub Release with
+  the APK attached, and drops a copy on the `build` branch too.
+
+  Signing: if you set repo secrets `KEYSTORE_BASE64` (base64 of your `.jks`), `STORE_PASSWORD` and
+  `KEY_PASSWORD`, releases are signed with your real key (required for in-place updates later).
+  Without secrets, each release is signed with a freshly generated key; the keystore is attached to
+  that run's artifacts and the password is printed in the log.
+
 ## Release schedule
 
 Pre-release / WIP — builds from `main`.
