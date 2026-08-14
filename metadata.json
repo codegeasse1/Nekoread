@@ -1,6 +1,0 @@
-{
-  "name": "NekoRead",
-  "description": "A Mihon and Aniyomi inspired Manga & Manhwa reader with extension source repositories, library tracking, and high-performance reader.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

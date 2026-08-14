@@ -1,44 +1,27 @@
-Fetching distribution.
-Downloading https://services.gradle.org/distributions/gradle-9.7.0-bin.zip
-..............10%..............20%..............30%...............40%..............50%...............60%..............70%..............80%...............90%..............100%
-
-Welcome to Gradle 9.7.0!
-
-Here are the highlights of this release:
- - Isolated Projects graduates to incubating
- - Broader Configuration Cache compatibility
- - More source locations in problem reports
-
-For more details see https://docs.gradle.org/9.7.0/release-notes.html
-
 To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.7.0/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
 Daemon will be stopped at the end of the build 
+
+> Configure project :app
+WARNING: The option setting 'android.disallowKotlinSourceSets=false' is experimental.
+The current default is 'true'.
+
 > Task :app:preBuild UP-TO-DATE
 > Task :app:preDebugBuild UP-TO-DATE
 > Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
-> Task :app:generateDebugBuildConfig
-> Task :app:generateDebugResources
-
-> Task :app:processDebugGoogleServices
-File google-services.json is missing.
-The Google Services Plugin cannot function without it.
-Searched locations: /home/runner/work/Nekoread/Nekoread/app/src/debug/google-services.json, /home/runner/work/Nekoread/Nekoread/app/src/debug/google-services.json, /home/runner/work/Nekoread/Nekoread/app/src/google-services.json, /home/runner/work/Nekoread/Nekoread/app/src/debug/google-services.json, /home/runner/work/Nekoread/Nekoread/app/src/Debug/google-services.json, /home/runner/work/Nekoread/Nekoread/app/google-services.json
-
-> Task :app:packageDebugResources
-> Task :app:processDebugNavigationResources
-> Task :app:parseDebugLocalResources
+> Task :app:generateDebugBuildConfig FROM-CACHE
+> Task :app:generateDebugResources FROM-CACHE
+> Task :app:processDebugGoogleServices FROM-CACHE
+> Task :app:packageDebugResources FROM-CACHE
+> Task :app:processDebugNavigationResources FROM-CACHE
+> Task :app:parseDebugLocalResources FROM-CACHE
+> Task :app:generateDebugRFile FROM-CACHE
+> Task :app:kspDebugKotlin FROM-CACHE
+> Task :app:javaPreCompileDebug FROM-CACHE
 > Task :app:generateDebugAssets UP-TO-DATE
-> Task :app:generateDebugRFile
-> Task :app:javaPreCompileDebug
 > Task :app:mergeDebugAssets
-> Task :app:compressDebugAssets
-> Task :app:desugarDebugFileDependencies
+> Task :app:compressDebugAssets FROM-CACHE
+> Task :app:desugarDebugFileDependencies FROM-CACHE
 > Task :app:checkDebugDuplicateClasses
-> Task :app:checkDebugAarMetadata
-> Task :app:kspDebugKotlin
-> Task :app:mergeExtDexDebug
-> Task :app:mapDebugSourceSetPaths
-> Task :app:mergeLibDexDebug
 
 > Task :app:compileDebugKotlin FAILED
 e: org.jetbrains.kotlin.cli.jvm.plugins.PluginCliParser$PluginProcessingError: Plugin androidx.compose.compiler.plugins.kotlin.ComposePluginRegistrar is incompatible with the current version of the compiler.
@@ -81,8 +64,8 @@ Caused by: java.lang.AbstractMethodError: Receiver class androidx.compose.compil
 	... 33 more
 
 
-> Task :app:compileDebugNavigationResources
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_3-1786734479762.json
+> Task :app:checkDebugAarMetadata
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_3-1786735456982.json
 
 [Incubating] Problems report is available at: file:///home/runner/work/Nekoread/Nekoread/build/reports/problems/problems-report.html
 
@@ -295,5 +278,5 @@ You can use '--warning-mode all' to show the individual deprecation warnings and
 
 For more on this, please refer to https://docs.gradle.org/9.7.0/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
 
-BUILD FAILED in 3m 3s
-19 actionable tasks: 19 executed
+BUILD FAILED in 17s
+15 actionable tasks: 4 executed, 11 from cache
