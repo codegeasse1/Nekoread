@@ -3,34 +3,52 @@ package eu.kanade.tachiyomi.network
 import android.app.Application
 import android.content.Context
 import eu.kanade.tachiyomi.AppInfo
+import eu.kanade.tachiyomi.network.interceptor.CloudflareInterceptor
 import okhttp3.OkHttpClient
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
 import java.util.concurrent.TimeUnit
 
 /**
- * Provides the network stack that loaded extensions use — same role as Tadami's NetworkHelper
- * (minus DoH/Cloudflare helpers, which extensions don't require to compile). Registered into the
- * global injekt scope so extension code can `by injectLazy()` it, exactly like Tadami.
+ * Provides the network stack that loaded extensions use — same role as Tadami's NetworkHelper.
+ * Registered into the global injekt scope so extension code can `by injectLazy()` it, exactly like
+ * Tadami.
  */
 class NetworkHelper(context: Context) {
 
-    val client: OkHttpClient = defaultClient()
-    val cloudflareClient: OkHttpClient = client
+    /** Shared WebView cookie store; extensions' OkHttp clients and the Cloudflare WebView both use it. */
+    val cookieJar = AndroidCookieJar()
 
-    private fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .callTimeout(90, TimeUnit.SECONDS)
-        // Shared cookie store with the in-app Cloudflare-verification WebView.
-        .cookieJar(WebViewCookieJar())
-        .addInterceptor { chain ->
-            val request = chain.request().newBuilder()
-                .header("User-Agent", defaultUserAgentProvider())
-                .build()
-            chain.proceed(request)
-        }
+    private val clientBuilder: OkHttpClient.Builder = run {
+        OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .callTimeout(120, TimeUnit.SECONDS)
+            .cookieJar(cookieJar)
+            .addInterceptor { chain ->
+                // Like Tadami: only set the app UA when the extension didn't supply its own, so the
+                // WebView (which mirrors the request's UA) binds cf_clearance to the real UA.
+                val request = chain.request()
+                val ua = request.header("User-Agent") ?: defaultUserAgentProvider()
+                chain.proceed(request.newBuilder().header("User-Agent", ua).build())
+            }
+    }
+
+    /** The one client extensions use. Automatically solves Cloudflare challenges via a hidden WebView. */
+    val client: OkHttpClient = clientBuilder
+        .addInterceptor(
+            CloudflareInterceptor(
+                context = context,
+                cookieManager = cookieJar,
+                defaultUserAgentProvider = { defaultUserAgentProvider() },
+            ),
+        )
         .build()
+
+    /** @deprecated — the regular client handles Cloudflare by default. */
+    @Deprecated("The regular client handles Cloudflare by default")
+    @Suppress("UNUSED")
+    val cloudflareClient: OkHttpClient = client
 
     fun defaultUserAgentProvider(): String = "Nekoread/" + AppInfo.getVersionName()
 

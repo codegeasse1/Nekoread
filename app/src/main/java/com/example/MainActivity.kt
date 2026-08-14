@@ -1,6 +1,5 @@
 package com.example
 
-import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -50,7 +49,6 @@ import com.example.ui.screens.MangaDetailScreen
 import com.example.ui.screens.ReaderScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.UpdatesHistoryScreen
-import com.example.ui.screens.WebViewScreen
 import com.example.ui.theme.BgGradientBottom
 import com.example.ui.theme.BgGradientMid
 import com.example.ui.theme.BgGradientTop
@@ -135,10 +133,6 @@ fun MainAppScreen(viewModel: MainViewModel) {
     val libraryManga by viewModel.libraryManga.collectAsStateWithLifecycle()
     val historyManga by viewModel.readingHistory.collectAsStateWithLifecycle()
 
-    fun openWebView(url: String) {
-        navController.navigate("webview/${Uri.encode(url)}")
-    }
-
     Scaffold(
         containerColor = Color.Transparent,
         bottomBar = {
@@ -216,8 +210,7 @@ fun MainAppScreen(viewModel: MainViewModel) {
                     viewModel = viewModel,
                     onMangaClick = { mangaId ->
                         navController.navigate("manga_detail/$mangaId")
-                    },
-                    onOpenWebView = { url -> openWebView(url) }
+                    }
                 )
             }
 
@@ -276,19 +269,7 @@ fun MainAppScreen(viewModel: MainViewModel) {
                         navController.navigate("reader/$mangaId/$newChapterId") {
                             popUpTo("reader/$mangaId/$chapterId") { inclusive = true }
                         }
-                    },
-                    onOpenWebView = { url -> openWebView(url) }
-                )
-            }
-
-            composable(
-                route = "webview/{url}",
-                arguments = listOf(navArgument("url") { type = NavType.StringType })
-            ) { backStackEntry ->
-                val url = Uri.decode(backStackEntry.arguments?.getString("url") ?: "")
-                WebViewScreen(
-                    url = url,
-                    onBackClick = { navController.popBackStack() }
+                    }
                 )
             }
         }

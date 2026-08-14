@@ -111,7 +111,6 @@ private fun contentWarningLabel(cw: String): String? = when (cw) {
 fun BrowseScreen(
     viewModel: MainViewModel,
     onMangaClick: (String) -> Unit,
-    onOpenWebView: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedTabIndex by remember { mutableStateOf(TAB_SOURCES) }
@@ -142,7 +141,16 @@ fun BrowseScreen(
     var repoNameInput by remember { mutableStateOf("") }
     var repoToDelete by remember { mutableStateOf<ExtensionRepoEntity?>(null) }
 
+    // Cloudflare / site verification overlay (a Dialog, so closing it keeps the user exactly here).
+    var webviewTarget by remember { mutableStateOf<Pair<String, String?>?>(null) }
+
     val snackbarHostState = remember { SnackbarHostState() }
+
+    fun sourceUserAgent(sourceId: String): String? =
+        if (sourceId.isBlank()) null
+        else runCatching { viewModel.repository.sourceForManga("$sourceId:x").userAgent }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
 
     // Show operation results (repo add/refresh/delete, install errors) in a snackbar.
     LaunchedEffect(opMessage) {
@@ -234,7 +242,9 @@ fun BrowseScreen(
                         viewModel.loadCatalog(source.id, "")
                         selectedTabIndex = TAB_CATALOG
                     },
-                    onOpenWebView = onOpenWebView
+                    onOpenWebView = { source ->
+                        webviewTarget = source.baseUrl to sourceUserAgent(source.id)
+                    }
                 )
                 TAB_GLOBAL -> GlobalSearchTabContent(
                     query = globalQuery,
@@ -256,7 +266,9 @@ fun BrowseScreen(
                     hasSource = activeSourceId.isNotBlank(),
                     onRetry = { viewModel.loadCatalog(activeSourceId, searchQuery) },
                     onMangaClick = onMangaClick,
-                    onOpenWebView = onOpenWebView
+                    onOpenWebView = { url ->
+                        webviewTarget = url to sourceUserAgent(activeSourceId)
+                    }
                 )
                 TAB_EXTENSIONS -> ExtensionsTabContent(
                     extensions = extensions,
@@ -323,6 +335,14 @@ fun BrowseScreen(
                     Text("Cancel")
                 }
             }
+        )
+    }
+
+    webviewTarget?.let { (url, ua) ->
+        WebViewDialog(
+            url = url,
+            userAgent = ua,
+            onDismiss = { webviewTarget = null }
         )
     }
 }
@@ -410,7 +430,7 @@ fun AddRepoDialog(
 fun SourcesTabContent(
     sources: List<ExtensionSourceEntity>,
     onBrowseSource: (ExtensionSourceEntity) -> Unit,
-    onOpenWebView: (String) -> Unit
+    onOpenWebView: (ExtensionSourceEntity) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
     val filtered = remember(sources, query) {
@@ -533,7 +553,7 @@ fun SourcesTabContent(
 
                         // Cloudflare / site verification: open the source in the in-app WebView
                         IconButton(
-                            onClick = { onOpenWebView(source.baseUrl) },
+                            onClick = { onOpenWebView(source) },
                             modifier = Modifier.testTag("source_webview_${source.id}")
                         ) {
                             Icon(

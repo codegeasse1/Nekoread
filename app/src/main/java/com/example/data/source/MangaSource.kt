@@ -21,6 +21,11 @@ interface MangaSource {
     val lang: String
     val sourceType: String
 
+    /** The User-Agent the source's HTTP requests actually send; used to mirror it in the
+     *  Cloudflare-verification WebView so a solved cf_clearance binds to the right UA. */
+    val userAgent: String
+        get() = ""
+
     suspend fun search(query: String, page: Int): List<MangaEntity>
     suspend fun latest(page: Int): List<MangaEntity>
     suspend fun getDetails(fullMangaId: String): MangaEntity

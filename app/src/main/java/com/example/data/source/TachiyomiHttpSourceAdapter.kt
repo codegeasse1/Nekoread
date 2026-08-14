@@ -28,6 +28,20 @@ class TachiyomiHttpSourceAdapter(
     override val lang: String = ext.lang
     override val sourceType: String = "MANGA"
 
+    /**
+     * The exact User-Agent the extension's requests will send: the extension's own UA if it sets
+     * one, otherwise the app default (which NetworkHelper injects). Mirrored by the
+     * Cloudflare-verification WebView so cf_clearance binds to the right UA.
+     */
+    override val userAgent: String
+        get() {
+            val extUa = runCatching { ext.headersBuilder().build()["User-Agent"] }.getOrNull()
+            if (!extUa.isNullOrBlank()) return extUa
+            return runCatching {
+                eu.kanade.tachiyomi.network.NetworkHelper.getInstance().defaultUserAgentProvider()
+            }.getOrNull() ?: ""
+        }
+
     override fun toString(): String = name
 
     private fun b64(raw: String): String =

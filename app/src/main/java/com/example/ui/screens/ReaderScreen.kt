@@ -82,7 +82,6 @@ fun ReaderScreen(
     allChapters: List<ChapterEntity>,
     onBackClick: () -> Unit,
     onChapterChange: (String) -> Unit,
-    onOpenWebView: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (manga == null || chapter == null) {
@@ -171,6 +170,14 @@ fun ReaderScreen(
             viewModel.repository.sourceForManga(manga.id).baseUrl
         }.getOrDefault("")
     }
+    val sourceUserAgent = remember(manga) {
+        if (manga == null) "" else runCatching {
+            viewModel.repository.sourceForManga(manga.id).userAgent
+        }.getOrDefault("")
+    }
+
+    // Cloudflare / site verification overlay (a Dialog, so closing it keeps the user in the reader).
+    var webviewTarget by remember { mutableStateOf<Pair<String, String?>?>(null) }
 
     Box(
         modifier = modifier
@@ -231,7 +238,9 @@ fun ReaderScreen(
                             }
                             if (sourceBaseUrl.isNotBlank()) {
                                 OutlinedButton(
-                                    onClick = { onOpenWebView(sourceBaseUrl) },
+                                    onClick = {
+                                        webviewTarget = sourceBaseUrl to sourceUserAgent
+                                    },
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = contentTextColor)
                                 ) {
                                     Text("Verify in WebView")
@@ -546,6 +555,14 @@ fun ReaderScreen(
                     Text("Done")
                 }
             }
+        )
+    }
+
+    webviewTarget?.let { (url, ua) ->
+        WebViewDialog(
+            url = url,
+            userAgent = ua,
+            onDismiss = { webviewTarget = null }
         )
     }
 }
