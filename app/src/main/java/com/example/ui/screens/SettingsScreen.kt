@@ -1,6 +1,9 @@
 package com.example.ui.screens
 
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,6 +24,8 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -30,7 +35,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -38,6 +45,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +58,20 @@ import com.example.ui.MainViewModel
 import com.example.ui.ReaderBg
 import com.example.ui.ReaderMode
 import com.example.ui.theme.NekoVioletPrimary
+import kotlinx.coroutines.launch
+
+private fun readerModeLabel(mode: ReaderMode): String = when (mode) {
+    ReaderMode.WEBTOON -> "Webtoon (Continuous Vertical)"
+    ReaderMode.LEFT_TO_RIGHT -> "Manga Left to Right"
+    ReaderMode.RIGHT_TO_LEFT -> "Manga Right to Left"
+}
+
+private fun readerBgLabel(bg: ReaderBg): String = when (bg) {
+    ReaderBg.PURE_BLACK -> "Pure Black"
+    ReaderBg.DARK_GRAY -> "Dark Gray"
+    ReaderBg.CREAM -> "Cream"
+    ReaderBg.WHITE -> "White"
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,12 +80,63 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var showCategoryModal by remember { mutableStateOf(false) }
     var newCategoryInput by remember { mutableStateOf("") }
+    var showReaderModeDialog by remember { mutableStateOf(false) }
+    var showReaderBgDialog by remember { mutableStateOf(false) }
+    var busyMessage by remember { mutableStateOf<String?>(null) }
 
     val categories: List<CategoryEntity> by viewModel.categories.collectAsStateWithLifecycle()
     val readerMode: ReaderMode by viewModel.readerMode.collectAsStateWithLifecycle()
     val readerBg: ReaderBg by viewModel.readerBg.collectAsStateWithLifecycle()
+    val showPageNumber: Boolean by viewModel.showPageNumber.collectAsStateWithLifecycle()
+
+    // Real export: user picks where to save the backup JSON (SAF).
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch {
+                busyMessage = "Exporting backup..."
+                try {
+                    val json = viewModel.exportBackup()
+                    context.contentResolver.openOutputStream(uri)?.use { out ->
+                        out.write(json.toByteArray())
+                    }
+                    Toast.makeText(context, "Backup exported successfully", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                } finally {
+                    busyMessage = null
+                }
+            }
+        }
+    }
+
+    // Real import: user picks a backup JSON (SAF).
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch {
+                busyMessage = "Restoring backup..."
+                try {
+                    val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    val error = text?.let { viewModel.importBackup(it) }
+                    Toast.makeText(
+                        context,
+                        error ?: "Backup restored successfully",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Restore failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                } finally {
+                    busyMessage = null
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -86,10 +159,10 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // General & Categories
+            // Reader
             item {
                 Text(
-                    text = "Library Settings",
+                    text = "Reader",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -101,28 +174,45 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
+                        SettingRow(
+                            icon = Icons.Default.MenuBook,
+                            title = "Default Reading Mode",
+                            subtitle = readerModeLabel(readerMode),
+                            onClick = { showReaderModeDialog = true }
+                        )
+
+                        SettingRow(
+                            icon = Icons.Default.Palette,
+                            title = "Reader Background",
+                            subtitle = readerBgLabel(readerBg),
+                            onClick = { showReaderBgDialog = true }
+                        )
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { showCategoryModal = true }
                                 .padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Category, contentDescription = "Categories", tint = NekoVioletPrimary)
+                            Icon(Icons.Default.Tag, contentDescription = "Page Number", tint = NekoVioletPrimary)
                             Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Edit Categories", fontWeight = FontWeight.Bold)
-                                Text("${categories.size} Custom Categories", style = MaterialTheme.typography.bodySmall)
+                                Text("Show Page Number", fontWeight = FontWeight.Bold)
+                                Text("Overlay the page number in the reader", style = MaterialTheme.typography.bodySmall)
                             }
+                            Switch(
+                                checked = showPageNumber,
+                                onCheckedChange = { viewModel.setShowPageNumber(it) }
+                            )
                         }
                     }
                 }
             }
 
-            // Reader Defaults
+            // Library
             item {
                 Text(
-                    text = "Reader Defaults",
+                    text = "Library",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -134,34 +224,20 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.MenuBook, contentDescription = "Reader Mode", tint = NekoVioletPrimary)
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Default Reading Mode", fontWeight = FontWeight.Bold)
-                                Text(
-                                    when (readerMode) {
-                                        ReaderMode.WEBTOON -> "Webtoon (Continuous Vertical)"
-                                        ReaderMode.LEFT_TO_RIGHT -> "Manga Left to Right"
-                                        ReaderMode.RIGHT_TO_LEFT -> "Manga Right to Right"
-                                    },
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
+                        SettingRow(
+                            icon = Icons.Default.Category,
+                            title = "Edit Categories",
+                            subtitle = "${categories.size} custom categories",
+                            onClick = { showCategoryModal = true }
+                        )
                     }
                 }
             }
 
-            // Backup & Restore
+            // Data
             item {
                 Text(
-                    text = "Data Backup & Restore",
+                    text = "Data",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -173,39 +249,19 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    Toast.makeText(context, "Library & Extension data backed up to JSON!", Toast.LENGTH_SHORT).show()
-                                }
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.CloudUpload, contentDescription = "Backup", tint = NekoVioletPrimary)
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Export Backup (JSON)", fontWeight = FontWeight.Bold)
-                                Text("Save library, history, categories & extension repos", style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
+                        SettingRow(
+                            icon = Icons.Default.CloudUpload,
+                            title = "Export Backup (JSON)",
+                            subtitle = "Save library, history, categories, repos & extensions",
+                            onClick = { exportLauncher.launch("nekoread-backup.json") }
+                        )
 
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    Toast.makeText(context, "Library restored successfully!", Toast.LENGTH_SHORT).show()
-                                }
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.CloudDownload, contentDescription = "Restore", tint = NekoVioletPrimary)
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Restore Backup", fontWeight = FontWeight.Bold)
-                                Text("Import library backup from file", style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
+                        SettingRow(
+                            icon = Icons.Default.CloudDownload,
+                            title = "Restore Backup",
+                            subtitle = "Import a previously exported backup file",
+                            onClick = { importLauncher.launch(arrayOf("application/json")) }
+                        )
                     }
                 }
             }
@@ -231,14 +287,84 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("NekoRead v1.0.0", fontWeight = FontWeight.Bold)
                         Text(
-                            text = "Inspired by Mihon & Aniyomi. Supporting custom extension repositories, webtoon reader & library management.",
+                            text = "A manga reader built on the Tadami/Mihon extension system — install real extensions and browse real sources.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             }
+
+            if (busyMessage != null) {
+                item {
+                    Text(
+                        text = busyMessage!!,
+                        style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
         }
+    }
+
+    if (showReaderModeDialog) {
+        AlertDialog(
+            onDismissRequest = { showReaderModeDialog = false },
+            title = { Text("Default Reading Mode") },
+            text = {
+                Column {
+                    ReaderMode.entries.forEach { mode ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.setReaderMode(mode); showReaderModeDialog = false }
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = readerMode == mode,
+                                onClick = { viewModel.setReaderMode(mode); showReaderModeDialog = false }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(readerModeLabel(mode))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showReaderModeDialog = false }) { Text("Close") }
+            }
+        )
+    }
+
+    if (showReaderBgDialog) {
+        AlertDialog(
+            onDismissRequest = { showReaderBgDialog = false },
+            title = { Text("Reader Background") },
+            text = {
+                Column {
+                    ReaderBg.entries.forEach { bg ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.setReaderBg(bg); showReaderBgDialog = false }
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = readerBg == bg,
+                                onClick = { viewModel.setReaderBg(bg); showReaderBgDialog = false }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(readerBgLabel(bg))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showReaderBgDialog = false }) { Text("Close") }
+            }
+        )
     }
 
     if (showCategoryModal) {
@@ -295,5 +421,28 @@ fun SettingsScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun SettingRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = title, tint = NekoVioletPrimary)
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontWeight = FontWeight.Bold)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall)
+        }
     }
 }

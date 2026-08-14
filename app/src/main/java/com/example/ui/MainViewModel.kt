@@ -1,6 +1,7 @@
 package com.example.ui
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
@@ -31,6 +32,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val repository: MangaRepository = MangaRepository(AppDatabase.getInstance(application), application)
 
+    private val prefs = application.getSharedPreferences("nekoread_settings", Context.MODE_PRIVATE)
+
     init {
         viewModelScope.launch {
             // Tachiyomi extensions need the shared network stack before any source is constructed.
@@ -52,6 +55,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _showPageNumber = MutableStateFlow(true)
     val showPageNumber: StateFlow<Boolean> = _showPageNumber.asStateFlow()
+
+    init {
+        // Load persisted reader settings (stored in SharedPreferences, survives app restarts).
+        _readerMode.value = ReaderMode.valueOf(prefs.getString("reader_mode", ReaderMode.WEBTOON.name)!!)
+        _readerBg.value = ReaderBg.valueOf(prefs.getString("reader_bg", ReaderBg.PURE_BLACK.name)!!)
+        _showPageNumber.value = prefs.getBoolean("show_page_number", true)
+    }
 
     // Library Filter & Search
     private val _librarySearchQuery = MutableStateFlow("")
@@ -152,11 +162,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setReaderMode(mode: ReaderMode) {
         _readerMode.value = mode
+        prefs.edit().putString("reader_mode", mode.name).apply()
     }
 
     fun setReaderBg(bg: ReaderBg) {
         _readerBg.value = bg
+        prefs.edit().putString("reader_bg", bg.name).apply()
     }
+
+    fun setShowPageNumber(show: Boolean) {
+        _showPageNumber.value = show
+        prefs.edit().putBoolean("show_page_number", show).apply()
+    }
+
+    suspend fun exportBackup(): String = repository.exportBackupJson()
+
+    suspend fun importBackup(json: String): String? = repository.importBackupJson(json)
 
     fun setLibrarySearchQuery(query: String) {
         _librarySearchQuery.value = query

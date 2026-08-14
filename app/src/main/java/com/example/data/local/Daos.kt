@@ -12,6 +12,9 @@ interface MangaDao {
     @Query("SELECT * FROM manga WHERE inLibrary = 1 ORDER BY lastReadTimestamp DESC, title ASC")
     fun getLibraryManga(): Flow<List<MangaEntity>>
 
+    @Query("SELECT * FROM manga ORDER BY title ASC")
+    suspend fun getAllManga(): List<MangaEntity>
+
     @Query("SELECT * FROM manga WHERE inLibrary = 1 AND category = :category ORDER BY title ASC")
     fun getLibraryMangaByCategory(category: String): Flow<List<MangaEntity>>
 
@@ -75,6 +78,9 @@ interface ChapterDao {
     @Query("UPDATE chapters SET read = 1 WHERE mangaId = :mangaId AND chapterNumber <= :chapterNumber")
     suspend fun markPreviousChaptersAsRead(mangaId: String, chapterNumber: Float)
 
+    @Query("SELECT * FROM chapters ORDER BY dateUpload DESC")
+    suspend fun getAllChapters(): List<ChapterEntity>
+
     @Query("SELECT * FROM chapters WHERE read = 1 ORDER BY dateUpload DESC LIMIT 20")
     fun getRecentlyReadChapters(): Flow<List<ChapterEntity>>
 }
@@ -83,6 +89,9 @@ interface ChapterDao {
 interface ExtensionDao {
     @Query("SELECT * FROM extension_repos ORDER BY name ASC")
     fun getAllRepos(): Flow<List<ExtensionRepoEntity>>
+
+    @Query("SELECT * FROM extension_repos ORDER BY name ASC")
+    suspend fun getAllReposOnce(): List<ExtensionRepoEntity>
 
     @Query("SELECT * FROM extension_repos WHERE id = :id")
     suspend fun getRepoById(id: String): ExtensionRepoEntity?
@@ -104,6 +113,9 @@ interface ExtensionDao {
 
     @Query("SELECT * FROM extensions ORDER BY name ASC")
     fun getAllExtensions(): Flow<List<ExtensionEntity>>
+
+    @Query("SELECT * FROM extensions ORDER BY name ASC")
+    suspend fun getAllExtensionsOnce(): List<ExtensionEntity>
 
     @Query("SELECT * FROM extensions WHERE repoId = :repoId ORDER BY name ASC")
     suspend fun getExtensionsByRepo(repoId: String): List<ExtensionEntity>
@@ -131,6 +143,9 @@ interface ExtensionDao {
 
     @Query("SELECT * FROM extension_sources ORDER BY name ASC")
     fun getAllSources(): Flow<List<ExtensionSourceEntity>>
+
+    @Query("SELECT * FROM extension_sources ORDER BY name ASC")
+    suspend fun getAllSourcesOnce(): List<ExtensionSourceEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSources(sources: List<ExtensionSourceEntity>)

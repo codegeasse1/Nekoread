@@ -1,16 +1,64 @@
+@file:Suppress("PropertyName")
+
 package eu.kanade.tachiyomi.source.model
 
-interface SManga {
+import kotlinx.serialization.json.JsonObject
+import java.io.Serializable
+
+interface SManga : Serializable {
+
     var url: String
+
     var title: String
+
     var artist: String?
+
     var author: String?
+
     var description: String?
+
     var genre: String?
+
     var status: Int
+
+    var rating: Float
+
     var thumbnail_url: String?
+
     var update_strategy: UpdateStrategy
+
     var initialized: Boolean
+
+    /**
+     * Extra metadata associated with the manga.
+     *
+     * The JSON object is not visible to users and is intended for internal or source-specific
+     * purposes. Apps may define their own namespaced keys (e.g., `"mihon.*"`) for sources to populate.
+     *
+     * @since tachiyomix 1.6
+     */
+    var memo: JsonObject
+        get() = JsonObject(emptyMap())
+        set(value) {}
+
+    fun getGenres(): List<String>? {
+        return parseSourceGenres(genre)
+    }
+
+    fun copy() = create().also {
+        it.url = url
+        it.title = title
+        it.artist = artist
+        it.author = author
+        it.description = description
+        it.genre = genre
+        it.status = status
+        it.rating = rating
+        it.thumbnail_url = thumbnail_url
+        it.update_strategy = update_strategy
+        it.initialized = initialized
+        it.memo = memo
+    }
 
     companion object {
         const val UNKNOWN = 0
@@ -21,19 +69,8 @@ interface SManga {
         const val CANCELLED = 5
         const val ON_HIATUS = 6
 
-        fun create(): SManga = SMangaImpl()
+        fun create(): SManga {
+            return SMangaImpl()
+        }
     }
-}
-
-class SMangaImpl : SManga {
-    override var url: String = ""
-    override var title: String = ""
-    override var artist: String? = null
-    override var author: String? = null
-    override var description: String? = null
-    override var genre: String? = null
-    override var status: Int = SManga.UNKNOWN
-    override var thumbnail_url: String? = null
-    override var update_strategy: UpdateStrategy = UpdateStrategy.ALWAYS_UPDATE
-    override var initialized: Boolean = false
 }

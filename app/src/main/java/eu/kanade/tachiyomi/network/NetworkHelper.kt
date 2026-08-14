@@ -1,18 +1,22 @@
 package eu.kanade.tachiyomi.network
 
+import android.app.Application
 import android.content.Context
 import eu.kanade.tachiyomi.AppInfo
 import okhttp3.OkHttpClient
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.addSingleton
 import java.util.concurrent.TimeUnit
 
 /**
- * Provides the network stack that loaded extensions use. Same role as Tadami/Mihon's
- * NetworkHelper (minus DoH/Cloudflare helpers, which extensions don't require to compile).
+ * Provides the network stack that loaded extensions use — same role as Tadami's NetworkHelper
+ * (minus DoH/Cloudflare helpers, which extensions don't require to compile). Registered into the
+ * global injekt scope so extension code can `by injectLazy()` it, exactly like Tadami.
  */
 class NetworkHelper(context: Context) {
 
     val client: OkHttpClient = defaultClient()
-    val cloudflareClient: OkHttpClient = defaultClient()
+    val cloudflareClient: OkHttpClient = client
 
     private fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -20,11 +24,13 @@ class NetworkHelper(context: Context) {
         .callTimeout(90, TimeUnit.SECONDS)
         .addInterceptor { chain ->
             val request = chain.request().newBuilder()
-                .header("User-Agent", "Nekoread/" + AppInfo.getVersionName())
+                .header("User-Agent", defaultUserAgentProvider())
                 .build()
             chain.proceed(request)
         }
         .build()
+
+    fun defaultUserAgentProvider(): String = "Nekoread/" + AppInfo.getVersionName()
 
     companion object {
         @Volatile
@@ -33,7 +39,13 @@ class NetworkHelper(context: Context) {
         fun init(context: Context) {
             AppInfo.init(context)
             if (instance == null) {
-                instance = NetworkHelper(context.applicationContext)
+                val app = context.applicationContext
+                val nh = NetworkHelper(app)
+                instance = nh
+                // Extensions resolve NetworkHelper (and the Application for source preferences)
+                // through the global injekt registry, exactly like Tadami does.
+                Injekt.addSingleton(nh)
+                Injekt.addSingleton(app as Application)
             }
         }
 

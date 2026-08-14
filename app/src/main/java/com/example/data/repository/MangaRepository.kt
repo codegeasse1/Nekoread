@@ -23,6 +23,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
 
@@ -428,5 +430,247 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
 
     suspend fun deleteCategory(id: String) = withContext(Dispatchers.IO) {
         db.categoryDao().deleteCategory(id)
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Backup & restore (real JSON export/import of all user data — like Tadami's Data section)
+    // ------------------------------------------------------------------------------------------
+
+    suspend fun exportBackupJson(): String = withContext(Dispatchers.IO) {
+        val root = JSONObject()
+        root.put("app", "Nekoread")
+        root.put("version", 1)
+
+        root.put(
+            "categories",
+            JSONArray().also { arr ->
+                for (c in db.categoryDao().getAllCategories().first()) {
+                    arr.put(
+                        JSONObject()
+                            .put("id", c.id)
+                            .put("name", c.name)
+                            .put("sortOrder", c.sortOrder)
+                    )
+                }
+            }
+        )
+
+        root.put(
+            "repos",
+            JSONArray().also { arr ->
+                for (r in db.extensionDao().getAllReposOnce()) {
+                    arr.put(
+                        JSONObject()
+                            .put("id", r.id)
+                            .put("name", r.name)
+                            .put("url", r.url)
+                            .put("extensionCount", r.extensionCount)
+                            .put("lastUpdated", r.lastUpdated)
+                            .put("addedDate", r.addedDate)
+                    )
+                }
+            }
+        )
+
+        root.put(
+            "extensions",
+            JSONArray().also { arr ->
+                for (e in db.extensionDao().getAllExtensionsOnce()) {
+                    arr.put(
+                        JSONObject()
+                            .put("packageName", e.packageName)
+                            .put("repoId", e.repoId)
+                            .put("name", e.name)
+                            .put("versionName", e.versionName)
+                            .put("versionCode", e.versionCode)
+                            .put("libVersion", e.libVersion)
+                            .put("contentWarning", e.contentWarning)
+                            .put("apkUrl", e.apkUrl)
+                            .put("iconUrl", e.iconUrl)
+                            .put("nsfw", e.nsfw)
+                            .put("isInstalled", e.isInstalled)
+                            .put("installedVersionName", e.installedVersionName)
+                            .put("installError", e.installError)
+                            .put("sourcesJson", e.sourcesJson)
+                    )
+                }
+            }
+        )
+
+        root.put(
+            "sources",
+            JSONArray().also { arr ->
+                for (s in db.extensionDao().getAllSourcesOnce()) {
+                    arr.put(
+                        JSONObject()
+                            .put("id", s.id)
+                            .put("extensionPkg", s.extensionPkg)
+                            .put("repoId", s.repoId)
+                            .put("name", s.name)
+                            .put("version", s.version)
+                            .put("lang", s.lang)
+                            .put("iconUrl", s.iconUrl)
+                            .put("isInstalled", s.isInstalled)
+                            .put("isNsfw", s.isNsfw)
+                            .put("baseUrl", s.baseUrl)
+                            .put("sourceType", s.sourceType)
+                            .put("sourceName", s.sourceName)
+                    )
+                }
+            }
+        )
+
+        root.put(
+            "manga",
+            JSONArray().also { arr ->
+                for (m in db.mangaDao().getAllManga()) {
+                    arr.put(
+                        JSONObject()
+                            .put("id", m.id)
+                            .put("title", m.title)
+                            .put("coverUrl", m.coverUrl)
+                            .put("author", m.author)
+                            .put("artist", m.artist)
+                            .put("description", m.description)
+                            .put("sourceId", m.sourceId)
+                            .put("sourceName", m.sourceName)
+                            .put("status", m.status)
+                            .put("type", m.type)
+                            .put("inLibrary", m.inLibrary)
+                            .put("category", m.category)
+                            .put("lastReadChapterId", m.lastReadChapterId)
+                            .put("lastReadChapterName", m.lastReadChapterName)
+                            .put("lastReadPage", m.lastReadPage)
+                            .put("lastReadTimestamp", m.lastReadTimestamp)
+                            .put("unreadCount", m.unreadCount)
+                            .put("bookmarkCount", m.bookmarkCount)
+                            .put("rating", m.rating)
+                            .put("genres", m.genres)
+                    )
+                }
+            }
+        )
+
+        root.put(
+            "chapters",
+            JSONArray().also { arr ->
+                for (c in db.chapterDao().getAllChapters()) {
+                    arr.put(
+                        JSONObject()
+                            .put("id", c.id)
+                            .put("mangaId", c.mangaId)
+                            .put("chapterNumber", c.chapterNumber)
+                            .put("name", c.name)
+                            .put("scanlator", c.scanlator)
+                            .put("releaseDate", c.releaseDate)
+                            .put("read", c.read)
+                            .put("bookmarked", c.bookmarked)
+                            .put("lastPageRead", c.lastPageRead)
+                            .put("totalPages", c.totalPages)
+                            .put("fetchUrl", c.fetchUrl)
+                            .put("dateUpload", c.dateUpload)
+                    )
+                }
+            }
+        )
+
+        root.toString(2)
+    }
+
+    /** Restore a backup JSON produced by [exportBackupJson]. Returns an error string, or null. */
+    suspend fun importBackupJson(json: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val root = JSONObject(json)
+            if (root.optString("app") != "Nekoread") return@withContext "Not a Nekoread backup file"
+
+            val categories = mutableListOf<CategoryEntity>()
+            val repos = mutableListOf<ExtensionRepoEntity>()
+            val extensions = mutableListOf<ExtensionEntity>()
+            val sources = mutableListOf<ExtensionSourceEntity>()
+            val manga = mutableListOf<MangaEntity>()
+            val chapters = mutableListOf<ChapterEntity>()
+
+            for (i in 0 until root.optJSONArray("categories")?.length() ?: 0) {
+                val o = root.optJSONArray("categories")!!.getJSONObject(i)
+                categories.add(CategoryEntity(o.getString("id"), o.getString("name"), o.getInt("sortOrder")))
+            }
+            for (i in 0 until root.optJSONArray("repos")?.length() ?: 0) {
+                val o = root.optJSONArray("repos")!!.getJSONObject(i)
+                repos.add(
+                    ExtensionRepoEntity(
+                        id = o.getString("id"), name = o.getString("name"), url = o.getString("url"),
+                        extensionCount = o.optInt("extensionCount"), lastUpdated = o.optLong("lastUpdated"),
+                        addedDate = o.optLong("addedDate", System.currentTimeMillis())
+                    )
+                )
+            }
+            for (i in 0 until root.optJSONArray("extensions")?.length() ?: 0) {
+                val o = root.optJSONArray("extensions")!!.getJSONObject(i)
+                extensions.add(
+                    ExtensionEntity(
+                        packageName = o.getString("packageName"), repoId = o.getString("repoId"),
+                        name = o.getString("name"), versionName = o.getString("versionName"),
+                        versionCode = o.getString("versionCode"), libVersion = o.optString("libVersion"),
+                        contentWarning = o.optString("contentWarning"), apkUrl = o.getString("apkUrl"),
+                        iconUrl = o.optString("iconUrl"), nsfw = o.optBoolean("nsfw"),
+                        isInstalled = o.optBoolean("isInstalled"), installedVersionName = o.optString("installedVersionName"),
+                        installError = o.optString("installError"), sourcesJson = o.optString("sourcesJson")
+                    )
+                )
+            }
+            for (i in 0 until root.optJSONArray("sources")?.length() ?: 0) {
+                val o = root.optJSONArray("sources")!!.getJSONObject(i)
+                sources.add(
+                    ExtensionSourceEntity(
+                        id = o.getString("id"), extensionPkg = o.optString("extensionPkg"),
+                        repoId = o.optString("repoId"), name = o.getString("name"), version = o.getString("version"),
+                        lang = o.optString("lang"), iconUrl = o.optString("iconUrl"),
+                        isInstalled = o.optBoolean("isInstalled"), isNsfw = o.optBoolean("isNsfw"),
+                        baseUrl = o.optString("baseUrl"), sourceType = o.optString("sourceType"),
+                        sourceName = o.optString("sourceName")
+                    )
+                )
+            }
+            for (i in 0 until root.optJSONArray("manga")?.length() ?: 0) {
+                val o = root.optJSONArray("manga")!!.getJSONObject(i)
+                manga.add(
+                    MangaEntity(
+                        id = o.getString("id"), title = o.getString("title"), coverUrl = o.optString("coverUrl"),
+                        author = o.optString("author"), artist = o.optString("artist"), description = o.optString("description"),
+                        sourceId = o.getString("sourceId"), sourceName = o.optString("sourceName"),
+                        status = o.optString("status"), type = o.optString("type"),
+                        inLibrary = o.optBoolean("inLibrary"), category = o.optString("category"),
+                        lastReadChapterId = o.optString("lastReadChapterId"), lastReadChapterName = o.optString("lastReadChapterName"),
+                        lastReadPage = o.optInt("lastReadPage", 1), lastReadTimestamp = o.optLong("lastReadTimestamp"),
+                        unreadCount = o.optInt("unreadCount"), bookmarkCount = o.optInt("bookmarkCount"),
+                        rating = o.optDouble("rating", 4.8).toFloat(), genres = o.optString("genres")
+                    )
+                )
+            }
+            for (i in 0 until root.optJSONArray("chapters")?.length() ?: 0) {
+                val o = root.optJSONArray("chapters")!!.getJSONObject(i)
+                chapters.add(
+                    ChapterEntity(
+                        id = o.getString("id"), mangaId = o.getString("mangaId"),
+                        chapterNumber = o.optDouble("chapterNumber", -1.0).toFloat(), name = o.getString("name"),
+                        scanlator = o.optString("scanlator"), releaseDate = o.optString("releaseDate"),
+                        read = o.optBoolean("read"), bookmarked = o.optBoolean("bookmarked"),
+                        lastPageRead = o.optInt("lastPageRead", 1), totalPages = o.optInt("totalPages", 20),
+                        fetchUrl = o.optString("fetchUrl"), dateUpload = o.optLong("dateUpload", System.currentTimeMillis())
+                    )
+                )
+            }
+
+            if (categories.isNotEmpty()) db.categoryDao().insertCategories(categories)
+            if (repos.isNotEmpty()) db.extensionDao().insertRepos(repos)
+            if (extensions.isNotEmpty()) db.extensionDao().insertExtensions(extensions)
+            if (sources.isNotEmpty()) db.extensionDao().insertSources(sources)
+            if (manga.isNotEmpty()) db.mangaDao().insertMangaList(manga)
+            if (chapters.isNotEmpty()) db.chapterDao().insertChapters(chapters)
+
+            null
+        } catch (e: Exception) {
+            "Import failed: ${e.message ?: "invalid file"}"
+        }
     }
 }

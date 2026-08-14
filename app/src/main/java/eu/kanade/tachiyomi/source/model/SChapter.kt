@@ -1,21 +1,46 @@
+@file:Suppress("PropertyName")
+
 package eu.kanade.tachiyomi.source.model
 
-interface SChapter {
+import kotlinx.serialization.json.JsonObject
+import java.io.Serializable
+
+interface SChapter : Serializable {
+
     var url: String
+
     var name: String
+
     var date_upload: Long
+
     var chapter_number: Float
+
     var scanlator: String?
 
-    companion object {
-        fun create(): SChapter = SChapterImpl()
-    }
-}
+    /**
+     * Extra metadata associated with the chapter.
+     *
+     * The JSON object is not visible to users and is intended for internal or source-specific
+     * purposes. Apps may define their own namespaced keys (e.g., `"mihon.*"`) for sources to populate.
+     *
+     * @since tachiyomix 1.6
+     */
+    var memo: JsonObject
+        get() = JsonObject(emptyMap())
+        set(value) {}
 
-class SChapterImpl : SChapter {
-    override var url: String = ""
-    override var name: String = ""
-    override var date_upload: Long = 0L
-    override var chapter_number: Float = 0f
-    override var scanlator: String? = null
+    fun copyFrom(other: SChapter) {
+        name = other.name
+        url = other.url
+        date_upload = other.date_upload
+        chapter_number = other.chapter_number
+        scanlator = other.scanlator
+        memo = other.memo
+    }
+
+    companion object {
+        fun create(): SChapter {
+            return SChapterImpl()
+        }
+    }
 }
