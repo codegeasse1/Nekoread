@@ -10,10 +10,11 @@ import androidx.room.RoomDatabase
         MangaEntity::class,
         ChapterEntity::class,
         ExtensionRepoEntity::class,
+        ExtensionEntity::class,
         ExtensionSourceEntity::class,
         CategoryEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

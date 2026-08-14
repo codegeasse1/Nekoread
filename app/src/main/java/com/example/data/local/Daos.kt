@@ -81,8 +81,14 @@ interface ChapterDao {
 
 @Dao
 interface ExtensionDao {
-    @Query("SELECT * FROM extension_repos ORDER BY isOfficial DESC, name ASC")
+    @Query("SELECT * FROM extension_repos ORDER BY name ASC")
     fun getAllRepos(): Flow<List<ExtensionRepoEntity>>
+
+    @Query("SELECT * FROM extension_repos WHERE id = :id")
+    suspend fun getRepoById(id: String): ExtensionRepoEntity?
+
+    @Query("SELECT * FROM extension_repos WHERE url = :url")
+    suspend fun getRepoByUrl(url: String): ExtensionRepoEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRepo(repo: ExtensionRepoEntity)
@@ -90,17 +96,50 @@ interface ExtensionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRepos(repos: List<ExtensionRepoEntity>)
 
+    @Query("UPDATE extension_repos SET name = :name, extensionCount = :count, lastUpdated = :lastUpdated WHERE id = :id")
+    suspend fun updateRepoInfo(id: String, name: String, count: Int, lastUpdated: Long)
+
     @Query("DELETE FROM extension_repos WHERE id = :id")
     suspend fun deleteRepo(id: String)
 
-    @Query("SELECT * FROM extension_sources ORDER BY isInstalled DESC, name ASC")
+    @Query("SELECT * FROM extensions ORDER BY name ASC")
+    fun getAllExtensions(): Flow<List<ExtensionEntity>>
+
+    @Query("SELECT * FROM extensions WHERE repoId = :repoId ORDER BY name ASC")
+    suspend fun getExtensionsByRepo(repoId: String): List<ExtensionEntity>
+
+    @Query("SELECT * FROM extensions WHERE packageName = :packageName")
+    suspend fun getExtension(packageName: String): ExtensionEntity?
+
+    @Query("SELECT * FROM extensions WHERE isInstalled = 1 ORDER BY name ASC")
+    fun getInstalledExtensions(): Flow<List<ExtensionEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertExtensions(extensions: List<ExtensionEntity>)
+
+    @Query("DELETE FROM extensions WHERE repoId = :repoId")
+    suspend fun deleteExtensionsByRepo(repoId: String)
+
+    @Query("DELETE FROM extensions WHERE packageName = :packageName")
+    suspend fun deleteExtension(packageName: String)
+
+    @Query("UPDATE extensions SET isInstalled = :installed, installedVersionName = :installedVersion, installError = :error WHERE packageName = :packageName")
+    suspend fun updateExtensionInstallState(packageName: String, installed: Boolean, installedVersion: String?, error: String?)
+
+    @Query("SELECT * FROM extension_sources ORDER BY name ASC")
     fun getAllSources(): Flow<List<ExtensionSourceEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSources(sources: List<ExtensionSourceEntity>)
 
-    @Query("UPDATE extension_sources SET isInstalled = :installed WHERE id = :id")
-    suspend fun updateSourceInstalledStatus(id: String, installed: Boolean)
+    @Query("DELETE FROM extension_sources WHERE extensionPkg = :extensionPkg")
+    suspend fun deleteSourcesByExtension(extensionPkg: String)
+
+    @Query("DELETE FROM extension_sources WHERE repoId = :repoId")
+    suspend fun deleteSourcesByRepo(repoId: String)
+
+    @Query("UPDATE extension_sources SET isInstalled = :installed WHERE extensionPkg = :extensionPkg")
+    suspend fun updateSourcesInstalled(extensionPkg: String, installed: Boolean)
 }
 
 @Dao

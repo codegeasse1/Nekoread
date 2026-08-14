@@ -8,6 +8,7 @@ import com.example.data.local.CategoryEntity
 import com.example.data.local.ChapterEntity
 import com.example.data.local.ExtensionRepoEntity
 import com.example.data.local.ExtensionSourceEntity
+import com.example.data.local.ExtensionEntity
 import com.example.data.local.MangaEntity
 import com.example.data.repository.MangaRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,11 +29,13 @@ enum class ReaderBg {
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
-    val repository: MangaRepository = MangaRepository(AppDatabase.getInstance(application))
+    val repository: MangaRepository = MangaRepository(AppDatabase.getInstance(application), application)
 
     init {
         viewModelScope.launch {
             repository.initializeDefaultDataIfNeeded()
+            // Refresh repo catalogs that have never been fetched (first launch / new repo).
+            repository.refreshStaleRepos()
         }
     }
 
@@ -76,6 +79,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val extensionSources: StateFlow<List<ExtensionSourceEntity>> = repository.extensionSources
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val extensions: StateFlow<List<ExtensionEntity>> = repository.extensions
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _opMessage = MutableStateFlow<String?>(null)
+    val opMessage: StateFlow<String?> = _opMessage.asStateFlow()
+
+    private val _opBusy = MutableStateFlow<String?>(null)
+    val opBusy: StateFlow<String?> = _opBusy.asStateFlow()
 
     // Live catalog browsing state (real sources)
     private val _catalogResults = MutableStateFlow<List<MangaEntity>>(emptyList())
@@ -163,14 +175,51 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun addExtensionRepo(url: String, name: String) {
         viewModelScope.launch {
-            repository.addExtensionRepo(url, name)
+            _opBusy.value = "repo_add"
+            val error = repository.addExtensionRepo(url, name)
+            _opBusy.value = null
+            _opMessage.value = error ?: "Repository added"
+        }
+    }
+
+    fun refreshExtensionRepo(id: String) {
+        viewModelScope.launch {
+            _opBusy.value = "repo_refresh_$id"
+            val error = repository.refreshExtensionRepo(id)
+            _opBusy.value = null
+            _opMessage.value = error ?: "Repository refreshed"
         }
     }
 
     fun deleteExtensionRepo(id: String) {
         viewModelScope.launch {
+            _opBusy.value = "repo_delete_$id"
             repository.deleteExtensionRepo(id)
+            _opBusy.value = null
+            _opMessage.value = "Repository removed"
         }
+    }
+
+    fun installExtension(packageName: String) {
+        viewModelScope.launch {
+            _opBusy.value = "install_$packageName"
+            val error = repository.installExtension(packageName)
+            _opBusy.value = null
+            if (error != null) _opMessage.value = error
+        }
+    }
+
+    fun uninstallExtension(packageName: String) {
+        viewModelScope.launch {
+            _opBusy.value = "uninstall_$packageName"
+            val error = repository.uninstallExtension(packageName)
+            _opBusy.value = null
+            _opMessage.value = error ?: "Extension uninstalled"
+        }
+    }
+
+    fun clearOpMessage() {
+        _opMessage.value = null
     }
 
     fun addCategory(name: String) {

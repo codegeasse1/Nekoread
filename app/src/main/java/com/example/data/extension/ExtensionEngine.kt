@@ -4,9 +4,9 @@ import com.example.data.local.CategoryEntity
 import com.example.data.local.ExtensionRepoEntity
 import com.example.data.local.ExtensionSourceEntity
 
-// Static seed configuration for first launch.
-// The actual network behavior lives in data/source/MangaDexSource.kt —
-// sources registered in SourceRegistry are the ones that really work.
+// Static seed configuration for first launch. The repos listed here are the well-known
+// Mihon/Aniyomi/Tadami-compatible repos — nothing is hardcoded beyond their index URLs.
+// Extension counts are fetched live from each repo's index.json the first time it is loaded.
 object ExtensionEngine {
 
     val defaultCategories = listOf(
@@ -18,44 +18,52 @@ object ExtensionEngine {
         CategoryEntity("c6", "Plan to Read", 6)
     )
 
+    /**
+     * Well-known repos (verified to serve real index.json files). The extensionCount of 0 is
+     * intentional — it is replaced with the real count the first time the repo index is fetched.
+     */
     val defaultRepos = listOf(
         ExtensionRepoEntity(
-            id = "mihon-official",
-            name = "Mihon Official Extension Repo",
-            url = "https://raw.githubusercontent.com/mihonapp/mihon-extensions/repo/index.json",
-            extensionCount = 142,
-            isOfficial = true
-        ),
-        ExtensionRepoEntity(
-            id = "aniyomi-anime-manga",
-            name = "Aniyomi Extensions Repository",
-            url = "https://raw.githubusercontent.com/aniyomiorg/aniyomi-extensions/repo/index.json",
-            extensionCount = 98,
-            isOfficial = true
-        ),
-        ExtensionRepoEntity(
-            id = "keiyoushi-community",
-            name = "Keiyoushi Community Extension Repo",
+            id = "repo_keiyoushi_extensions",
+            name = "Keiyoushi Community",
             url = "https://raw.githubusercontent.com/keiyoushi/extensions/main/index.json",
-            extensionCount = 310,
-            isOfficial = false
+            extensionCount = 0,
+            lastUpdated = 0L,
+            addedDate = System.currentTimeMillis()
+        ),
+        ExtensionRepoEntity(
+            id = "repo_aniyomiorg_aniyomi_extensions",
+            name = "Aniyomi Extensions",
+            url = "https://raw.githubusercontent.com/aniyomiorg/aniyomi-extensions/repo/index.json",
+            extensionCount = 0,
+            lastUpdated = 0L,
+            addedDate = System.currentTimeMillis()
+        ),
+        ExtensionRepoEntity(
+            id = "repo_tachiyomiorg_extensions",
+            name = "Tachiyomi Archive",
+            url = "https://raw.githubusercontent.com/tachiyomiorg/extensions/repo/index.json",
+            extensionCount = 0,
+            lastUpdated = 0L,
+            addedDate = System.currentTimeMillis()
         )
     )
 
-    // Only sources that have a working MangaSource implementation are listed here.
-    // Adding a new source = implement data/source/MangaSource.kt + register it in SourceRegistry.
-    val defaultSources = listOf(
-        ExtensionSourceEntity(
-            id = "mangadex",
-            name = "MangaDex",
-            version = "2.0.18",
-            lang = "en",
-            iconUrl = "",
-            repoId = "builtin",
-            isInstalled = true,
-            isNsfw = false,
-            baseUrl = "https://mangadex.org",
-            sourceType = "MANGA"
-        )
+    /**
+     * The built-in MangaDex source — implemented by data/source/MangaDexSource.kt and always
+     * installed. Extension-provided sources are added at runtime when their APK is installed.
+     */
+    val builtinSource = ExtensionSourceEntity(
+        id = "mangadex",
+        name = "MangaDex",
+        version = "1.0",
+        lang = "en",
+        iconUrl = "",
+        repoId = "builtin",
+        isInstalled = true,
+        isNsfw = false,
+        baseUrl = "https://mangadex.org",
+        sourceType = "MANGA",
+        sourceName = "mangadex"
     )
 }

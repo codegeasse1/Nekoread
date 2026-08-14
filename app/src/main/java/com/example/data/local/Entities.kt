@@ -43,28 +43,66 @@ data class ChapterEntity(
     val dateUpload: Long = System.currentTimeMillis()
 )
 
+/**
+ * An extension repository (same concept as a Mihon/Aniyomi/Tadami repo). Everything here is real
+ * data fetched from the repo's index.json — the name and extensionCount come from the server, and
+ * the extension catalog is stored in the [ExtensionEntity] table.
+ */
 @Entity(tableName = "extension_repos")
 data class ExtensionRepoEntity(
     @PrimaryKey val id: String,
     val name: String,
     val url: String,
     val extensionCount: Int = 0,
-    val isOfficial: Boolean = false,
+    val lastUpdated: Long = 0L,
     val addedDate: Long = System.currentTimeMillis()
 )
 
+/**
+ * A single extension available from a repo (e.g. "MangaDex" APK from the keiyoushi repo).
+ * Install/uninstall actually downloads the APK into app-private storage and validates it against
+ * the extension manifest before marking [isInstalled].
+ */
+@Entity(tableName = "extensions")
+data class ExtensionEntity(
+    @PrimaryKey val packageName: String,
+    val repoId: String,
+    val name: String,
+    val versionName: String,
+    val versionCode: String,
+    val libVersion: String,
+    val contentWarning: String = "",
+    val apkUrl: String,
+    val iconUrl: String = "",
+    val nsfw: Boolean = false,
+    val isInstalled: Boolean = false,
+    val installedVersionName: String? = null,
+    val installError: String? = null,
+    // JSON array of {id,name,lang,baseUrl} source descriptors from the repo index — used to
+    // activate this extension's sources in the Sources tab when it is installed.
+    val sourcesJson: String = ""
+)
+
+/**
+ * A browsable source. Two kinds of rows:
+ *  - the built-in source ("mangadex", repoId = "builtin") — implemented by MangaSource impls.
+ *  - sources that ship inside an installed extension ([extensionPkg] != ""). Browsing works for
+ *    sources backed by a real MangaSource implementation; others open the real site in a browser.
+ */
 @Entity(tableName = "extension_sources")
 data class ExtensionSourceEntity(
-    @PrimaryKey val id: String,
+    @PrimaryKey val id: String, // "mangadex" for built-in, otherwise "<extensionPkg>:<sourceId>"
+    val extensionPkg: String = "", // owning extension package ("" = built-in)
+    val repoId: String = "builtin",
     val name: String,
     val version: String,
     val lang: String = "en",
     val iconUrl: String = "",
-    val repoId: String = "official",
     val isInstalled: Boolean = true,
     val isNsfw: Boolean = false,
     val baseUrl: String = "",
-    val sourceType: String = "MANHWA"
+    val sourceType: String = "MANGA",
+    val sourceName: String = "" // raw source id from the repo index ("" = built-in)
 )
 
 @Entity(tableName = "categories")
