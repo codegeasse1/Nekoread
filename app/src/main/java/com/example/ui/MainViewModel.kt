@@ -103,7 +103,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _catalogError = MutableStateFlow<String?>(null)
     val catalogError: StateFlow<String?> = _catalogError.asStateFlow()
 
-    private val _catalogSourceName = MutableStateFlow("MangaDex")
+    private val _catalogSourceName = MutableStateFlow("")
     val catalogSourceName: StateFlow<String> = _catalogSourceName.asStateFlow()
 
     // Detail screen loading state
@@ -113,7 +113,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _detailError = MutableStateFlow<String?>(null)
     val detailError: StateFlow<String?> = _detailError.asStateFlow()
 
-    fun loadCatalog(sourceId: String = "mangadex", query: String = "", page: Int = 0) {
+    fun loadCatalog(sourceId: String = "", query: String = "", page: Int = 0) {
+        if (sourceId.isBlank()) return
         viewModelScope.launch {
             _catalogSourceName.value = repository.sourceForManga("$sourceId:x").name
             _catalogLoading.value = true

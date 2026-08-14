@@ -33,10 +33,10 @@ The **Extensions** and **Extension Repos** tabs are fully real, modeled after Mi
   loads its dex against NekoRead's in-app Tachiyomi/Mihon source-api runtime, and brings its
   sources online — the exact same mechanism Mihon/Tadami use. Uninstall deletes the APK and its
   sources.
-- **Sources** — the built-in MangaDex source plus the sources that ship inside installed
-  extensions. **Every** source is browsed in-app through the real Tachiyomi extension engine:
-  search → catalog → details → chapters → read all run inside the app, exactly like Tadami
-  (no WebView, no leaving the app). A real extension (e.g. MangaDex from the keiyoushi repo)
+- **Sources** — every source comes from an installed extension, exactly like Tadami (no built-in
+  sources, no fallback). Each installed extension's sources are browsed in-app through the real
+  Tachiyomi extension engine: search → catalog → details → chapters → read all run inside the
+  app (no WebView, no leaving the app). A real extension (e.g. MangaDex from the keiyoushi repo)
   produces results directly from its HTTP API.
 
 Files: `data/extension/ExtensionNetwork.kt` (repo index parsing + APK download),

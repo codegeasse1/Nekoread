@@ -36,15 +36,16 @@ object SourceRegistry {
 
     /**
      * Resolve a source by id. Extension ids ("ext_...") come from loaded extension APKs and are
-     * resolved through the [ExtensionDexLoader] registry; if an extension source is referenced but
-     * not loaded (e.g. the APK failed to load), throw so the UI surfaces the real problem instead
-     * of showing mislabeled data from another source.
+     * resolved through the [ExtensionDexLoader] registry. "mangadex" is kept only as a runtime
+     * implementation for legacy library entries (it is never shown as a source). Anything unknown
+     * throws — no silent fallback, so a broken/unloaded source can never masquerade as another.
      */
     fun source(id: String): MangaSource {
         if (id.startsWith("ext_")) {
             return ExtensionDexLoader.get(id)
-                ?: throw IllegalStateException("Extension source not loaded (id $id). Try reinstalling the extension.")
+                ?: throw IllegalStateException("Extension source not loaded (id $id). Reinstall the extension.")
         }
-        return sources[id] ?: MangaDexSource
+        return sources[id]
+            ?: throw IllegalStateException("Unknown source: $id")
     }
 }

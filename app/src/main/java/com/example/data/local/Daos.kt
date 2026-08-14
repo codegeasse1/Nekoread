@@ -138,6 +138,9 @@ interface ExtensionDao {
     @Query("DELETE FROM extension_sources WHERE extensionPkg = :extensionPkg")
     suspend fun deleteSourcesByExtension(extensionPkg: String)
 
+    @Query("DELETE FROM extension_sources")
+    suspend fun clearExtensionSources()
+
     @Query("DELETE FROM extension_sources WHERE repoId = :repoId")
     suspend fun deleteSourcesByRepo(repoId: String)
 

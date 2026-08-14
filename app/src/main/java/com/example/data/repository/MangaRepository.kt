@@ -47,11 +47,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
             db.categoryDao().insertCategories(ExtensionEngine.defaultCategories)
         }
 
-        // Built-in MangaDex source is always present.
-        val sourceList = db.extensionDao().getAllSources().first()
-        if (sourceList.none { it.repoId == "builtin" }) {
-            db.extensionDao().insertSources(listOf(ExtensionEngine.builtinSource))
-        }
+        // Sources come from installed extensions only (like Tadami) — nothing is seeded here.
 
         // Seed the well-known repos only on first launch. Counts are fetched live afterwards.
         val repoList = db.extensionDao().getAllRepos().first()
@@ -326,12 +322,11 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
             val sources = ExtensionDexLoader.loadApk(dest, dexCacheDir(), packageName)
             val registered = registerExtensionSources(ext, sources)
             if (!registered) {
-                dest.delete()
                 db.extensionDao().updateExtensionInstallState(packageName, false, null, "No sources in extension")
                 return@withContext "Extension APK contained no browsable sources"
             }
         } catch (e: Exception) {
-            dest.delete()
+            // Keep the downloaded APK so a reinstall doesn't need to re-download it.
             val msg = e.message ?: "unknown error"
             db.extensionDao().updateExtensionInstallState(packageName, false, null, msg)
             return@withContext "Couldn't load extension: $msg"
@@ -344,8 +339,11 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
     /**
      * Load every installed extension's dex back into memory on app start (their sources are
      * stateless HTTP clients, so re-instantiating is all that's needed). Called once at startup.
+     * Source rows are rebuilt from what actually loads — anything stale (from an old install or a
+     * failed load) is dropped, so no fake source can ever appear in the Sources tab.
      */
     suspend fun loadInstalledExtensions() = withContext(Dispatchers.IO) {
+        db.extensionDao().clearExtensionSources()
         val installed = db.extensionDao().getInstalledExtensionsOnce()
         for (ext in installed) {
             val dest = apkFile(ext.packageName)

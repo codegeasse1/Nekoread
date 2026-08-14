@@ -2,7 +2,6 @@ package com.example.data.extension
 
 import com.example.data.local.CategoryEntity
 import com.example.data.local.ExtensionRepoEntity
-import com.example.data.local.ExtensionSourceEntity
 
 // Static seed configuration for first launch. The repos listed here are the well-known
 // Mihon/Aniyomi/Tadami-compatible repos — nothing is hardcoded beyond their index URLs.
@@ -47,23 +46,5 @@ object ExtensionEngine {
             lastUpdated = 0L,
             addedDate = System.currentTimeMillis()
         )
-    )
-
-    /**
-     * The built-in MangaDex source — implemented by data/source/MangaDexSource.kt and always
-     * installed. Extension-provided sources are added at runtime when their APK is installed.
-     */
-    val builtinSource = ExtensionSourceEntity(
-        id = "mangadex",
-        name = "MangaDex",
-        version = "1.0",
-        lang = "en",
-        iconUrl = "",
-        repoId = "builtin",
-        isInstalled = true,
-        isNsfw = false,
-        baseUrl = "https://mangadex.org",
-        sourceType = "MANGA",
-        sourceName = "mangadex"
     )
 }

@@ -55,6 +55,11 @@ object ExtensionDexLoader {
      *                    generated class name when the manifest can't be parsed
      */
     fun loadApk(apkFile: File, dexCacheDir: File, packageName: String): List<Source> {
+        // DexClassLoader needs a real, writable optimized-dex directory (API 24/25) or loading
+        // fails with "not writable" errors.
+        if (!dexCacheDir.exists() && !dexCacheDir.mkdirs()) {
+            throw IllegalStateException("Cannot create dex cache dir $dexCacheDir")
+        }
         val loader = DexClassLoader(
             apkFile.absolutePath,
             dexCacheDir.absolutePath,

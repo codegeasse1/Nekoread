@@ -106,7 +106,7 @@ fun BrowseScreen(
     val catalogSourceName: String by viewModel.catalogSourceName.collectAsStateWithLifecycle()
 
     var searchQuery by remember { mutableStateOf("") }
-    var activeSourceId by remember { mutableStateOf("mangadex") }
+    var activeSourceId by remember { mutableStateOf("") }
     var showAddRepoDialog by remember { mutableStateOf(false) }
     var repoUrlInput by remember { mutableStateOf("") }
     var repoNameInput by remember { mutableStateOf("") }
@@ -125,7 +125,7 @@ fun BrowseScreen(
 
     // Debounced real search against the active source.
     LaunchedEffect(searchQuery, activeSourceId) {
-        if (selectedTabIndex == 1) {
+        if (selectedTabIndex == 1 && activeSourceId.isNotBlank()) {
             delay(350)
             viewModel.loadCatalog(activeSourceId, searchQuery)
         }
@@ -155,7 +155,7 @@ fun BrowseScreen(
                             selected = selectedTabIndex == index,
                             onClick = {
                                 selectedTabIndex = index
-                                if (index == 1 && catalogResults.isEmpty() && !catalogLoading) {
+                                if (index == 1 && activeSourceId.isNotBlank() && catalogResults.isEmpty() && !catalogLoading) {
                                     viewModel.loadCatalog(activeSourceId, searchQuery)
                                 }
                             },
@@ -191,6 +191,7 @@ fun BrowseScreen(
                     isLoading = catalogLoading,
                     error = catalogError,
                     sourceName = catalogSourceName,
+                    hasSource = activeSourceId.isNotBlank(),
                     onRetry = { viewModel.loadCatalog(activeSourceId, searchQuery) },
                     onMangaClick = onMangaClick
                 )
@@ -363,7 +364,7 @@ fun SourcesTabContent(
         if (sources.isEmpty()) {
             item {
                 Text(
-                    text = "Install an extension to add more sources. The built-in MangaDex source is always available.",
+                    text = "No sources installed. Go to the Extensions tab, install an extension, then its sources appear here to browse.",
                     style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                 )
             }
@@ -466,10 +467,36 @@ fun CatalogTabContent(
     isLoading: Boolean,
     error: String?,
     sourceName: String,
+    hasSource: Boolean,
     onRetry: () -> Unit,
     onMangaClick: (String) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
+        if (!hasSource) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.Public,
+                        contentDescription = null,
+                        tint = NekoVioletPrimary,
+                        modifier = Modifier.size(40.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Pick a source from the Sources tab to browse it here.",
+                        style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
+            }
+            return@Column
+        }
+
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             OutlinedTextField(
                 value = searchQuery,
@@ -611,7 +638,7 @@ fun ExtensionsTabContent(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Install an extension to add its sources to the Sources tab. " +
-                        "Each extension is downloaded from its repo and verified before installing.",
+                        "Each extension is downloaded from its repo and loaded in-app before installing.",
                     style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                 )
             }
