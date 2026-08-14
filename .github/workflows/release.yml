@@ -1,0 +1,139 @@
+name: Release APK
+
+# Manual workflow (Actions tab -> "Release APK" -> Run workflow).
+# Builds a signed release APK and publishes it as a GitHub Release,
+# plus a copy on the `build` branch for convenience.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version number, e.g. 1.0.0"
+        required: true
+        type: string
+        default: "1.0.0"
+      notes:
+        description: "Release notes (optional; auto-generated if left empty)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept SDK licenses and install core packages
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" > /dev/null 2>&1 || true
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Prepare signing keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -e
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > my-upload-key.jks
+            SP="$STORE_PASSWORD"
+            KP="${KEY_PASSWORD:-$SP}"
+            if [ -z "$SP" ]; then
+              echo "::error::KEYSTORE_BASE64 is set but STORE_PASSWORD is missing. Add the STORE_PASSWORD secret (and KEY_PASSWORD if it differs)."
+              exit 1
+            fi
+            echo "Using the keystore provided via secrets."
+          else
+            SP="${STORE_PASSWORD:-$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')}"
+            KP="${KEY_PASSWORD:-$SP}"
+            keytool -genkeypair -v \
+              -keystore my-upload-key.jks \
+              -alias upload \
+              -keyalg RSA -keysize 2048 -validity 10950 \
+              -storepass "$SP" -keypass "$KP" \
+              -dname "CN=Nekoread,O=Nekoread,C=US" > /dev/null 2>&1
+            touch newly-generated-keystore
+            echo "::warning::Generated a FRESH release keystore for this build. To sign future releases with the SAME key, download my-upload-key.jks from this run's artifacts and add it to repo secrets as KEYSTORE_BASE64 (base64 of the .jks), STORE_PASSWORD and KEY_PASSWORD."
+            echo "Fresh keystore password: $SP"
+          fi
+          echo "STORE_PASSWORD=$SP" >> "$GITHUB_ENV"
+          echo "KEY_PASSWORD=$KP" >> "$GITHUB_ENV"
+
+      - name: Build release APK
+        run: |
+          VERSION="${INPUT_VERSION#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          ./gradlew :app:assembleRelease -PversionCode=${{ github.run_number }} -PversionName="$VERSION" --no-daemon --no-configuration-cache --stacktrace
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+
+      - name: Upload signing keystore (only when freshly generated)
+        if: hashFiles('newly-generated-keystore') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: my-upload-key.jks
+          path: my-upload-key.jks
+          if-no-files-found: error
+
+      - name: Upload APK as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nekoread-release-${{ env.VERSION }}
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+
+      - name: Push release APK to the build branch
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin build || true
+          if git rev-parse --verify origin/build > /dev/null 2>&1; then
+            git checkout build
+          else
+            git checkout --orphan build
+          fi
+
+          cp app/build/outputs/apk/release/app-release.apk "Nekoread-$VERSION.apk"
+
+          git add -A
+          git commit -m "release: v$VERSION (from ${{ github.sha }})" --allow-empty
+          git push --force origin build
+        env:
+          VERSION: ${{ env.VERSION }}
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ env.VERSION }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          set -e
+          if [ -n "$NOTES" ]; then
+            gh release create "v$VERSION" \
+              "app/build/outputs/apk/release/app-release.apk#Nekoread-$VERSION.apk" \
+              --title "Nekoread v$VERSION" \
+              --notes "$NOTES"
+          else
+            gh release create "v$VERSION" \
+              "app/build/outputs/apk/release/app-release.apk#Nekoread-$VERSION.apk" \
+              --title "Nekoread v$VERSION" \
+              --generate-notes
+          fi
