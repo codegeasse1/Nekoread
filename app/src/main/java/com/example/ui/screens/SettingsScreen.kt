@@ -64,7 +64,8 @@ import com.example.util.BuildInfo
 import kotlinx.coroutines.launch
 
 private fun readerModeLabel(mode: ReaderMode): String = when (mode) {
-    ReaderMode.WEBTOON -> "Webtoon"
+    ReaderMode.WEBTOON -> "Long strip"
+    ReaderMode.WEBTOON_GAPS -> "Long strip with gaps"
     ReaderMode.LEFT_TO_RIGHT -> "Left to Right"
     ReaderMode.RIGHT_TO_LEFT -> "Right to Left"
     ReaderMode.VERTICAL -> "Vertical"
