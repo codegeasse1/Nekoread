@@ -58,6 +58,7 @@ class NetworkHelper(context: Context) {
             )
             .addInterceptor(UncaughtExceptionInterceptor())
             .addInterceptor(UserAgentInterceptor(::defaultUserAgentProvider))
+            .addInterceptor(ApexWwwRetryInterceptor())
     }
 
     /** The one client extensions use. Automatically solves Cloudflare challenges via a hidden WebView. */
