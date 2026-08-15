@@ -142,4 +142,14 @@ class TachiyomiHttpSourceAdapter(
 
     /** Covers go through the extension's own client + headers, so hotlink-protected CDNs accept them. */
     override fun coverImageModel(coverUrl: String): Any = ExtensionCoverImage(coverUrl, ext)
+
+    /**
+     * Canonical web page URL for the manga, built by the extension's own URL scheme via
+     * [HttpSource.getMangaUrl]. The app's naive "baseUrl + '/' + url" join 404s on sources like
+     * TheBlank, whose stored manga url is a bare slug ("a-naughty") whose real page is
+     * "https://theblank.net/serie/a-naughty".
+     */
+    override suspend fun getMangaWebUrl(fullMangaId: String): String = runCatching {
+        ext.getMangaUrl(sm(mangaUrl(fullMangaId)))
+    }.getOrDefault(super.getMangaWebUrl(fullMangaId))
 }
