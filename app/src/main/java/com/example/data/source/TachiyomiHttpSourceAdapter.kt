@@ -133,7 +133,7 @@ class TachiyomiHttpSourceAdapter(
         pages.map { page ->
             val url = page.imageUrl ?: ext.fetchImageUrl(page).toBlocking().first()
             page.imageUrl = url
-            ExtensionPageImage(url, ext)
+            ExtensionPageImage(page.url, url, ext)
         }
     }
 }
