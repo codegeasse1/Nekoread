@@ -49,7 +49,10 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
+import kotlin.coroutines.resume
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Fullscreen overlay used for Cloudflare / DDoS-Guard / site verification, shown as a Dialog so
@@ -341,21 +344,41 @@ fun WebViewDialog(
         mainWebView?.loadUrl(url, headers)
     }
 
-    // Auto-close the moment a fresh cf_clearance appears (the challenge is solved) so the caller's
-    // retry — which shares this cookie store — succeeds without the user hunting for a button.
+    // Auto-close only once the challenge is genuinely solved: a cf_clearance cookie PLUS the
+    // loaded page no longer being a Cloudflare challenge. Checking just the cookie is not enough —
+    // a stale cf_clearance from an earlier solve (or the automatic hidden resolver) can sit in the
+    // cookie store while the current challenge is still "Verifying...", which dismissed the dialog
+    // mid-verification and left the caller's retry with 0 chapters.
     LaunchedEffect(mainWebView) {
         while (true) {
-            delay(600)
+            delay(700)
             val wv = mainWebView ?: break
             val current = wv.url ?: url
+            if (!current.startsWith("http")) continue
             val cookies = runCatching { CookieManager.getInstance().getCookie(current) }.getOrNull()
-            if (cookies != null && cookies.contains("cf_clearance")) {
-                verified = true
-                CookieManager.getInstance().flush()
-                delay(1000)
-                onDismiss()
-                break
-            }
+            if (cookies == null || !cookies.contains("cf_clearance")) continue
+            // Confirm the loaded page is the actual site, not the challenge interstitial. The
+            // challenge can auto-advance in place without a new navigation, so re-probe document
+            // state each poll. Any uncertainty (null result, timeout) means "still verifying".
+            val stillChallenge = withTimeoutOrNull(3000) {
+                suspendCancellableCoroutine<Boolean> { cont ->
+                    try {
+                        wv.evaluateJavascript(CHALLENGE_PAGE_PROBE) { result ->
+                            // null (e.g. mid-navigation, JS context replaced) counts as
+                            // "still verifying", never as "page loaded".
+                            cont.resume(result != "false")
+                        }
+                    } catch (e: Throwable) {
+                        cont.resume(true)
+                    }
+                }
+            } ?: true
+            if (stillChallenge) continue
+            verified = true
+            CookieManager.getInstance().flush()
+            delay(1000)
+            onDismiss()
+            break
         }
     }
 
@@ -372,3 +395,26 @@ fun WebViewDialog(
         }
     }
 }
+
+/**
+ * Returns true while the loaded document is still a Cloudflare challenge page. The interstitial
+ * can complete and auto-advance without a new navigation, so this re-checks document state rather
+ * than relying on URL or page-load callbacks.
+ */
+private val CHALLENGE_PAGE_PROBE = """
+    (function() {
+        try {
+            var t = document.title || '';
+            if (t.indexOf('Just a moment') !== -1) return true;
+            if (t.indexOf('Attention Required') !== -1) return true;
+            if (t.indexOf('Performing security verification') !== -1) return true;
+            if (document.querySelector('iframe[src*="challenges.cloudflare.com"], .cf-turnstile, #challenge-form, #challenge-running') !== null) return true;
+            var b = (document.body && document.body.innerText || '').slice(0, 5000);
+            if (b.indexOf('Performing security verification') !== -1) return true;
+            if (b.indexOf('Verify you are human') !== -1) return true;
+            if (b.indexOf('Just a moment') !== -1) return true;
+            if (b.indexOf('security service to protect against malicious bots') !== -1) return true;
+            return false;
+        } catch (e) { return false; }
+    })();
+""".trimIndent()
