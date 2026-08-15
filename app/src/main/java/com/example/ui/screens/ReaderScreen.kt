@@ -701,11 +701,7 @@ fun ReaderScreen(
                                                 stableKey = item,
                                                 model = model,
                                                 contentDescription = "Page ${i + 1}",
-                                                contentScale = when (readerFit) {
-                                                    ReaderFit.FIT_WIDTH -> ContentScale.FillWidth
-                                                    ReaderFit.FIT -> ContentScale.Fit
-                                                    ReaderFit.FIT_HEIGHT -> ContentScale.Fit
-                                                },
+                                                contentScale = ContentScale.FillWidth,
                                                 spinnerColor = contentTextColor,
                                                 onError = { msg ->
                                                     pageImageErrors = pageImageErrors + (i to msg)
@@ -924,15 +920,11 @@ fun ReaderScreen(
                         ReaderToolButton(Icons.Default.FormatListBulleted, "Chapters") { showChaptersSheet = true }
                         ReaderToolButton(
                             icon = Icons.Default.AspectRatio,
-                            label = "Fit Width"
+                            label = if (readerFit == ReaderFit.FIT_WIDTH) "Normal" else "Fit Width"
                         ) {
-                            viewModel.setReaderFit(ReaderFit.FIT_WIDTH)
-                        }
-                        ReaderToolButton(
-                            icon = Icons.Default.FitScreen,
-                            label = "Fit Screen"
-                        ) {
-                            viewModel.setReaderFit(ReaderFit.FIT)
+                            viewModel.setReaderFit(
+                                if (readerFit == ReaderFit.FIT_WIDTH) ReaderFit.FIT else ReaderFit.FIT_WIDTH
+                            )
                         }
                         ReaderToolButton(
                             icon = Icons.Default.ScreenRotation,
