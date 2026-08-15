@@ -31,6 +31,15 @@ interface MangaSource {
     suspend fun getDetails(fullMangaId: String): MangaEntity
     suspend fun getChapters(fullMangaId: String): List<ChapterEntity>
     suspend fun getPageUrls(rawChapterId: String): List<String>
+
+    /**
+     * Coil image models for each page of a chapter, in order. Default: the plain page URLs (which
+     * Coil loads directly). Extension-backed sources override this to return [ExtensionPageImage]
+     * models so each page is fetched through the extension's own client + imageRequest headers,
+     * exactly like Tadami — plain URL loading is what made hotlink-protected CDNs return blank
+     * pages.
+     */
+    suspend fun getPageImageModels(rawChapterId: String): List<Any> = getPageUrls(rawChapterId)
 }
 
 object SourceRegistry {
