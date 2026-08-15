@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -85,8 +86,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.app.Activity
 import android.content.pm.ActivityInfo
+import coil.compose.AsyncImagePainter
 import coil.compose.LocalImageLoader
-import coil.compose.SubcomposeAsyncImage
+import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
@@ -131,6 +133,9 @@ fun ReaderScreen(
     var retryKey by remember { mutableStateOf(0) }
     var pageImageErrors by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
     val pageRetries = remember { mutableStateMapOf<Int, Int>() }
+    // Slider thumb while the user is dragging it; the actual scroll happens once on release so a
+    // drag can't fire a storm of conflicting scrollToItem calls into unloaded content.
+    var sliderDragPage by remember { mutableStateOf<Float?>(null) }
 
     // Continuous scroll (webtoon): chapters queued after the current one, appended automatically
     // as the reader reaches the end. The first chapter's pages live in [pages]; every queued
@@ -143,7 +148,7 @@ fun ReaderScreen(
         pageImageErrors = emptyMap()
         queuedChapters.clear()
         try {
-            pages = withTimeout(120_000) {
+            pages = withTimeout(MAIN_LOAD_TIMEOUT_MS) {
                 viewModel.repository.getChapterPageImageModels(chapter.id)
             }
         } catch (e: Throwable) {
@@ -155,6 +160,31 @@ fun ReaderScreen(
     }
 
     val coroutineScope = rememberCoroutineScope()
+
+    // Re-load a queued chapter's pages after a failure (tapped from its error row). A failed
+    // queued chapter never blocks continuous scroll — the reader just shows the retry row.
+    fun retryQueuedChapter(chapterId: String) {
+        val i = queuedChapters.indexOfFirst { it.chapter.id == chapterId }
+        if (i < 0) return
+        val qc = queuedChapters[i]
+        queuedChapters[i] = QueuedCh(qc.chapter, null, null)
+        coroutineScope.launch {
+            try {
+                val p = withTimeout(QUEUED_LOAD_TIMEOUT_MS) {
+                    viewModel.repository.getChapterPageImageModels(qc.chapter.id)
+                }
+                val cur = queuedChapters.getOrNull(i)
+                if (cur != null && cur.chapter.id == qc.chapter.id) {
+                    queuedChapters[i] = QueuedCh(qc.chapter, p, null)
+                }
+            } catch (e: Throwable) {
+                val cur = queuedChapters.getOrNull(i)
+                if (cur != null && cur.chapter.id == qc.chapter.id) {
+                    queuedChapters[i] = QueuedCh(qc.chapter, null, e.describe())
+                }
+            }
+        }
+    }
 
     // Display size + image loader used to downsample reader pages to screen width (much cheaper to
     // decode than full-resolution, which is what made webtoon scrolling lag).
@@ -281,10 +311,14 @@ fun ReaderScreen(
 
     // Append the next chapter when the reader scrolls near the end of the loaded pages.
     LaunchedEffect(lastVisibleEntry, entries.size, queuedChapters.size) {
+        // Hard cap so a jump near the end can't queue every remaining chapter at once (each would
+        // spawn a network load and block threads — the whole app freezes/lags).
+        if (queuedChapters.size >= MAX_QUEUED_CHAPTERS) return@LaunchedEffect
         if (lastVisibleEntry < entries.size - 3) return@LaunchedEffect
         val tail = queuedChapters.lastOrNull()
-        val tailReady = if (tail == null) pages != null else (tail.pages != null && tail.error == null)
-        if (!tailReady) return@LaunchedEffect
+        // "Settled" = loaded OR failed. A failed chapter must not block continuous scroll forever.
+        val tailSettled = if (tail == null) pages != null else (tail.pages != null || tail.error != null)
+        if (!tailSettled) return@LaunchedEffect
         val lastCh = tail?.chapter ?: chapter
         val next = nextChapterAfter(lastCh) ?: return@LaunchedEffect
         val cid = next.id
@@ -292,7 +326,7 @@ fun ReaderScreen(
         val qi = queuedChapters.size - 1
         coroutineScope.launch {
             try {
-                val p = withTimeout(120_000) { viewModel.repository.getChapterPageImageModels(cid) }
+                val p = withTimeout(QUEUED_LOAD_TIMEOUT_MS) { viewModel.repository.getChapterPageImageModels(cid) }
                 val cur = queuedChapters.getOrNull(qi)
                 if (cur != null && cur.chapter.id == cid) queuedChapters[qi] = QueuedCh(next, p, null)
             } catch (e: Throwable) {
@@ -463,12 +497,13 @@ fun ReaderScreen(
                                 is LoadingItem -> {
                                     if (item.error != null) {
                                         Text(
-                                            text = "Couldn't load ${item.chapter.name}: ${item.error}",
+                                            text = "Couldn't load ${item.chapter.name} — tap to retry",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = contentTextColor.copy(alpha = 0.7f),
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .padding(24.dp)
+                                                .clickable { retryQueuedChapter(item.chapter.id) }
                                         )
                                     } else {
                                         Row(
@@ -496,58 +531,31 @@ fun ReaderScreen(
                                     val retries = pageRetries[i] ?: 0
                                     key(item, retries) {
                                         Column(modifier = Modifier.fillMaxWidth()) {
-                                            SubcomposeAsyncImage(
+                                            LoadableReaderImage(
+                                                stableKey = item,
                                                 model = ImageRequest.Builder(context)
                                                     .data(item)
                                                     .size(screenW, Int.MAX_VALUE)
                                                     .crossfade(false)
                                                     .build(),
                                                 contentDescription = "Page ${i + 1}",
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .testTag("reader_page_$i"),
                                                 contentScale = ContentScale.FillWidth,
-                                                onError = { state ->
-                                                    pageImageErrors = pageImageErrors + (i to (state.result.throwable.message ?: "image load failed"))
+                                                spinnerColor = contentTextColor,
+                                                onError = { msg ->
+                                                    pageImageErrors = pageImageErrors + (i to msg)
+                                                },
+                                                onRetry = {
+                                                    pageImageErrors = pageImageErrors - i
+                                                    pageRetries[i] = (pageRetries[i] ?: 0) + 1
                                                 },
                                                 // A loading page keeps a minimum height (with a
                                                 // spinner, like Tadami) so the list stays scrollable
                                                 // instead of collapsing to zero height and getting
                                                 // stuck mid-chapter.
-                                                loading = {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .heightIn(min = 200.dp),
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        CircularProgressIndicator(
-                                                            modifier = Modifier.size(28.dp),
-                                                            strokeWidth = 3.dp,
-                                                            color = contentTextColor
-                                                        )
-                                                    }
-                                                },
-                                                error = {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .heightIn(min = 180.dp)
-                                                            .background(Color(0x22000000))
-                                                            .clickable {
-                                                                pageImageErrors = pageImageErrors - i
-                                                                pageRetries[i] = (pageRetries[i] ?: 0) + 1
-                                                            },
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        Text(
-                                                            text = "Page ${i + 1} failed — tap to retry",
-                                                            style = MaterialTheme.typography.bodySmall,
-                                                            color = contentTextColor.copy(alpha = 0.8f),
-                                                            textAlign = TextAlign.Center
-                                                        )
-                                                    }
-                                                }
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .heightIn(min = 200.dp)
+                                                    .testTag("reader_page_$i")
                                             )
                                         }
                                     }
@@ -569,43 +577,23 @@ fun ReaderScreen(
                             val retries = pageRetries[pageIndex] ?: 0
                             key(pageUrl, retries) {
                                 Box(modifier = Modifier.fillMaxSize()) {
-                                    SubcomposeAsyncImage(
+                                    LoadableReaderImage(
+                                        stableKey = pageUrl,
                                         model = pageUrl,
                                         contentDescription = "Page ${pageIndex + 1}",
+                                        contentScale = if (readerFit == ReaderFit.FIT_WIDTH) ContentScale.FillWidth else ContentScale.Fit,
+                                        spinnerColor = contentTextColor,
+                                        onError = { msg ->
+                                            pageImageErrors = pageImageErrors + (pageIndex to msg)
+                                        },
+                                        onRetry = {
+                                            pageImageErrors = pageImageErrors - pageIndex
+                                            pageRetries[pageIndex] = (pageRetries[pageIndex] ?: 0) + 1
+                                        },
                                         modifier = Modifier
                                             .fillMaxSize()
                                             .clipToBounds()
-                                            .testTag("reader_page_$pageIndex"),
-                                        contentScale = if (readerFit == ReaderFit.FIT_WIDTH) ContentScale.FillWidth else ContentScale.Fit,
-                                        onError = { state ->
-                                            pageImageErrors = pageImageErrors + (pageIndex to (state.result.throwable.message ?: "image load failed"))
-                                        },
-                                        loading = {
-                                            Box(
-                                                modifier = Modifier.fillMaxSize(),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                CircularProgressIndicator(color = contentTextColor)
-                                            }
-                                        },
-                                        error = {
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxSize()
-                                                    .clickable {
-                                                        pageImageErrors = pageImageErrors - pageIndex
-                                                        pageRetries[pageIndex] = (pageRetries[pageIndex] ?: 0) + 1
-                                                    },
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(
-                                                    text = "Page ${pageIndex + 1} failed — tap to retry",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = Color(0xFFFF5252),
-                                                    textAlign = TextAlign.Center
-                                                )
-                                            }
-                                        }
+                                            .testTag("reader_page_$pageIndex")
                                     )
                                 }
                             }
@@ -762,14 +750,22 @@ fun ReaderScreen(
                     }
 
                     Slider(
-                        value = if (readerMode == ReaderMode.WEBTOON) pageInChapter.toFloat() else currentPage.toFloat(),
-                        onValueChange = { pageVal ->
-                            val targetPage = pageVal.toInt() - 1
+                        // During a drag the thumb follows the finger (sliderDragPage); the actual
+                        // scroll happens ONCE on release. Per-tick scrollToItem calls stormed the
+                        // list state, corrupted it, and left the reader stuck on endless loading
+                        // icons for any source.
+                        value = sliderDragPage ?: if (readerMode == ReaderMode.WEBTOON) pageInChapter.toFloat() else currentPage.toFloat(),
+                        onValueChange = { sliderDragPage = it },
+                        onValueChangeFinished = {
+                            val p = sliderDragPage ?: return@onValueChangeFinished
+                            sliderDragPage = null
+                            val targetPage = p.toInt() - 1
                             coroutineScope.launch {
                                 if (readerMode == ReaderMode.WEBTOON) {
-                                    listState.scrollToItem((visibleRange?.start ?: 0) + targetPage)
+                                    val maxIdx = (entries.size - 1).coerceAtLeast(0)
+                                    listState.scrollToItem(((visibleRange?.start ?: 0) + targetPage).coerceIn(0, maxIdx))
                                 } else {
-                                    pagerState.scrollToPage(targetPage)
+                                    pagerState.scrollToPage(targetPage.coerceIn(0, (pages?.size ?: 1) - 1))
                                 }
                             }
                         },
@@ -1026,3 +1022,83 @@ private data class PageRange(val chapter: ChapterEntity, val start: Int, val cou
 
 private fun formatChapterNum(n: Float): String =
     if (n % 1f == 0f) n.toInt().toString() else n.toString()
+
+// Timeout for the first chapter's page list (must also cover a Cloudflare silent solve).
+private const val MAIN_LOAD_TIMEOUT_MS = 60_000L
+
+// Continuous-scroll queued chapters: shorter timeout (a stalled queued chapter shows a retry row
+// instead of an endless spinner) and a hard cap so a jump to the end can't queue every remaining
+// chapter at once (that froze/lagged the whole app).
+private const val QUEUED_LOAD_TIMEOUT_MS = 25_000L
+private const val MAX_QUEUED_CHAPTERS = 8
+
+/**
+ * A reader page image with its own loading spinner and tap-to-retry error state (like Tadami).
+ *
+ * Plain painter + [Image] rather than SubcomposeAsyncImage: the subcomposed variant hangs / ANRs
+ * inside a LazyColumn when the loading slot's size differs from the loaded image, leaving pages
+ * stuck on eternal spinners. A spinner is drawn as an overlay so the page keeps a minimum height
+ * while loading and the list stays scrollable.
+ */
+@Composable
+private fun LoadableReaderImage(
+    stableKey: Any,
+    model: Any,
+    contentDescription: String,
+    contentScale: ContentScale,
+    spinnerColor: Color,
+    onError: (String) -> Unit,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // stableKey is the source model object (stable across recompositions); `model` may be a fresh
+    // ImageRequest wrapper each recomposition, so never key state on it.
+    var loading by remember(stableKey) { mutableStateOf(true) }
+    var failed by remember(stableKey) { mutableStateOf(false) }
+    val painter = rememberAsyncImagePainter(
+        model = model,
+        onState = { state ->
+            loading = state is AsyncImagePainter.State.Empty || state is AsyncImagePainter.State.Loading
+            failed = state is AsyncImagePainter.State.Error
+            if (state is AsyncImagePainter.State.Error) {
+                onError(state.result.throwable.message ?: "image load failed")
+            }
+        }
+    )
+    Box(modifier = modifier) {
+        Image(
+            painter = painter,
+            contentDescription = contentDescription,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = contentScale
+        )
+        if (loading) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(28.dp),
+                    strokeWidth = 3.dp,
+                    color = spinnerColor
+                )
+            }
+        }
+        if (failed) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0x33000000))
+                    .clickable(onClick = onRetry),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Page failed — tap to retry",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = spinnerColor.copy(alpha = 0.9f),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
