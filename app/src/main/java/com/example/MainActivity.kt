@@ -44,6 +44,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import coil.Coil
 import coil.ImageLoader
+import com.example.data.source.ExtensionPageImageFetcherFactory
+import com.example.data.source.ExtensionPageImageKeyer
 import com.example.ui.MainViewModel
 import com.example.ui.screens.BrowseScreen
 import com.example.ui.screens.LibraryScreen
@@ -73,9 +75,18 @@ class MainActivity : ComponentActivity() {
         // All cover thumbnails go through the SAME client the extension requests use — so they
         // carry the cf_clearance cookies (and UA) that Cloudflare-protected sources require.
         // Without this, catalog covers on CF sources always came back blank.
+        //
+        // The ExtensionPageImage fetcher is what makes READER PAGES load like Tadami: each page is
+        // fetched through the extension's own client + imageRequest(page) headers (Referer/Origin),
+        // not as a bare URL via the generic client — bare URLs were rejected by hotlink-protected
+        // CDNs and showed as blank/black pages.
         Coil.setImageLoader(
             ImageLoader.Builder(this)
                 .okHttpClient(NetworkHelper.getInstance().client)
+                .components {
+                    add(ExtensionPageImageFetcherFactory())
+                    add(ExtensionPageImageKeyer())
+                }
                 .crossfade(true)
                 .build(),
         )
