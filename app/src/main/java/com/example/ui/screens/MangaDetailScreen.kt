@@ -126,7 +126,9 @@ fun MangaDetailScreen(
     }
 
     var isDescriptionExpanded by remember { mutableStateOf(false) }
-    var isSortAscending by remember { mutableStateOf(false) }
+    // Default to ascending (chapter 1 at the top, true reading order) — users expect the first
+    // chapter first, and "Read" to open it, not the newest/last chapter at the bottom.
+    var isSortAscending by remember { mutableStateOf(true) }
     var showCategoryDialog by remember { mutableStateOf(false) }
 
     val categories: List<CategoryEntity> by viewModel.categories.collectAsStateWithLifecycle()
