@@ -28,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,9 +42,26 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.local.MangaEntity
+import com.example.data.source.SourceRegistry
 import com.example.ui.theme.SleekGoldBadge
 import com.example.ui.theme.SleekVioletPrimary
 import com.example.ui.theme.GlassCardBorder
+
+@Composable
+private fun coverModelFor(manga: MangaEntity): Any? {
+    // Extension-sourced covers load through the extension's own client + headers (Referer/Origin),
+    // so hotlink-protected CDNs accept them; plain URLs fall back to Coil's default loader.
+    return remember(manga.id, manga.sourceId, manga.coverUrl) {
+        val url = manga.coverUrl
+        if (url.isBlank()) {
+            url
+        } else if (manga.sourceId.startsWith("ext_")) {
+            runCatching { SourceRegistry.source(manga.sourceId).coverImageModel(url) }.getOrNull() ?: url
+        } else {
+            url
+        }
+    }
+}
 
 @Composable
 fun MangaGridCard(
@@ -71,7 +89,7 @@ fun MangaGridCard(
                     .aspectRatio(0.72f)
             ) {
                 AsyncImage(
-                    model = manga.coverUrl,
+                    model = coverModelFor(manga),
                     contentDescription = manga.title,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
@@ -253,7 +271,7 @@ fun MangaListCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
-                model = manga.coverUrl,
+                model = coverModelFor(manga),
                 contentDescription = manga.title,
                 modifier = Modifier
                     .size(width = 60.dp, height = 80.dp)
