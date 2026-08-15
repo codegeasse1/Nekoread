@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 
 /**
  * Bridges a DexClassLoader-loaded Tachiyomi [HttpSource] (from an installed extension APK) onto
@@ -88,37 +89,39 @@ class TachiyomiHttpSourceAdapter(
 
     private fun idOf(mangaUrl: String): String = "${this.id}:" + b64(mangaUrl)
 
+    // Nekoread drives extensions through the SUSPEND API (getLatestUpdates/getPopularManga/
+    // getSearchManga/getMangaDetails/getChapterList/getPageList/getImageUrl) — exactly what
+    // Tadami/Mihon call. The old Rx fetch* methods are still provided by the vendored HttpSource
+    // for lib-1.4 sources (their defaults run request+parse), but keiyoushi lib-1.6 (KeiSource)
+    // sources force those Rx methods to throw, so calling fetch* directly broke sources like 4KHD.
+    private suspend fun <T> loading(tag: String, block: suspend () -> T): T =
+        withTimeout(120_000) { block() }
+
     override suspend fun search(query: String, page: Int): List<MangaEntity> = withContext(Dispatchers.IO) {
-        ext.fetchSearchManga(page, query, FilterList())
-            .toBlocking()
-            .first()
+        loading("search") { ext.getSearchManga(page, query, FilterList()) }
             .mangas
             .map { it.toManga() }
     }
 
     override suspend fun latest(page: Int): List<MangaEntity> = withContext(Dispatchers.IO) {
-        ext.fetchLatestUpdates(page)
-            .toBlocking()
-            .first()
+        loading("latest") { ext.getLatestUpdates(page) }
             .mangas
             .map { it.toManga() }
     }
 
     override suspend fun getDetails(fullMangaId: String): MangaEntity = withContext(Dispatchers.IO) {
-        ext.fetchMangaDetails(sm(mangaUrl(fullMangaId))).toBlocking().first().toManga()
+        loading("details") { ext.getMangaDetails(sm(mangaUrl(fullMangaId))) }.toManga()
     }
 
     override suspend fun getChapters(fullMangaId: String): List<ChapterEntity> = withContext(Dispatchers.IO) {
-        ext.fetchChapterList(sm(mangaUrl(fullMangaId)))
-            .toBlocking()
-            .first()
+        loading("chapters") { ext.getChapterList(sm(mangaUrl(fullMangaId))) }
             .map { it.toChapter(fullMangaId) }
     }
 
     override suspend fun getPageUrls(rawChapterId: String): List<String> = withContext(Dispatchers.IO) {
-        val pages = ext.fetchPageList(ch(rawChapterId)).toBlocking().first()
+        val pages = loading("pages") { ext.getPageList(ch(rawChapterId)) }
         pages.map { page ->
-            page.imageUrl ?: ext.fetchImageUrl(page).toBlocking().first()
+            page.imageUrl ?: ext.getImageUrl(page)
         }
     }
 
@@ -129,9 +132,9 @@ class TachiyomiHttpSourceAdapter(
      * them (blank/black pages).
      */
     override suspend fun getPageImageModels(rawChapterId: String): List<Any> = withContext(Dispatchers.IO) {
-        val pages = ext.fetchPageList(ch(rawChapterId)).toBlocking().first()
+        val pages = loading("pages") { ext.getPageList(ch(rawChapterId)) }
         pages.map { page ->
-            val url = page.imageUrl ?: ext.fetchImageUrl(page).toBlocking().first()
+            val url = page.imageUrl ?: ext.getImageUrl(page)
             page.imageUrl = url
             ExtensionPageImage(page.url, url, ext)
         }
