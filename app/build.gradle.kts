@@ -7,6 +7,7 @@ plugins {
   alias(libs.plugins.roborazzi)
   alias(libs.plugins.secrets)
   alias(libs.plugins.google.services)
+  alias(libs.plugins.serialization)
 }
 
 android {
@@ -112,6 +113,11 @@ dependencies {
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.kotlinx.serialization.json)
   implementation(libs.kotlinx.serialization.json.okio)
+  implementation(libs.kotlinx.serialization.protobuf)
+  // Tadami's source-api exposes kotlin-reflect as an api() dep to extensions; a matching
+  // kotlin-reflect on the app classpath is required or reflection-using extension code fails
+  // with NoClassDefFoundError at runtime.
+  implementation(libs.kotlin.reflect)
   implementation(libs.logging.interceptor)
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
