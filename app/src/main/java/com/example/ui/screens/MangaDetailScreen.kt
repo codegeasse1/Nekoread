@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.util.Base64
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
@@ -123,8 +125,24 @@ fun MangaDetailScreen(
     var isDescriptionExpanded by remember { mutableStateOf(false) }
     var isSortAscending by remember { mutableStateOf(false) }
     var showCategoryDialog by remember { mutableStateOf(false) }
+    var showWebview by remember { mutableStateOf(false) }
 
     val categories: List<CategoryEntity> by viewModel.categories.collectAsStateWithLifecycle()
+
+    // For extension sources, the manga page URL + the exact UA its requests send, so a manually
+    // solved Cloudflare challenge binds a cf_clearance that the chapter/detail requests accept.
+    val verifyTarget = remember(manga.id) {
+        if (manga.id.startsWith("ext_")) {
+            runCatching {
+                val src = viewModel.repository.sourceForManga(manga.id)
+                val raw = manga.id.substringAfter(":")
+                val decoded = Base64.decode(raw, Base64.URL_SAFE or Base64.NO_WRAP).toString(Charsets.UTF_8)
+                (src.baseUrl + decoded) to src.userAgent
+            }.getOrNull()
+        } else {
+            null
+        }
+    }
 
     val sortedChapters = remember(chapters, isSortAscending) {
         if (isSortAscending) chapters.sortedBy { it.chapterNumber } else chapters.sortedByDescending { it.chapterNumber }
@@ -340,6 +358,19 @@ fun MangaDetailScreen(
                             Text(manga.category)
                         }
                     }
+
+                    // Cloudflare / site verification — some sources challenge the chapter/detail
+                    // pages too, so open the manga's own page here and solve it.
+                    if (verifyTarget != null) {
+                        OutlinedButton(
+                            onClick = { showWebview = true },
+                            modifier = Modifier.testTag("detail_verify_webview_button")
+                        ) {
+                            Icon(Icons.Default.Language, contentDescription = "Verify in WebView")
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Verify in WebView")
+                        }
+                    }
                 }
             }
 
@@ -509,6 +540,18 @@ fun MangaDetailScreen(
                 TextButton(onClick = { showCategoryDialog = false }) {
                     Text("Cancel")
                 }
+            }
+        )
+    }
+
+    if (showWebview && verifyTarget != null) {
+        WebViewDialog(
+            url = verifyTarget.first,
+            userAgent = verifyTarget.second,
+            onDismiss = {
+                showWebview = false
+                // Re-fetch chapters/details after verification so the solved cookies take effect.
+                onRetry()
             }
         )
     }
