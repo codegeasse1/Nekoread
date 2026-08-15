@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.network.interceptor
 import android.content.Context
 import androidx.core.content.ContextCompat
 import eu.kanade.tachiyomi.network.AndroidCookieJar
+import eu.kanade.tachiyomi.util.system.isOutdated
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
@@ -37,6 +38,7 @@ class CloudflareInterceptor(
         mainExecutor = ContextCompat.getMainExecutor(context),
         createWebView = this::createWebView,
         parseHeaders = this::parseHeaders,
+        isWebViewOutdated = { it.isOutdated() },
     )
 
     override fun shouldIntercept(response: Response): Boolean {
