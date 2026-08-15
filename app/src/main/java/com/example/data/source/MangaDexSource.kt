@@ -9,6 +9,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -148,6 +149,22 @@ object MangaDexSource : MangaSource {
         }
         pages
     }
+
+    override suspend fun downloadPageImage(page: MangaSource.PageDescriptor, target: File): File =
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder().url(page.imageUrl).build()
+            client.newCall(request).execute().use { response ->
+                val body = response.body ?: throw IOException("Empty body for ${page.imageUrl}")
+                if (!response.isSuccessful) {
+                    throw IOException("HTTP ${response.code} for ${page.imageUrl}")
+                }
+                target.parentFile?.mkdirs()
+                body.byteStream().use { input ->
+                    target.outputStream().use { output -> input.copyTo(output) }
+                }
+            }
+            target
+        }
 
     private fun parseMangaCollection(root: JSONObject): List<MangaEntity> {
         val data = root.optJSONArray("data") ?: JSONArray()
