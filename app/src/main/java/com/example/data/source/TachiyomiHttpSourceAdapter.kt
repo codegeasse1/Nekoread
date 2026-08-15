@@ -114,8 +114,19 @@ class TachiyomiHttpSourceAdapter(
     }
 
     override suspend fun getChapters(fullMangaId: String): List<ChapterEntity> = withContext(Dispatchers.IO) {
-        loading("chapters") { ext.getChapterList(sm(mangaUrl(fullMangaId))) }
-            .map { it.toChapter(fullMangaId) }
+        val chapters = loading("chapters") { ext.getChapterList(sm(mangaUrl(fullMangaId))) }
+            .mapIndexed { i, ch -> ch.toChapter(fullMangaId) }
+        // Sources that don't set chapter_number leave the SChapter default (-1) on every chapter,
+        // which shows "-1" all over the UI and breaks chapter ordering, prev/next navigation and
+        // continuous scroll. Fall back to the list position (the source's own order) so chapters
+        // are numbered 1,2,3… in reading order.
+        if (chapters.isNotEmpty() && chapters.all { it.chapterNumber <= 0f }) {
+            chapters.mapIndexed { i, ch ->
+                if (ch.chapterNumber > 0f) ch else ch.copy(chapterNumber = (i + 1).toFloat())
+            }
+        } else {
+            chapters
+        }
     }
 
     override suspend fun getPageUrls(rawChapterId: String): List<String> = withContext(Dispatchers.IO) {
