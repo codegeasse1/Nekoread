@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -198,6 +199,9 @@ fun ReaderScreen(
     // fits the decode inside this box; pages taller than ~3 screens are downscaled slightly.
     val screenH = with(density) { configuration.screenHeightDp.dp.roundToPx() }
     val webtoonDecodeH = (screenH * 3).coerceAtLeast(1200)
+    // Loading placeholder height = one viewport (like Tadami): keeps the list's layout stable
+    // while pages stream in, so content doesn't jump and re-layout when each image lands.
+    val webtoonPlaceholderH = configuration.screenHeightDp.dp
     val activity = context as? Activity
 
     fun toggleRotation() {
@@ -361,17 +365,27 @@ fun ReaderScreen(
         }
     }
 
-    // Preload the next few pages (webtoon) so scrolling ahead doesn't wait on the network.
+    // Preload pages ahead of the viewport (like Tadami's preload manager): by the time an item
+    // scrolls into view its bytes are already downloaded AND decoded, so continuous scroll never
+    // sits on a spinner. Must use the SAME size as the display request (screenW/webtoonDecodeH)
+    // so Coil's cache/in-flight coalescing reuses the result — a different size decodes a second,
+    // full-height bitmap, which is what blew up memory (freeze/crash) and made pages re-download.
     LaunchedEffect(firstVisible, entries.size) {
         if (readerMode != ReaderMode.WEBTOON || entries.isEmpty()) return@LaunchedEffect
-        val loader = imageLoader
-        val start = firstVisible.coerceIn(0, entries.size - 1)
-        val end = minOf(start + 6, entries.size - 1)
-        for (i in start..end) {
-            val m = entries[i]
+        val info = listState.layoutInfo
+        val last = info.visibleItemsInfo.lastOrNull()?.index ?: firstVisible
+        val visibleCount = info.visibleItemsInfo.size.coerceAtLeast(1)
+        val start = last + 1
+        val end = minOf(start + visibleCount + PRELOAD_PAGES, entries.size)
+        for (i in start until end) {
+            val m = entries.getOrNull(i) ?: continue
             if (m is DividerItem || m is LoadingItem) continue
-            loader?.enqueue(
-                ImageRequest.Builder(context).data(m).size(screenW, Int.MAX_VALUE).crossfade(false).build()
+            imageLoader?.enqueue(
+                ImageRequest.Builder(context)
+                    .data(m)
+                    .size(screenW, webtoonDecodeH)
+                    .crossfade(false)
+                    .build()
             )
         }
     }
@@ -569,13 +583,13 @@ fun ReaderScreen(
                                                     pageImageErrors = pageImageErrors - i
                                                     pageRetries[i] = (pageRetries[i] ?: 0) + 1
                                                 },
-                                                // A loading page keeps a minimum height (with a
-                                                // spinner, like Tadami) so the list stays scrollable
-                                                // instead of collapsing to zero height and getting
-                                                // stuck mid-chapter.
+                                                // A loading page keeps a viewport-height
+                                                // placeholder (like Tadami) so the list stays
+                                                // scrollable and doesn't jump when each image
+                                                // finishes loading.
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .heightIn(min = 200.dp)
+                                                    .heightIn(min = webtoonPlaceholderH)
                                                     .testTag("reader_page_$i")
                                             )
                                         }
@@ -585,11 +599,7 @@ fun ReaderScreen(
                         }
                     }
                 } else {
-                    HorizontalPager(
-                        state = pagerState,
-                        reverseLayout = readerMode == ReaderMode.RIGHT_TO_LEFT,
-                        modifier = Modifier.fillMaxSize()
-                    ) { pageIndex ->
+                    val pageContent: @Composable (Int) -> Unit = { pageIndex ->
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
@@ -602,7 +612,11 @@ fun ReaderScreen(
                                         stableKey = pageUrl,
                                         model = pageUrl,
                                         contentDescription = "Page ${pageIndex + 1}",
-                                        contentScale = if (readerFit == ReaderFit.FIT_WIDTH) ContentScale.FillWidth else ContentScale.Fit,
+                                        contentScale = when (readerFit) {
+                                            ReaderFit.FIT_WIDTH -> ContentScale.FillWidth
+                                            ReaderFit.FIT_HEIGHT -> ContentScale.FillHeight
+                                            ReaderFit.FIT -> ContentScale.Fit
+                                        },
                                         spinnerColor = contentTextColor,
                                         onError = { msg ->
                                             pageImageErrors = pageImageErrors + (pageIndex to msg)
@@ -619,6 +633,18 @@ fun ReaderScreen(
                                 }
                             }
                         }
+                    }
+                    if (readerMode == ReaderMode.VERTICAL) {
+                        VerticalPager(
+                            state = pagerState,
+                            modifier = Modifier.fillMaxSize()
+                        ) { pageContent(it) }
+                    } else {
+                        HorizontalPager(
+                            state = pagerState,
+                            reverseLayout = readerMode == ReaderMode.RIGHT_TO_LEFT,
+                            modifier = Modifier.fillMaxSize()
+                        ) { pageContent(it) }
                     }
                 }
             }
@@ -757,10 +783,18 @@ fun ReaderScreen(
                         if (readerMode != ReaderMode.WEBTOON) {
                             ReaderToolButton(
                                 icon = Icons.Default.AspectRatio,
-                                label = if (readerFit == ReaderFit.FIT_WIDTH) "Fit Width" else "Fit Screen"
+                                label = when (readerFit) {
+                                    ReaderFit.FIT_WIDTH -> "Fit Width"
+                                    ReaderFit.FIT_HEIGHT -> "Fit Height"
+                                    ReaderFit.FIT -> "Fit Screen"
+                                }
                             ) {
                                 viewModel.setReaderFit(
-                                    if (readerFit == ReaderFit.FIT_WIDTH) ReaderFit.FIT else ReaderFit.FIT_WIDTH
+                                    when (readerFit) {
+                                        ReaderFit.FIT_WIDTH -> ReaderFit.FIT_HEIGHT
+                                        ReaderFit.FIT_HEIGHT -> ReaderFit.FIT
+                                        ReaderFit.FIT -> ReaderFit.FIT_WIDTH
+                                    }
                                 )
                             }
                         }
@@ -839,7 +873,7 @@ fun ReaderScreen(
                             onClick = { viewModel.setReaderMode(ReaderMode.WEBTOON) }
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Webtoon (Continuous Vertical)")
+                        Text("Webtoon")
                     }
 
                     Row(
@@ -853,7 +887,7 @@ fun ReaderScreen(
                             onClick = { viewModel.setReaderMode(ReaderMode.LEFT_TO_RIGHT) }
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Manga Left-to-Right")
+                        Text("Left to Right")
                     }
 
                     Row(
@@ -867,7 +901,21 @@ fun ReaderScreen(
                             onClick = { viewModel.setReaderMode(ReaderMode.RIGHT_TO_LEFT) }
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Manga Right-to-Left (Traditional)")
+                        Text("Right to Left")
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { viewModel.setReaderMode(ReaderMode.VERTICAL) }
+                    ) {
+                        RadioButton(
+                            selected = readerMode == ReaderMode.VERTICAL,
+                            onClick = { viewModel.setReaderMode(ReaderMode.VERTICAL) }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Vertical")
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -1051,9 +1099,14 @@ private const val MAIN_LOAD_TIMEOUT_MS = 60_000L
 
 // Continuous-scroll queued chapters: shorter timeout (a stalled queued chapter shows a retry row
 // instead of an endless spinner) and a hard cap so a jump to the end can't queue every remaining
-// chapter at once (that froze/lagged the whole app).
-private const val QUEUED_LOAD_TIMEOUT_MS = 25_000L
+// chapter at once (that froze/lagged the whole app). Generous enough for sources whose page-list
+// call does a session/secret-stream handshake (TheBlank) — a too-tight timeout surfaced error rows
+// and made the reader feel broken mid-scroll.
+private const val QUEUED_LOAD_TIMEOUT_MS = 45_000L
 private const val MAX_QUEUED_CHAPTERS = 8
+
+// Webtoon: how many items past the current viewport to preload (like Tadami's preload window).
+private const val PRELOAD_PAGES = 10
 
 /**
  * A reader page image with its own loading spinner and tap-to-retry error state (like Tadami).
