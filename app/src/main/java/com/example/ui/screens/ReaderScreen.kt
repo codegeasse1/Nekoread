@@ -194,16 +194,16 @@ fun ReaderScreen(
     val context = LocalContext.current
     val imageLoader = LocalImageLoader.current
     val screenW = with(density) { configuration.screenWidthDp.dp.roundToPx() }
-    // Decode webtoon pages at most this tall (in pixels). Keeps every bitmap under the GPU's
-    // ~4096px max texture size — taller bitmaps render with a BLACK BAND cutting the image in
-    // half (the hardware renderer can't texture the middle). Pages taller than this are downscaled
-    // (they're read one screen at a time, so on-screen quality is preserved), and memory stays
-    // bounded (a 1080x3400 bitmap is ~15MB, not ~60MB).
+    // Decode webtoon pages at most this tall (in pixels). Full-height decoding is what keeps
+    // pages sharp ("full HD"): a cap of ~8000px covers essentially every webtoon page natively
+    // while still bounding memory (a 1080x8000 bitmap is ~34MB) so Coil's LRU cache handles it.
+    // (The earlier 3400px cap downscaled tall pages → the blur you saw.)
     val screenH = with(density) { configuration.screenHeightDp.dp.roundToPx() }
-    val webtoonDecodeH = minOf(screenH * 3, 3400)
-    // Loading placeholder height = one viewport (like Tadami): keeps the list's layout stable
-    // while pages stream in, so content doesn't jump and re-layout when each image lands.
-    val webtoonPlaceholderH = configuration.screenHeightDp.dp
+    val webtoonDecodeH = minOf(screenH * 3, 8000).coerceAtLeast(2400)
+    // Loading placeholder: a SMALL minimum height. A viewport-tall placeholder centered short
+    // pages inside a full-screen box, leaving big black bands that cut the artwork — this was the
+    // "image cut in half" bug. With a small placeholder the item collapses to the image size.
+    val webtoonPlaceholderH = 200.dp
     val activity = context as? Activity
 
     fun toggleRotation() {
@@ -1119,7 +1119,8 @@ private const val QUEUED_LOAD_TIMEOUT_MS = 45_000L
 private const val MAX_QUEUED_CHAPTERS = 8
 
 // Webtoon: how many items past the current viewport to preload (like Tadami's preload window).
-private const val PRELOAD_PAGES = 10
+// Kept modest so the higher-resolution decodes don't run too many at once.
+private const val PRELOAD_PAGES = 6
 
 /**
  * A reader page image with its own loading spinner and tap-to-retry error state (like Tadami).
