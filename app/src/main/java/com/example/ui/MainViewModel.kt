@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 enum class ReaderMode {
-    WEBTOON, LEFT_TO_RIGHT, RIGHT_TO_LEFT, VERTICAL
+    WEBTOON, WEBTOON_GAPS, LEFT_TO_RIGHT, RIGHT_TO_LEFT, VERTICAL
 }
 
 enum class ReaderBg {
