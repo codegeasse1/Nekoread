@@ -29,11 +29,12 @@ cameraCamera2 = "1.5.0"
 cameraLifecycle = "1.5.0"
 cameraView = "1.5.0"
 cameraCore = "1.5.0"
-loggingInterceptor = "4.10.0"
-okhttp = "4.10.0"
+loggingInterceptor = "5.4.0"
+okhttp = "5.4.0"
+okio = "3.10.2"
 rxjava = "1.3.8"
 rxandroid = "1.2.1"
-jsoup = "1.15.3"
+jsoup = "1.19.1"
 serializationJson = "1.7.3"
 moshiKotlin = "1.15.2"
 moshiKotlinCodegen = "1.15.2"
@@ -88,6 +89,9 @@ androidx-camera-view = { group = "androidx.camera", name = "camera-view", versio
 androidx-camera-core = { group = "androidx.camera", name = "camera-core", version.ref = "cameraCore" }
 logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "loggingInterceptor" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+okhttp-brotli = { group = "com.squareup.okhttp3", name = "okhttp-brotli", version.ref = "okhttp" }
+okhttp-zstd = { group = "com.squareup.okhttp3", name = "okhttp-zstd", version.ref = "okhttp" }
+okio-zstd = { group = "com.squareup.okio", name = "okio-zstd", version.ref = "okio" }
 rxjava = { group = "io.reactivex", name = "rxjava", version.ref = "rxjava" }
 rxandroid = { group = "io.reactivex", name = "rxandroid", version.ref = "rxandroid" }
 jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
