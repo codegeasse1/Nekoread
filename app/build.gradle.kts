@@ -120,7 +120,7 @@ dependencies {
   // the app classpath or those extensions die with NoClassDefFoundError. Same set as Tadami.
   implementation(libs.okhttp.brotli)
   implementation(libs.okhttp.zstd)
-  implementation(libs.okio.zstd)
+  implementation(libs.zstd.kmp.okio)
   // Tachiyomi-style extension engine (Tadami/Mihon compatible): these runtime libs are what
   // loaded extension APKs link against.
   implementation(libs.rxjava)
