@@ -33,6 +33,55 @@ class ExtensionPageImageKeyer : Keyer<ExtensionPageImage> {
     override fun key(data: ExtensionPageImage, options: Options): String = data.imageUrl
 }
 
+/**
+ * Coil model for a catalog/library cover served by a Tachiyomi extension.
+ *
+ * The dedicated [Fetcher] loads the cover through the extension's OWN client and headers
+ * ([HttpSource.headers] = the source's User-Agent + Referer/Origin etc.) so hotlink-protected
+ * CDNs accept it — the same reason reader pages go through [ExtensionPageImage]. Loading the bare
+ * URL through the generic client omitted the source's Referer, which is why covers on sources like
+ * 18 Porn Comic / TheBlank came back as blank gray tiles even after their API worked.
+ */
+data class ExtensionCoverImage(
+    val imageUrl: String,
+    val source: HttpSource,
+)
+
+class ExtensionCoverImageFetcherFactory : Fetcher.Factory<ExtensionCoverImage> {
+    override fun create(
+        data: ExtensionCoverImage,
+        options: Options,
+        imageLoader: ImageLoader,
+    ): Fetcher? {
+        return object : Fetcher {
+            override suspend fun fetch(): FetchResult? {
+                val request = okhttp3.Request.Builder()
+                    .url(data.imageUrl)
+                    .headers(data.source.headers)
+                    .build()
+                val response = try {
+                    data.source.client.newCall(request).execute()
+                } catch (e: Exception) {
+                    throw IOException("${data.source.name} cover load failed (${data.imageUrl.take(80)}): ${e.message}", e)
+                }
+                if (!response.isSuccessful) {
+                    response.close()
+                    throw IOException("HTTP ${response.code} for ${data.imageUrl.take(80)}")
+                }
+                val body = response.body ?: throw IOException("Null cover body")
+                return SourceResult(
+                    source = ImageSource(
+                        source = body.source(),
+                        context = options.context,
+                    ),
+                    mimeType = body.contentType()?.toString() ?: "image/*",
+                    dataSource = DataSource.NETWORK,
+                )
+            }
+        }
+    }
+}
+
 class ExtensionPageImageFetcherFactory : Fetcher.Factory<ExtensionPageImage> {
     override fun create(
         data: ExtensionPageImage,
