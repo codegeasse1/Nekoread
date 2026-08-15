@@ -4,13 +4,25 @@ import android.app.Application
 import android.content.Context
 import eu.kanade.tachiyomi.AppInfo
 import eu.kanade.tachiyomi.network.interceptor.CloudflareInterceptor
+import eu.kanade.tachiyomi.network.interceptor.UncaughtExceptionInterceptor
+import eu.kanade.tachiyomi.network.interceptor.UserAgentInterceptor
+import okhttp3.Cache
 import okhttp3.OkHttpClient
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
+import java.io.File
 import java.util.concurrent.TimeUnit
 
 /**
- * Provides the network stack that loaded extensions use — same role as Tadami's NetworkHelper.
+ * Provides the network stack that loaded extensions use — ported to match Tadami's
+ * NetworkHelper exactly, so the client looks like the one Mihon/Tadami hand to extensions:
+ *
+ *  - [UncaughtExceptionInterceptor] first in the chain (and required *by name* by extension-lib
+ *    1.6 sources — missing it is what made some extensions fail with
+ *    "UncaughtExceptionInterceptor must be present in default client");
+ *  - [UserAgentInterceptor] to set the default UA (also required *by name*);
+ *  - [CloudflareInterceptor] as the innermost application interceptor (also required *by name*).
+ *
  * Registered into the global injekt scope so extension code can `by injectLazy()` it, exactly like
  * Tadami.
  */
@@ -21,17 +33,31 @@ class NetworkHelper(context: Context) {
 
     private val clientBuilder: OkHttpClient.Builder = run {
         OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .callTimeout(120, TimeUnit.SECONDS)
             .cookieJar(cookieJar)
-            .addInterceptor { chain ->
-                // Like Tadami: only set the app UA when the extension didn't supply its own, so the
-                // WebView (which mirrors the request's UA) binds cf_clearance to the real UA.
-                val request = chain.request()
-                val ua = request.header("User-Agent") ?: defaultUserAgentProvider()
-                chain.proceed(request.newBuilder().header("User-Agent", ua).build())
-            }
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .callTimeout(2, TimeUnit.MINUTES)
+            .dispatcher(
+                okhttp3.Dispatcher().apply {
+                    maxRequests = 64
+                    maxRequestsPerHost = 8
+                },
+            )
+            .connectionPool(
+                okhttp3.ConnectionPool(
+                    maxIdleConnections = 15,
+                    keepAliveDuration = 5,
+                    timeUnit = TimeUnit.MINUTES,
+                ),
+            )
+            .cache(
+                Cache(
+                    directory = File(context.cacheDir, "network_cache"),
+                    maxSize = 64L * 1024 * 1024,
+                ),
+            )
+            .addInterceptor(UncaughtExceptionInterceptor())
+            .addInterceptor(UserAgentInterceptor(::defaultUserAgentProvider))
     }
 
     /** The one client extensions use. Automatically solves Cloudflare challenges via a hidden WebView. */
@@ -40,7 +66,7 @@ class NetworkHelper(context: Context) {
             CloudflareInterceptor(
                 context = context,
                 cookieManager = cookieJar,
-                defaultUserAgentProvider = { defaultUserAgentProvider() },
+                defaultUserAgentProvider = ::defaultUserAgentProvider,
             ),
         )
         .build()
@@ -50,7 +76,14 @@ class NetworkHelper(context: Context) {
     @Suppress("UNUSED")
     val cloudflareClient: OkHttpClient = client
 
-    fun defaultUserAgentProvider(): String = "Nekoread/" + AppInfo.getVersionName()
+    /**
+     * The default User-Agent for extension requests and the Cloudflare WebView. Same as Tadami's:
+     * a real Chrome-on-Android UA. Cloudflare's Turnstile treats non-browser UAs as bots and
+     * loops the challenge forever — the old "Nekoread/x" default is why verification never
+     * completed.
+     */
+    fun defaultUserAgentProvider(): String =
+        "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36"
 
     companion object {
         @Volatile
