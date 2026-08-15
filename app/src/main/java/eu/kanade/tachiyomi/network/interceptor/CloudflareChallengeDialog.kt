@@ -182,7 +182,7 @@ class CloudflareChallengeDialog(
         }
     }
 
-    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+    private fun dp(value: Int): Int = (value * context.resources.displayMetrics.density).toInt()
 
     companion object {
         private const val POLL_INTERVAL_MS = 500L
