@@ -17,11 +17,12 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -30,22 +31,29 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.NavigateBefore
 import androidx.compose.material.icons.filled.NavigateNext
+import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -60,20 +68,31 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.app.Activity
+import android.content.pm.ActivityInfo
 import coil.compose.AsyncImage
+import coil.compose.LocalImageLoader
+import coil.request.ImageRequest
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
 import com.example.util.describe
 import com.example.ui.MainViewModel
 import com.example.ui.ReaderBg
+import com.example.ui.ReaderFit
 import com.example.ui.ReaderMode
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
@@ -98,9 +117,12 @@ fun ReaderScreen(
 
     var showHud by remember { mutableStateOf(true) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showChaptersSheet by remember { mutableStateOf(false) }
+    var rotationLocked by remember { mutableStateOf(false) }
 
     val readerMode: ReaderMode by viewModel.readerMode.collectAsStateWithLifecycle()
     val readerBg: ReaderBg by viewModel.readerBg.collectAsStateWithLifecycle()
+    val readerFit: ReaderFit by viewModel.readerFit.collectAsStateWithLifecycle()
 
     var pages by remember { mutableStateOf<List<Any>?>(null) }
     var pageError by remember { mutableStateOf<String?>(null) }
@@ -109,10 +131,16 @@ fun ReaderScreen(
     var pageImageErrors by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
     val pageRetries = remember { mutableStateMapOf<Int, Int>() }
 
+    // Continuous scroll (webtoon): chapters queued after the current one, appended automatically
+    // as the reader reaches the end. The first chapter's pages live in [pages]; every queued
+    // chapter is a (chapter, loaded-pages-or-null, error-or-null) entry.
+    val queuedChapters = remember { mutableStateListOf<QueuedCh>() }
+
     LaunchedEffect(chapter.id, retryKey) {
         pageLoading = true
         pageError = null
         pageImageErrors = emptyMap()
+        queuedChapters.clear()
         try {
             pages = withTimeout(120_000) {
                 viewModel.repository.getChapterPageImageModels(chapter.id)
@@ -126,6 +154,24 @@ fun ReaderScreen(
     }
 
     val coroutineScope = rememberCoroutineScope()
+
+    // Display size + image loader used to downsample reader pages to screen width (much cheaper to
+    // decode than full-resolution, which is what made webtoon scrolling lag).
+    val density = LocalDensity.current
+    val configuration = LocalConfiguration.current
+    val context = LocalContext.current
+    val imageLoader = LocalImageLoader.current
+    val screenW = with(density) { configuration.screenWidthDp.dp.roundToPx() }
+    val activity = context as? Activity
+
+    fun toggleRotation() {
+        rotationLocked = !rotationLocked
+        activity?.requestedOrientation = if (rotationLocked) {
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
 
     // Determine current background color
     val bgColor = when (readerBg) {
@@ -159,10 +205,108 @@ fun ReaderScreen(
         }
     }
 
-    // Save reading progress on page change
+    // Save reading progress on page change (paged modes; webtoon continuous scroll saves the
+    // chapter actually on screen, in the effect below).
     LaunchedEffect(currentPage) {
-        if (currentPage > 0) {
+        if (readerMode != ReaderMode.WEBTOON && currentPage > 0) {
             viewModel.saveProgress(manga.id, chapter.id, chapter.name, currentPage)
+        }
+    }
+
+    // ---- Continuous scroll (webtoon): pages + queued chapters flattened into one list ----
+    val entries: List<Any> = buildList {
+        val cur = pages
+        if (cur != null) addAll(cur)
+        for (qc in queuedChapters) {
+            val qp = qc.pages
+            if (qp != null) {
+                add(DividerItem(qc.chapter))
+                addAll(qp)
+            } else {
+                add(LoadingItem(qc.chapter, qc.error))
+            }
+        }
+    }
+
+    // Where each chapter's pages start inside [entries], so the HUD/progress can map the scroll
+    // position back to a chapter + page-in-chapter (divider/loading items shift page indices, hence
+    // tracking start offsets in the real item list).
+    val pageRanges: List<PageRange> = buildList {
+        var idx = 0
+        val cur = pages
+        if (cur != null) {
+            add(PageRange(chapter, idx, cur.size)); idx += cur.size
+        }
+        for (qc in queuedChapters) {
+            val qp = qc.pages
+            if (qp != null) {
+                idx += 1 // divider item occupies one slot
+                add(PageRange(qc.chapter, idx, qp.size)); idx += qp.size
+            } else {
+                idx += 1 // loading item occupies one slot
+            }
+        }
+    }
+
+    val firstVisible = listState.firstVisibleItemIndex
+    val visibleRange = pageRanges.lastOrNull { firstVisible >= it.start } ?: pageRanges.firstOrNull()
+    val pageInChapter = visibleRange?.let { (firstVisible - it.start + 1).coerceIn(1, it.count) } ?: 1
+    val activeChapter = visibleRange?.chapter
+
+    val lastVisibleEntry by remember {
+        derivedStateOf { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
+    }
+
+    // Append the next chapter when the reader scrolls near the end of the loaded pages.
+    LaunchedEffect(lastVisibleEntry, entries.size, queuedChapters.size) {
+        if (lastVisibleEntry < entries.size - 3) return@LaunchedEffect
+        val tail = queuedChapters.lastOrNull()
+        val tailReady = if (tail == null) pages != null else (tail.pages != null && tail.error == null)
+        if (!tailReady) return@LaunchedEffect
+        val lastCh = tail?.chapter ?: chapter
+        val next = allChapters.sortedBy { it.chapterNumber }.firstOrNull { it.chapterNumber > lastCh.chapterNumber }
+            ?: return@LaunchedEffect
+        val cid = next.id
+        queuedChapters.add(QueuedCh(next, null, null))
+        val qi = queuedChapters.size - 1
+        coroutineScope.launch {
+            try {
+                val p = withTimeout(120_000) { viewModel.repository.getChapterPageImageModels(cid) }
+                val cur = queuedChapters.getOrNull(qi)
+                if (cur != null && cur.chapter.id == cid) queuedChapters[qi] = QueuedCh(next, p, null)
+            } catch (e: Throwable) {
+                val cur = queuedChapters.getOrNull(qi)
+                if (cur != null && cur.chapter.id == cid) queuedChapters[qi] = QueuedCh(next, null, e.describe())
+            }
+        }
+    }
+
+    // Save progress + mark earlier chapters read as the reader crosses into queued chapters.
+    if (readerMode == ReaderMode.WEBTOON) {
+        val vis = visibleRange
+        LaunchedEffect(vis?.chapter?.id, pageInChapter) {
+            val v = vis
+            if (v != null && pageInChapter > 0) {
+                viewModel.saveProgress(manga.id, v.chapter.id, v.chapter.name, pageInChapter)
+                if (v.chapter.id != chapter.id) {
+                    viewModel.markPreviousChaptersRead(manga.id, v.chapter.chapterNumber)
+                }
+            }
+        }
+    }
+
+    // Preload the next few pages (webtoon) so scrolling ahead doesn't wait on the network.
+    LaunchedEffect(firstVisible, entries.size) {
+        if (readerMode != ReaderMode.WEBTOON || entries.isEmpty()) return@LaunchedEffect
+        val loader = imageLoader
+        val start = firstVisible.coerceIn(0, entries.size - 1)
+        val end = minOf(start + 4, entries.size - 1)
+        for (i in start..end) {
+            val m = entries[i]
+            if (m is DividerItem || m is LoadingItem) continue
+            loader?.enqueue(
+                ImageRequest.Builder(context).data(m).size(screenW, Int.MAX_VALUE).crossfade(false).build()
+            )
         }
     }
 
@@ -268,70 +412,105 @@ fun ReaderScreen(
                         state = listState,
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        itemsIndexed(pageList) { index, pageUrl ->
-                            val retries = pageRetries[index] ?: 0
-                            key(pageUrl, retries) {
-                                Column(modifier = Modifier.fillMaxWidth()) {
-                                    AsyncImage(
-                                        model = pageUrl,
-                                        contentDescription = "Page ${index + 1}",
+                        items(entries.size) { i ->
+                            when (val item = entries[i]) {
+                                is DividerItem -> {
+                                    Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .testTag("reader_page_$index"),
-                                        contentScale = ContentScale.FillWidth,
-                                        onError = { state ->
-                                            pageImageErrors = pageImageErrors + (index to (state.result.throwable.message ?: "image load failed"))
-                                        }
-                                    )
-                                    pageImageErrors[index]?.let { err ->
+                                            .padding(vertical = 20.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        HorizontalDivider(
+                                            modifier = Modifier.fillMaxWidth(0.7f),
+                                            color = contentTextColor.copy(alpha = 0.25f)
+                                        )
+                                        Spacer(modifier = Modifier.height(12.dp))
                                         Text(
-                                            text = "Page ${index + 1} failed: $err",
+                                            text = "End of ${item.chapter.name}",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = contentTextColor.copy(alpha = 0.8f)
+                                        )
+                                        Text(
+                                            text = "Continuing into the next chapter…",
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = Color(0xFFFF5252),
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .background(Color(0x66000000))
-                                                .padding(8.dp)
-                                                .clickable {
-                                                    pageImageErrors = pageImageErrors - index
-                                                    pageRetries[index] = (pageRetries[index] ?: 0) + 1
-                                                }
+                                            color = contentTextColor.copy(alpha = 0.5f)
+                                        )
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        HorizontalDivider(
+                                            modifier = Modifier.fillMaxWidth(0.7f),
+                                            color = contentTextColor.copy(alpha = 0.25f)
                                         )
                                     }
                                 }
-                            }
-                        }
-
-                        // Next Chapter Prompt Footer
-                        item {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(32.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = "End of ${chapter.name}",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = contentTextColor
-                                    )
-                                )
-
-                                Spacer(modifier = Modifier.height(16.dp))
-
-                                if (nextChapter != null) {
-                                    Button(
-                                        onClick = { onChapterChange(nextChapter.id) },
-                                        modifier = Modifier.testTag("next_chapter_button")
-                                    ) {
-                                        Text("Read Next: ${nextChapter.name}")
+                                is LoadingItem -> {
+                                    if (item.error != null) {
+                                        Text(
+                                            text = "Couldn't load ${item.chapter.name}: ${item.error}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = contentTextColor.copy(alpha = 0.7f),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(24.dp)
+                                        )
+                                    } else {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 28.dp),
+                                            horizontalArrangement = Arrangement.Center,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(18.dp),
+                                                strokeWidth = 2.dp,
+                                                color = contentTextColor
+                                            )
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Text(
+                                                text = "Loading ${item.chapter.name}…",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = contentTextColor.copy(alpha = 0.7f)
+                                            )
+                                        }
                                     }
-                                } else {
-                                    Text(
-                                        text = "You have caught up with the latest released chapter!",
-                                        style = MaterialTheme.typography.bodySmall.copy(color = contentTextColor.copy(alpha = 0.7f))
-                                    )
+                                }
+                                else -> {
+                                    val retries = pageRetries[i] ?: 0
+                                    key(item, retries) {
+                                        Column(modifier = Modifier.fillMaxWidth()) {
+                                            AsyncImage(
+                                                model = ImageRequest.Builder(context)
+                                                    .data(item)
+                                                    .size(screenW, Int.MAX_VALUE)
+                                                    .crossfade(false)
+                                                    .build(),
+                                                contentDescription = "Page ${i + 1}",
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .testTag("reader_page_$i"),
+                                                contentScale = ContentScale.FillWidth,
+                                                onError = { state ->
+                                                    pageImageErrors = pageImageErrors + (i to (state.result.throwable.message ?: "image load failed"))
+                                                }
+                                            )
+                                            pageImageErrors[i]?.let { err ->
+                                                Text(
+                                                    text = "Page ${i + 1} failed: $err",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = Color(0xFFFF5252),
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .background(Color(0x66000000))
+                                                        .padding(8.dp)
+                                                        .clickable {
+                                                            pageImageErrors = pageImageErrors - i
+                                                            pageRetries[i] = (pageRetries[i] ?: 0) + 1
+                                                        }
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -355,8 +534,9 @@ fun ReaderScreen(
                                         contentDescription = "Page ${pageIndex + 1}",
                                         modifier = Modifier
                                             .fillMaxSize()
+                                            .clipToBounds()
                                             .testTag("reader_page_$pageIndex"),
-                                        contentScale = ContentScale.Fit,
+                                        contentScale = if (readerFit == ReaderFit.FIT_WIDTH) ContentScale.FillWidth else ContentScale.Fit,
                                         onError = { state ->
                                             pageImageErrors = pageImageErrors + (pageIndex to (state.result.throwable.message ?: "image load failed"))
                                         }
@@ -410,7 +590,7 @@ fun ReaderScreen(
                                 maxLines = 1
                             )
                             Text(
-                                text = chapter.name,
+                                text = activeChapter?.name ?: chapter.name,
                                 style = MaterialTheme.typography.bodySmall.copy(color = Color.LightGray),
                                 maxLines = 1
                             )
@@ -469,24 +649,29 @@ fun ReaderScreen(
                             )
                         }
 
-                        Text(
-                            text = "Page $currentPage / ${pages?.size ?: 0}",
-                            style = MaterialTheme.typography.labelLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            ),
-                            modifier = Modifier.testTag("page_indicator_text")
-                        )
-
-                        if (pageImageErrors.isNotEmpty()) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "  ${pageImageErrors.size} img failed",
-                                style = MaterialTheme.typography.labelSmall.copy(
+                                text = if (readerMode == ReaderMode.WEBTOON && activeChapter != null)
+                                    "${formatChapterNum(activeChapter.chapterNumber)} • Page $pageInChapter / ${visibleRange?.count ?: 0}"
+                                else
+                                    "Page $currentPage / ${pages?.size ?: 0}",
+                                style = MaterialTheme.typography.labelLarge.copy(
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFFF5252)
+                                    color = Color.White
                                 ),
-                                modifier = Modifier.testTag("page_errors_count")
+                                modifier = Modifier.testTag("page_indicator_text")
                             )
+
+                            if (pageImageErrors.isNotEmpty()) {
+                                Text(
+                                    text = "${pageImageErrors.size} img failed",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFFF5252)
+                                    ),
+                                    modifier = Modifier.testTag("page_errors_count")
+                                )
+                            }
                         }
 
                         IconButton(
@@ -501,19 +686,47 @@ fun ReaderScreen(
                         }
                     }
 
+                    // Reader toolbar (mirrors Tadami's): chapter list, fit mode, rotation lock.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        ReaderToolButton(Icons.Default.FormatListBulleted, "Chapters") { showChaptersSheet = true }
+                        if (readerMode != ReaderMode.WEBTOON) {
+                            ReaderToolButton(
+                                icon = Icons.Default.AspectRatio,
+                                label = if (readerFit == ReaderFit.FIT_WIDTH) "Fit Width" else "Fit Screen"
+                            ) {
+                                viewModel.setReaderFit(
+                                    if (readerFit == ReaderFit.FIT_WIDTH) ReaderFit.FIT else ReaderFit.FIT_WIDTH
+                                )
+                            }
+                        }
+                        ReaderToolButton(
+                            icon = Icons.Default.ScreenRotation,
+                            label = if (rotationLocked) "Unlock" else "Landscape"
+                        ) { toggleRotation() }
+                    }
+
                     Slider(
-                        value = currentPage.toFloat(),
+                        value = if (readerMode == ReaderMode.WEBTOON) pageInChapter.toFloat() else currentPage.toFloat(),
                         onValueChange = { pageVal ->
                             val targetPage = pageVal.toInt() - 1
                             coroutineScope.launch {
                                 if (readerMode == ReaderMode.WEBTOON) {
-                                    listState.scrollToItem(targetPage)
+                                    listState.scrollToItem((visibleRange?.start ?: 0) + targetPage)
                                 } else {
                                     pagerState.scrollToPage(targetPage)
                                 }
                             }
                         },
-                        valueRange = 1f..(pages?.size ?: 1).coerceAtLeast(1).toFloat(),
+                        valueRange = 1f..(
+                            if (readerMode == ReaderMode.WEBTOON)
+                                (visibleRange?.count ?: 1).coerceAtLeast(1).toFloat()
+                            else
+                                (pages?.size ?: 1).coerceAtLeast(1).toFloat()
+                        ),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("reader_page_slider")
@@ -630,12 +843,85 @@ fun ReaderScreen(
         )
     }
 
+    if (showChaptersSheet) {
+        ModalBottomSheet(onDismissRequest = { showChaptersSheet = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp)
+            ) {
+                Text(
+                    text = "Chapters",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+                )
+                val activeId = activeChapter?.id ?: chapter.id
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                ) {
+                    items(allChapters.sortedBy { it.chapterNumber }, key = { it.id }) { c ->
+                        val isCurrent = c.id == activeId
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    showChaptersSheet = false
+                                    onChapterChange(c.id)
+                                }
+                                .background(
+                                    if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent
+                                )
+                                .padding(horizontal = 20.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = c.name,
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (c.read) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = "Read",
+                                    tint = MaterialTheme.colorScheme.outline,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     webviewTarget?.let { (url, ua) ->
         WebViewDialog(
             url = url,
             userAgent = ua,
             onDismiss = { webviewTarget = null }
         )
+    }
+}
+
+@Composable
+private fun ReaderToolButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    TextButton(
+        onClick = onClick,
+        colors = ButtonDefaults.textButtonColors(contentColor = Color.White)
+    ) {
+        Icon(icon, contentDescription = label, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(label, style = MaterialTheme.typography.labelMedium)
     }
 }
 
@@ -673,3 +959,18 @@ private fun ReaderBgChip(
         }
     }
 }
+
+private data class QueuedCh(
+    val chapter: ChapterEntity,
+    val pages: List<Any>?,
+    val error: String?,
+)
+
+private data class DividerItem(val chapter: ChapterEntity)
+
+private data class LoadingItem(val chapter: ChapterEntity, val error: String?)
+
+private data class PageRange(val chapter: ChapterEntity, val start: Int, val count: Int)
+
+private fun formatChapterNum(n: Float): String =
+    if (n % 1f == 0f) n.toInt().toString() else n.toString()
