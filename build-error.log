@@ -1,0 +1,722 @@
+Initialized native services in: /home/runner/.gradle/native
+Initialized jansi services in: /home/runner/.gradle/native
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Starting process 'Gradle build daemon'. Working directory: /home/runner/.gradle/daemon/9.3.1 Command: /usr/lib/jvm/temurin-17-jdk-amd64/bin/java --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-opens=java.base/java.nio.charset=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.xml/javax.xml.namespace=ALL-UNNAMED --add-opens=java.base/java.time=ALL-UNNAMED -Xmx4g -Dfile.encoding=UTF-8 -Duser.country -Duser.language=en -Duser.variant -cp /home/runner/.gradle/wrapper/dists/gradle-9.3.1-bin/23ovyewtku6u96viwx3xl3oks/gradle-9.3.1/lib/gradle-daemon-main-9.3.1.jar -javaagent:/home/runner/.gradle/wrapper/dists/gradle-9.3.1-bin/23ovyewtku6u96viwx3xl3oks/gradle-9.3.1/lib/agents/gradle-instrumentation-agent-9.3.1.jar org.gradle.launcher.daemon.bootstrap.GradleDaemon 9.3.1
+Successfully started process 'Gradle build daemon'
+An attempt to start the daemon took 1.278 secs.
+The client will now receive all logging from the daemon (pid: 2775). The daemon log file: /home/runner/.gradle/daemon/9.3.1/daemon-2775.out.log
+Daemon will be stopped at the end of the build 
+Using 4 worker leases.
+Operational build model parameters: {requiresToolingModels=false, parallelProjectExecution=true, configureOnDemand=false, configurationCache=false, configurationCacheParallelStore=false, configurationCacheParallelLoad=true, isolatedProjects=false, parallelProjectConfiguration=false, intermediateModelCache=false, parallelToolingApiActions=true, invalidateCoupledProjects=false, modelAsProjectDependency=false, resilientModelBuilding=false}
+Received JVM installation metadata from '/usr/lib/jvm/temurin-17-jdk-amd64': {JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64, JAVA_VERSION=17.0.20, JAVA_VENDOR=Eclipse Adoptium, RUNTIME_NAME=OpenJDK Runtime Environment, RUNTIME_VERSION=17.0.20+8, VM_NAME=OpenJDK 64-Bit Server VM, VM_VERSION=17.0.20+8, VM_VENDOR=Eclipse Adoptium, OS_ARCH=amd64}
+Watching the file system is configured to be enabled if available
+Now considering [/home/runner/work/Nekoread/Nekoread] as hierarchies to watch
+File system watching is active
+Starting Build
+Resolved plugin [id: 'org.gradle.toolchains.foojay-resolver-convention', version: '1.0.0']
+Settings evaluated using settings file '/home/runner/work/Nekoread/Nekoread/settings.gradle.kts'.
+Using local directory build cache for the root build (location = /home/runner/.gradle/caches/build-cache-1, remove unused entries = after 7 days).
+Projects loaded. Root project using build file '/home/runner/work/Nekoread/Nekoread/build.gradle.kts'.
+Included projects: [root project 'NekoRead', project ':app']
+
+> Configure project :
+Evaluating root project 'NekoRead' using build file '/home/runner/work/Nekoread/Nekoread/build.gradle.kts'.
+Resolved plugin [id: 'com.android.application', version: '9.1.1', apply: false]
+Resolved plugin [id: 'org.jetbrains.kotlin.plugin.compose', version: '2.2.10', apply: false]
+Resolved plugin [id: 'com.google.devtools.ksp', version: '2.2.10-2.0.2', apply: false]
+Resolved plugin [id: 'io.github.takahirom.roborazzi', version: '1.59.0', apply: false]
+Resolved plugin [id: 'com.google.android.libraries.mapsplatform.secrets-gradle-plugin', version: '2.0.1', apply: false]
+Resolved plugin [id: 'com.google.gms.google-services', version: '4.5.0', apply: false]
+
+> Configure project :app
+Evaluating project ':app' using build file '/home/runner/work/Nekoread/Nekoread/app/build.gradle.kts'.
+Resolved plugin [id: 'com.android.application', version: '9.1.1']
+Resolved plugin [id: 'org.jetbrains.kotlin.plugin.compose', version: '2.2.10']
+Resolved plugin [id: 'com.google.devtools.ksp', version: '2.2.10-2.0.2']
+Resolved plugin [id: 'io.github.takahirom.roborazzi', version: '1.59.0']
+Resolved plugin [id: 'com.google.android.libraries.mapsplatform.secrets-gradle-plugin', version: '2.0.1']
+Resolved plugin [id: 'com.google.gms.google-services', version: '4.5.0']
+Resolved plugin [id: 'org.jetbrains.kotlin.plugin.serialization', version: '2.2.10']
+WARNING: The option setting 'android.disallowKotlinSourceSets=false' is experimental.
+The current default is 'true'.
+Build cedd9ecd-1169-467c-b10d-eef9e6c803c3 is started
+Using default execution profile
+Detected Android Gradle Plugin compose compiler configuration
+Detected Android Gradle Plugin compose compiler configuration
+Detected Android Gradle Plugin compose compiler configuration
+Detected Android Gradle Plugin compose compiler configuration
+All projects evaluated.
+Task path ':app:assembleDebug' matched project ':app'
+Task name matched 'assembleDebug'
+Selected primary task 'assembleDebug' from project :app
+Adding -Xuse-inline-scopes-numbers Kotlin compiler flag for task :app:compileDebugKotlin
+Tasks to be executed: [task ':app:preBuild', task ':app:preDebugBuild', task ':app:mergeDebugNativeDebugMetadata', task ':app:generateDebugBuildConfig', task ':app:generateDebugResources', task ':app:processDebugGoogleServices', task ':app:packageDebugResources', task ':app:processDebugNavigationResources', task ':app:parseDebugLocalResources', task ':app:generateDebugRFile', task ':app:kspDebugKotlin', task ':app:compileDebugKotlin', task ':app:javaPreCompileDebug', task ':app:compileDebugJavaWithJavac', task ':app:generateDebugAssets', task ':app:mergeDebugAssets', task ':app:compressDebugAssets', task ':app:processDebugJavaRes', task ':app:mergeDebugJavaResource', task ':app:checkDebugDuplicateClasses', task ':app:desugarDebugFileDependencies', task ':app:mergeExtDexDebug', task ':app:mergeLibDexDebug', task ':app:checkDebugAarMetadata', task ':app:mapDebugSourceSetPaths', task ':app:compileDebugNavigationResources', task ':app:mergeDebugResources', task ':app:createDebugCompatibleScreenManifests', task ':app:extractDeepLinksDebug', task ':app:processDebugMainManifest', task ':app:processDebugManifest', task ':app:processDebugManifestForPackage', task ':app:processDebugResources', task ':app:dexBuilderDebug', task ':app:mergeProjectDexDebug', task ':app:mergeDebugJniLibFolders', task ':app:mergeDebugNativeLibs', task ':app:stripDebugDebugSymbols', task ':app:validateSigningDebug', task ':app:writeDebugAppMetadata', task ':app:writeDebugSigningConfigVersions', task ':app:packageDebug', task ':app:createDebugApkListingFileRedirect', task ':app:assembleDebug']
+Tasks that were excluded: []
+Resolve mutations for :app:preBuild (Thread[Execution worker,5,main]) started.
+:app:preBuild (Thread[Execution worker,5,main]) started.
+
+> Task :app:preBuild UP-TO-DATE
+Skipping task ':app:preBuild' as it has no actions.
+Resolve mutations for :app:preDebugBuild (Thread[Execution worker,5,main]) started.
+:app:preDebugBuild (Thread[Execution worker,5,main]) started.
+
+> Task :app:preDebugBuild UP-TO-DATE
+Skipping task ':app:preDebugBuild' as it has no actions.
+Resolve mutations for :app:mergeDebugNativeDebugMetadata (Thread[Execution worker Thread 3,5,main]) started.
+:app:mergeDebugNativeDebugMetadata (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+Skipping task ':app:mergeDebugNativeDebugMetadata' as it has no source files and no previous output files.
+Resolve mutations for :app:generateDebugBuildConfig (Thread[Execution worker Thread 3,5,main]) started.
+:app:generateDebugBuildConfig (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:generateDebugBuildConfig FROM-CACHE
+Build cache key for task ':app:generateDebugBuildConfig' is e12ae79c011a56ac9904c64793f625a4
+Task ':app:generateDebugBuildConfig' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:generateDebugBuildConfig' with cache key e12ae79c011a56ac9904c64793f625a4
+Resolve mutations for :app:generateDebugResources (Thread[Execution worker Thread 3,5,main]) started.
+:app:generateDebugResources (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:generateDebugResources FROM-CACHE
+Build cache key for task ':app:generateDebugResources' is e51a7442e9a92fd89a7602a6789327ea
+Task ':app:generateDebugResources' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:generateDebugResources' with cache key e51a7442e9a92fd89a7602a6789327ea
+Resolve mutations for :app:processDebugGoogleServices (Thread[Execution worker Thread 3,5,main]) started.
+:app:processDebugGoogleServices (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:processDebugGoogleServices FROM-CACHE
+Build cache key for task ':app:processDebugGoogleServices' is 918ba7c309644420fbf00cbd2172da1d
+Task ':app:processDebugGoogleServices' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:processDebugGoogleServices' with cache key 918ba7c309644420fbf00cbd2172da1d
+Resolve mutations for :app:packageDebugResources (Thread[Execution worker Thread 3,5,main]) started.
+:app:packageDebugResources (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:packageDebugResources FROM-CACHE
+Build cache key for task ':app:packageDebugResources' is 9bb6bbe205bda0194612b80d15e16fd7
+Task ':app:packageDebugResources' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:packageDebugResources' with cache key 9bb6bbe205bda0194612b80d15e16fd7
+Resolve mutations for :app:processDebugNavigationResources (Thread[Execution worker Thread 3,5,main]) started.
+:app:processDebugNavigationResources (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:processDebugNavigationResources FROM-CACHE
+Build cache key for task ':app:processDebugNavigationResources' is 2a4fd9b73eb3e56b75b65e86330d1147
+Task ':app:processDebugNavigationResources' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:processDebugNavigationResources' with cache key 2a4fd9b73eb3e56b75b65e86330d1147
+Resolve mutations for :app:parseDebugLocalResources (Thread[Execution worker Thread 3,5,main]) started.
+:app:parseDebugLocalResources (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:parseDebugLocalResources FROM-CACHE
+Build cache key for task ':app:parseDebugLocalResources' is 1bd46a0b7b79363d3f2f4a223fd45b20
+Task ':app:parseDebugLocalResources' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:parseDebugLocalResources' with cache key 1bd46a0b7b79363d3f2f4a223fd45b20
+Resolve mutations for :app:generateDebugRFile (Thread[Execution worker Thread 3,5,main]) started.
+:app:generateDebugRFile (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:generateDebugRFile FROM-CACHE
+Build cache key for task ':app:generateDebugRFile' is 23dd72c991e7a8f5649879465c9d9458
+Task ':app:generateDebugRFile' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:generateDebugRFile' with cache key 23dd72c991e7a8f5649879465c9d9458
+Resolve mutations for :app:kspDebugKotlin (Thread[Execution worker Thread 3,5,main]) started.
+:app:kspDebugKotlin (Thread[Execution worker Thread 3,5,main]) started.
+Resolve mutations for :app:javaPreCompileDebug (Thread[included builds,5,main]) started.
+:app:javaPreCompileDebug (Thread[included builds,5,main]) started.
+
+> Task :app:javaPreCompileDebug FROM-CACHE
+Build cache key for task ':app:javaPreCompileDebug' is 51572672f809265dcedd2c36abfa23d0
+Task ':app:javaPreCompileDebug' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:javaPreCompileDebug' with cache key 51572672f809265dcedd2c36abfa23d0
+Resolve mutations for :app:generateDebugAssets (Thread[Execution worker,5,main]) started.
+:app:generateDebugAssets (Thread[Execution worker,5,main]) started.
+
+> Task :app:generateDebugAssets UP-TO-DATE
+Skipping task ':app:generateDebugAssets' as it has no actions.
+Resolve mutations for :app:mergeDebugAssets (Thread[Execution worker,5,main]) started.
+:app:mergeDebugAssets (Thread[Execution worker,5,main]) started.
+
+> Task :app:mergeDebugAssets
+Caching disabled for task ':app:mergeDebugAssets' because:
+  Simple merging task
+Task ':app:mergeDebugAssets' is not up-to-date because:
+  No history is available.
+The input changes require a full rebuild for incremental task ':app:mergeDebugAssets'.
+Resolve mutations for :app:compressDebugAssets (Thread[Execution worker Thread 2,5,main]) started.
+:app:compressDebugAssets (Thread[Execution worker,5,main]) started.
+
+> Task :app:compressDebugAssets FROM-CACHE
+Build cache key for task ':app:compressDebugAssets' is 6f352414dda5dc129b0803de2f6a22d6
+Task ':app:compressDebugAssets' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:compressDebugAssets' with cache key 6f352414dda5dc129b0803de2f6a22d6
+Resolve mutations for :app:checkDebugDuplicateClasses (Thread[Execution worker,5,main]) started.
+:app:checkDebugDuplicateClasses (Thread[Execution worker,5,main]) started.
+Resolve mutations for :app:desugarDebugFileDependencies (Thread[Execution worker Thread 2,5,main]) started.
+:app:desugarDebugFileDependencies (Thread[included builds,5,main]) started.
+
+> Task :app:desugarDebugFileDependencies FROM-CACHE
+Build cache key for task ':app:desugarDebugFileDependencies' is 070fbc9ec9d0db94de433ef748a8f7d7
+Task ':app:desugarDebugFileDependencies' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:desugarDebugFileDependencies' with cache key 070fbc9ec9d0db94de433ef748a8f7d7
+Resolve mutations for :app:checkDebugAarMetadata (Thread[Execution worker Thread 2,5,main]) started.
+:app:checkDebugAarMetadata (Thread[Execution worker Thread 2,5,main]) started.
+
+> Task :app:checkDebugDuplicateClasses
+Caching disabled for task ':app:checkDebugDuplicateClasses' because:
+  Caching has been disabled for the task
+Task ':app:checkDebugDuplicateClasses' is not up-to-date because:
+  No history is available.
+Resolve mutations for :app:mergeExtDexDebug (Thread[Execution worker,5,main]) started.
+:app:mergeExtDexDebug (Thread[Execution worker,5,main]) started.
+
+> Task :app:checkDebugAarMetadata
+Caching disabled for task ':app:checkDebugAarMetadata' because:
+  Caching has been disabled for the task
+Task ':app:checkDebugAarMetadata' is not up-to-date because:
+  No history is available.
+
+> Task :app:kspDebugKotlin
+Registered task dependencies: app:debugCompileClasspath
+Skipping misunderstood TO dep string: androidx.compose.ui:ui-test-manifest
+Skipping misunderstood TO dep string: org.jetbrains.kotlin:kotlin-stdlib
+Skipping misunderstood TO dep string: org.jetbrains.kotlin:kotlin-stdlib
+Skipping misunderstood TO dep string: androidx.compose.ui:ui-tooling
+Skipping misunderstood TO dep string: androidx.compose.material:material-icons-core
+Skipping misunderstood TO dep string: androidx.compose.material:material-icons-extended
+Skipping misunderstood TO dep string: androidx.compose.material3:material3
+Skipping misunderstood TO dep string: androidx.compose.ui:ui
+Skipping misunderstood TO dep string: androidx.compose.ui:ui-graphics
+Skipping misunderstood TO dep string: androidx.compose.ui:ui-tooling-preview
+Skipping misunderstood TO dep string: org.jetbrains.kotlin:kotlin-stdlib
+Skipping misunderstood TO dep string: org.jetbrains.kotlin:kotlin-stdlib
+Skipping misunderstood TO dep string: org.jetbrains.kotlin:kotlin-stdlib
+Skipping misunderstood TO dep string: com.google.firebase:firebase-ai
+Skipping misunderstood TO dep string: com.google.firebase:firebase-appcheck-recaptcha
+Starting dependency analysis
+Build cache key for task ':app:kspDebugKotlin' is 35a179ac020ff8ebf8b048750c7f7c44
+Task ':app:kspDebugKotlin' is not up-to-date because:
+  No history is available.
+The input changes require a full rebuild for incremental task ':app:kspDebugKotlin'.
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/main/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/main/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/kotlin', not found
+i: [ksp] loaded provider(s): [androidx.room.RoomKspProcessor$Provider, com.squareup.moshi.kotlin.codegen.ksp.JsonClassSymbolProcessorProvider]
+
+> Task :app:mergeExtDexDebug FROM-CACHE
+Build cache key for task ':app:mergeExtDexDebug' is 87f381e245437a0630e860bb1f7f68e5
+Task ':app:mergeExtDexDebug' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:mergeExtDexDebug' with cache key 87f381e245437a0630e860bb1f7f68e5
+Resolve mutations for :app:mergeLibDexDebug (Thread[included builds,5,main]) started.
+:app:mergeLibDexDebug (Thread[included builds,5,main]) started.
+
+> Task :app:mergeLibDexDebug FROM-CACHE
+Build cache key for task ':app:mergeLibDexDebug' is dc290efafba8116196281743bd24c889
+Task ':app:mergeLibDexDebug' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:mergeLibDexDebug' with cache key dc290efafba8116196281743bd24c889
+Resolve mutations for :app:mapDebugSourceSetPaths (Thread[Execution worker,5,main]) started.
+:app:mapDebugSourceSetPaths (Thread[Execution worker,5,main]) started.
+
+> Task :app:mapDebugSourceSetPaths
+Caching disabled for task ':app:mapDebugSourceSetPaths' because:
+  Caching has been disabled for the task
+Task ':app:mapDebugSourceSetPaths' is not up-to-date because:
+  No history is available.
+Resolve mutations for :app:compileDebugNavigationResources (Thread[included builds,5,main]) started.
+:app:compileDebugNavigationResources (Thread[included builds,5,main]) started.
+
+> Task :app:compileDebugNavigationResources FROM-CACHE
+Build cache key for task ':app:compileDebugNavigationResources' is 534a0753494bdc53340e03c06ae075d1
+Task ':app:compileDebugNavigationResources' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:compileDebugNavigationResources' with cache key 534a0753494bdc53340e03c06ae075d1
+Resolve mutations for :app:mergeDebugResources (Thread[Execution worker,5,main]) started.
+:app:mergeDebugResources (Thread[Execution worker Thread 2,5,main]) started.
+
+> Task :app:mergeDebugResources FROM-CACHE
+Build cache key for task ':app:mergeDebugResources' is bdce6f0e3ec51ca6380f8703addfb57f
+Task ':app:mergeDebugResources' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:mergeDebugResources' with cache key bdce6f0e3ec51ca6380f8703addfb57f
+Resolve mutations for :app:createDebugCompatibleScreenManifests (Thread[Execution worker Thread 2,5,main]) started.
+:app:createDebugCompatibleScreenManifests (Thread[Execution worker Thread 2,5,main]) started.
+
+> Task :app:createDebugCompatibleScreenManifests
+Caching disabled for task ':app:createDebugCompatibleScreenManifests' because:
+  Caching has been disabled for the task
+Task ':app:createDebugCompatibleScreenManifests' is not up-to-date because:
+  No history is available.
+Resolve mutations for :app:extractDeepLinksDebug (Thread[Execution worker,5,main]) started.
+:app:extractDeepLinksDebug (Thread[Execution worker,5,main]) started.
+
+> Task :app:extractDeepLinksDebug FROM-CACHE
+Build cache key for task ':app:extractDeepLinksDebug' is c46a52428db4d999c40d7d6c0928a5c8
+Task ':app:extractDeepLinksDebug' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:extractDeepLinksDebug' with cache key c46a52428db4d999c40d7d6c0928a5c8
+Resolve mutations for :app:processDebugMainManifest (Thread[Execution worker,5,main]) started.
+:app:processDebugMainManifest (Thread[Execution worker Thread 2,5,main]) started.
+
+> Task :app:processDebugMainManifest FROM-CACHE
+Build cache key for task ':app:processDebugMainManifest' is 6afe6bd4c49ef7f41386f0308e39fb41
+Task ':app:processDebugMainManifest' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:processDebugMainManifest' with cache key 6afe6bd4c49ef7f41386f0308e39fb41
+Resolve mutations for :app:processDebugManifest (Thread[Execution worker Thread 2,5,main]) started.
+:app:processDebugManifest (Thread[Execution worker Thread 2,5,main]) started.
+
+> Task :app:processDebugManifest FROM-CACHE
+Build cache key for task ':app:processDebugManifest' is 2b7b6bd2631d19c88f2290f4810165a5
+Task ':app:processDebugManifest' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:processDebugManifest' with cache key 2b7b6bd2631d19c88f2290f4810165a5
+Resolve mutations for :app:processDebugManifestForPackage (Thread[Execution worker Thread 2,5,main]) started.
+:app:processDebugManifestForPackage (Thread[Execution worker Thread 2,5,main]) started.
+
+> Task :app:processDebugManifestForPackage FROM-CACHE
+Custom actions are attached to task ':app:processDebugManifestForPackage'.
+Build cache key for task ':app:processDebugManifestForPackage' is 66a254fe70069d7a329bcfb43b7e1334
+Task ':app:processDebugManifestForPackage' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:processDebugManifestForPackage' with cache key 66a254fe70069d7a329bcfb43b7e1334
+Resolve mutations for :app:processDebugResources (Thread[Execution worker Thread 2,5,main]) started.
+:app:processDebugResources (Thread[Execution worker Thread 2,5,main]) started.
+
+> Task :app:processDebugResources FROM-CACHE
+Build cache key for task ':app:processDebugResources' is 1320a738e767a94ee54c9a48c728846e
+Task ':app:processDebugResources' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:processDebugResources' with cache key 1320a738e767a94ee54c9a48c728846e
+Resolve mutations for :app:mergeDebugJniLibFolders (Thread[Execution worker Thread 2,5,main]) started.
+:app:mergeDebugJniLibFolders (Thread[Execution worker Thread 2,5,main]) started.
+
+> Task :app:mergeDebugJniLibFolders
+Caching disabled for task ':app:mergeDebugJniLibFolders' because:
+  Simple merging task
+Task ':app:mergeDebugJniLibFolders' is not up-to-date because:
+  No history is available.
+The input changes require a full rebuild for incremental task ':app:mergeDebugJniLibFolders'.
+Resolve mutations for :app:mergeDebugNativeLibs (Thread[Execution worker Thread 2,5,main]) started.
+:app:mergeDebugNativeLibs (Thread[Execution worker Thread 2,5,main]) started.
+Resolve mutations for :app:validateSigningDebug (Thread[included builds,5,main]) started.
+:app:validateSigningDebug (Thread[included builds,5,main]) started.
+
+> Task :app:validateSigningDebug
+Caching disabled for task ':app:validateSigningDebug' because:
+  Caching has been disabled for the task
+Task ':app:validateSigningDebug' is not up-to-date because:
+  No history is available.
+Resolve mutations for :app:writeDebugAppMetadata (Thread[included builds,5,main]) started.
+:app:writeDebugAppMetadata (Thread[Execution worker,5,main]) started.
+
+> Task :app:writeDebugAppMetadata
+Caching disabled for task ':app:writeDebugAppMetadata' because:
+  Caching has been disabled for the task
+Task ':app:writeDebugAppMetadata' is not up-to-date because:
+  No history is available.
+Resolve mutations for :app:writeDebugSigningConfigVersions (Thread[Execution worker,5,main]) started.
+:app:writeDebugSigningConfigVersions (Thread[Execution worker,5,main]) started.
+
+> Task :app:mergeDebugNativeLibs
+Caching disabled for task ':app:mergeDebugNativeLibs' because:
+  Caching has been disabled for the task
+Task ':app:mergeDebugNativeLibs' is not up-to-date because:
+  No history is available.
+
+> Task :app:writeDebugSigningConfigVersions
+Caching disabled for task ':app:writeDebugSigningConfigVersions' because:
+  Caching has been disabled for the task
+Task ':app:writeDebugSigningConfigVersions' is not up-to-date because:
+  No history is available.
+Resolve mutations for :app:stripDebugDebugSymbols (Thread[Execution worker,5,main]) started.
+:app:stripDebugDebugSymbols (Thread[Execution worker Thread 2,5,main]) started.
+
+> Task :app:stripDebugDebugSymbols
+Caching disabled for task ':app:stripDebugDebugSymbols' because:
+  Caching has been disabled for the task
+Task ':app:stripDebugDebugSymbols' is not up-to-date because:
+  No history is available.
+The input changes require a full rebuild for incremental task ':app:stripDebugDebugSymbols'.
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/arm64-v8a/libandroidx.graphics.path.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/arm64-v8a/libandroidx.graphics.path.so
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/arm64-v8a/libzstd-kmp.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/arm64-v8a/libzstd-kmp.so
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/arm64-v8a/libdatastore_shared_counter.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/arm64-v8a/libdatastore_shared_counter.so
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/armeabi-v7a/libzstd-kmp.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/armeabi-v7a/libzstd-kmp.so
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/armeabi-v7a/libdatastore_shared_counter.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/armeabi-v7a/libdatastore_shared_counter.so
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/armeabi-v7a/libandroidx.graphics.path.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/armeabi-v7a/libandroidx.graphics.path.so
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86/libandroidx.graphics.path.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86/libandroidx.graphics.path.so
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86/libdatastore_shared_counter.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86/libdatastore_shared_counter.so
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86/libzstd-kmp.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86/libzstd-kmp.so
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86_64/libandroidx.graphics.path.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86_64/libandroidx.graphics.path.so
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86_64/libdatastore_shared_counter.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86_64/libdatastore_shared_counter.so
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86_64/libzstd-kmp.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86_64/libzstd-kmp.so
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+
+> Task :app:kspDebugKotlin
+Stored cache entry for task ':app:kspDebugKotlin' with cache key 35a179ac020ff8ebf8b048750c7f7c44
+Resolve mutations for :app:compileDebugKotlin (Thread[Execution worker Thread 3,5,main]) started.
+:app:compileDebugKotlin (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:compileDebugKotlin
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/main/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/main/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+Registered task dependencies: app:kotlinCompilerClasspath
+Starting dependency analysis
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/main/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+Registered task dependencies: app:kotlinCompilerPluginClasspath
+Starting dependency analysis
+Registered task dependencies: app:kotlinCompilerPluginClasspathDebug
+Starting dependency analysis
+Custom actions are attached to task ':app:compileDebugKotlin'.
+Build cache key for task ':app:compileDebugKotlin' is 05657065896f325d211f5be99bb7e18f
+Task ':app:compileDebugKotlin' is not up-to-date because:
+  No history is available.
+The input changes require a full rebuild for incremental task ':app:compileDebugKotlin'.
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/main/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/main/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/main/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/build/generated/ksp/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/main/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/main/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/main/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/main/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/build/generated/ksp/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/main/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/main/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/main/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/build/generated/ksp/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/main/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/main/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/main/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/kotlin', not found
+file or directory '/home/runner/work/Nekoread/Nekoread/app/build/generated/ksp/debug/java', not found
+Kotlin source files: /home/runner/work/Nekoread/Nekoread/app/src/main/java/uy/kohesive/injekt/Injekt.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/uy/kohesive/injekt/registry/default/DefaultRegistrar.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/uy/kohesive/injekt/api/Modules.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/uy/kohesive/injekt/api/Exceptions.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/uy/kohesive/injekt/api/Factory.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/uy/kohesive/injekt/api/Scope.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/uy/kohesive/injekt/api/Registrar.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/uy/kohesive/injekt/api/Registry.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/uy/kohesive/injekt/api/TypeInfo.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/tachiyomi/core/common/util/lang/RxCoroutineBridge.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/source/CatalogueSource.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/source/Source.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/source/SourceFactory.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/source/online/ParsedHttpSource.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/source/online/ResolvableSource.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/source/online/HttpSource.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/source/UnmeteredSource.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/source/PreferenceScreen.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/source/model/Filter.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/source/model/Page.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/source/model/MangasPage.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/source/model/UpdateStrategy.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/source/model/RefreshContext.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/source/model/SManga.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/source/model/SourceGenreParser.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/source/model/SChapter.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/source/model/SMangaUpdate.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/source/model/SMangaImpl.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/source/model/SChapterImpl.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/source/model/FilterList.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/source/ConfigurableSource.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/source/MangaSource.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/AppInfo.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/network/AndroidCookieJar.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/network/OkHttpExtensions.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/network/NetworkHelper.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/network/interceptor/ApexWwwRetryInterceptor.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/network/interceptor/UncaughtExceptionInterceptor.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/network/interceptor/CloudflareInterceptor.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/network/interceptor/CloudflareChallengeResolver.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/network/interceptor/SpecificHostRateLimitInterceptor.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/network/interceptor/CloudflareChallengeDialog.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/network/interceptor/RateLimitInterceptor.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/network/interceptor/WebViewInterceptor.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/network/interceptor/CloudflareChallengeDetector.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/network/interceptor/UserAgentInterceptor.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/network/ProgressListener.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/network/Requests.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/network/JavaScriptEngine.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/network/ProgressResponseBody.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/util/JsonExtensions.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/util/JsoupExtensions.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/util/RxExtension.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/util/system/WebViewUtil.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/eu/kanade/tachiyomi/util/system/CloudflareWebViewHeaders.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/ui/theme/Color.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/ui/theme/Type.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/ui/theme/Theme.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/ui/screens/WebViewDialog.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/ui/screens/SettingsScreen.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/ui/screens/BrowseScreen.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/ui/screens/UpdatesHistoryScreen.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/ui/screens/ReaderScreen.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/ui/screens/LibraryScreen.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/ui/screens/MangaDetailScreen.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/ui/components/Glass.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/ui/components/MangaCard.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/ui/MainViewModel.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/data/local/AppDatabase.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/data/local/Entities.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/data/local/Daos.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/data/source/MangaDexSource.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/data/source/TachiyomiHttpSourceAdapter.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/data/source/ExtensionPageImageFetcher.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/data/source/MangaSource.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/data/repository/MangaRepository.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/data/extension/ExtensionDexLoader.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/data/extension/ExtensionEngine.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/data/extension/ExtensionNetwork.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/MainActivity.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/util/BuildInfo.kt, /home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/util/Errors.kt, /home/runner/work/Nekoread/Nekoread/app/build/generated/ksp/debug/kotlin/com/example/data/local/MangaDao_Impl.kt, /home/runner/work/Nekoread/Nekoread/app/build/generated/ksp/debug/kotlin/com/example/data/local/AppDatabase_Impl.kt, /home/runner/work/Nekoread/Nekoread/app/build/generated/ksp/debug/kotlin/com/example/data/local/ExtensionDao_Impl.kt, /home/runner/work/Nekoread/Nekoread/app/build/generated/ksp/debug/kotlin/com/example/data/local/ChapterDao_Impl.kt, /home/runner/work/Nekoread/Nekoread/app/build/generated/ksp/debug/kotlin/com/example/data/local/CategoryDao_Impl.kt
+Java source files: /home/runner/work/Nekoread/Nekoread/app/build/generated/source/buildConfig/debug/com/example/BuildConfig.java
+Script source files: 
+Script file extensions: 
+Using Kotlin/JVM incremental compilation
+[KOTLIN] Kotlin compilation 'jdkHome' argument: /usr/lib/jvm/temurin-17-jdk-amd64
+Finished executing kotlin compiler using IN_PROCESS strategy
+e: file:///home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/ui/screens/ReaderScreen.kt:760:61 Unresolved label.
+
+> Task :app:compileDebugKotlin FAILED
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_3-1786819830664.json
+Build cedd9ecd-1169-467c-b10d-eef9e6c803c3 is closed
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+* Exception is:
+org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:compileDebugKotlin'.
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.lambda$executeIfValid$1(ExecuteActionsTaskExecuter.java:135)
+	at org.gradle.internal.Try$Failure.ifSuccessfulOrElse(Try.java:288)
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:133)
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.execute(ExecuteActionsTaskExecuter.java:121)
+	at org.gradle.api.internal.tasks.execution.ProblemsTaskPathTrackingTaskExecuter.execute(ProblemsTaskPathTrackingTaskExecuter.java:41)
+	at org.gradle.api.internal.tasks.execution.FinalizePropertiesTaskExecuter.execute(FinalizePropertiesTaskExecuter.java:46)
+	at org.gradle.api.internal.tasks.execution.ResolveTaskExecutionModeExecuter.execute(ResolveTaskExecutionModeExecuter.java:51)
+	at org.gradle.api.internal.tasks.execution.SkipTaskWithNoActionsExecuter.execute(SkipTaskWithNoActionsExecuter.java:57)
+	at org.gradle.api.internal.tasks.execution.SkipOnlyIfTaskExecuter.execute(SkipOnlyIfTaskExecuter.java:74)
+	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.executeTask(EventFiringTaskExecuter.java:77)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(EventFiringTaskExecuter.java:55)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(EventFiringTaskExecuter.java:52)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:209)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:204)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:166)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter.execute(EventFiringTaskExecuter.java:52)
+	at org.gradle.execution.plan.DefaultNodeExecutor.executeLocalTaskNode(DefaultNodeExecutor.java:55)
+	at org.gradle.execution.plan.DefaultNodeExecutor.execute(DefaultNodeExecutor.java:34)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$InvokeNodeExecutorsAction.execute(DefaultTaskExecutionGraph.java:355)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$InvokeNodeExecutorsAction.execute(DefaultTaskExecutionGraph.java:343)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.lambda$execute$0(DefaultTaskExecutionGraph.java:339)
+	at org.gradle.internal.operations.CurrentBuildOperationRef.with(CurrentBuildOperationRef.java:84)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(DefaultTaskExecutionGraph.java:339)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(DefaultTaskExecutionGraph.java:328)
+	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.execute(DefaultPlanExecutor.java:459)
+	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.run(DefaultPlanExecutor.java:376)
+	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)
+	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:47)
+Caused by: org.gradle.workers.internal.DefaultWorkerExecutor$WorkExecutionException: A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+	at org.gradle.workers.internal.DefaultWorkerExecutor$WorkItemExecution.waitForCompletion(DefaultWorkerExecutor.java:289)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.lambda$waitForItemsAndGatherFailures$2(DefaultAsyncWorkTracker.java:130)
+	at org.gradle.internal.Factories$1.create(Factories.java:30)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.lambda$withoutLocks$2(DefaultWorkerLeaseService.java:344)
+	at org.gradle.internal.work.ResourceLockStatistics$1.measure(ResourceLockStatistics.java:42)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withoutLocks(DefaultWorkerLeaseService.java:342)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withoutLocks(DefaultWorkerLeaseService.java:326)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withoutLock(DefaultWorkerLeaseService.java:331)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForItemsAndGatherFailures(DefaultAsyncWorkTracker.java:126)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForItemsAndGatherFailures(DefaultAsyncWorkTracker.java:92)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForAll(DefaultAsyncWorkTracker.java:78)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForCompletion(DefaultAsyncWorkTracker.java:66)
+	at org.gradle.api.internal.tasks.execution.TaskExecution$3.run(TaskExecution.java:267)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:29)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:26)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:166)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.run(DefaultBuildOperationRunner.java:47)
+	at org.gradle.api.internal.tasks.execution.TaskExecution.executeAction(TaskExecution.java:244)
+	at org.gradle.api.internal.tasks.execution.TaskExecution.executeActions(TaskExecution.java:227)
+	at org.gradle.api.internal.tasks.execution.TaskExecution.executeWithPreviousOutputFiles(TaskExecution.java:210)
+	at org.gradle.api.internal.tasks.execution.TaskExecution.execute(TaskExecution.java:176)
+	at org.gradle.internal.execution.steps.ExecuteStep.executeInternal(ExecuteStep.java:110)
+	at org.gradle.internal.execution.steps.ExecuteStep.access$000(ExecuteStep.java:47)
+	at org.gradle.internal.execution.steps.ExecuteStep$1.call(ExecuteStep.java:64)
+	at org.gradle.internal.execution.steps.ExecuteStep$1.call(ExecuteStep.java:61)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:209)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:204)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:166)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+	at org.gradle.internal.execution.steps.ExecuteStep.execute(ExecuteStep.java:61)
+	at org.gradle.internal.execution.steps.ExecuteStep.execute(ExecuteStep.java:47)
+	at org.gradle.internal.execution.steps.CancelExecutionStep.execute(CancelExecutionStep.java:42)
+	at org.gradle.internal.execution.steps.TimeoutStep.executeWithoutTimeout(TimeoutStep.java:75)
+	at org.gradle.internal.execution.steps.TimeoutStep.execute(TimeoutStep.java:55)
+	at org.gradle.internal.execution.steps.PreCreateOutputParentsStep.execute(PreCreateOutputParentsStep.java:51)
+	at org.gradle.internal.execution.steps.PreCreateOutputParentsStep.execute(PreCreateOutputParentsStep.java:29)
+	at org.gradle.internal.execution.steps.RemovePreviousOutputsStep.executeMutable(RemovePreviousOutputsStep.java:70)
+	at org.gradle.internal.execution.steps.RemovePreviousOutputsStep.executeMutable(RemovePreviousOutputsStep.java:40)
+	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:25)
+	at org.gradle.internal.execution.steps.BroadcastChangingOutputsStep.execute(BroadcastChangingOutputsStep.java:62)
+	at org.gradle.internal.execution.steps.BroadcastChangingOutputsStep.execute(BroadcastChangingOutputsStep.java:27)
+	at org.gradle.internal.execution.steps.CaptureOutputsAfterExecutionStep.execute(CaptureOutputsAfterExecutionStep.java:69)
+	at org.gradle.internal.execution.steps.CaptureOutputsAfterExecutionStep.execute(CaptureOutputsAfterExecutionStep.java:46)
+	at org.gradle.internal.execution.steps.ResolveInputChangesStep.executeMutable(ResolveInputChangesStep.java:39)
+	at org.gradle.internal.execution.steps.ResolveInputChangesStep.executeMutable(ResolveInputChangesStep.java:28)
+	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:25)
+	at org.gradle.internal.execution.steps.BuildCacheStep.executeWithoutCache(BuildCacheStep.java:192)
+	at org.gradle.internal.execution.steps.BuildCacheStep.executeAndStoreInCache(BuildCacheStep.java:148)
+	at org.gradle.internal.execution.steps.BuildCacheStep.lambda$executeWithCache$4(BuildCacheStep.java:104)
+	at org.gradle.internal.execution.steps.BuildCacheStep.lambda$executeWithCache$5(BuildCacheStep.java:104)
+	at org.gradle.internal.Try$Success.map(Try.java:170)
+	at org.gradle.internal.execution.steps.BuildCacheStep.executeWithCache(BuildCacheStep.java:88)
+	at org.gradle.internal.execution.steps.BuildCacheStep.lambda$execute$0(BuildCacheStep.java:75)
+	at org.gradle.internal.Either$Left.fold(Either.java:116)
+	at org.gradle.internal.execution.caching.CachingState.fold(CachingState.java:62)
+	at org.gradle.internal.execution.steps.BuildCacheStep.execute(BuildCacheStep.java:74)
+	at org.gradle.internal.execution.steps.BuildCacheStep.execute(BuildCacheStep.java:49)
+	at org.gradle.internal.execution.steps.StoreExecutionStateStep.execute(StoreExecutionStateStep.java:46)
+	at org.gradle.internal.execution.steps.StoreExecutionStateStep.execute(StoreExecutionStateStep.java:35)
+	at org.gradle.internal.execution.steps.SkipUpToDateStep.executeBecause(SkipUpToDateStep.java:75)
+	at org.gradle.internal.execution.steps.SkipUpToDateStep.lambda$execute$2(SkipUpToDateStep.java:53)
+	at org.gradle.internal.execution.steps.SkipUpToDateStep.execute(SkipUpToDateStep.java:53)
+	at org.gradle.internal.execution.steps.SkipUpToDateStep.execute(SkipUpToDateStep.java:35)
+	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsFinishedStep.execute(MarkSnapshottingInputsFinishedStep.java:37)
+	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsFinishedStep.execute(MarkSnapshottingInputsFinishedStep.java:27)
+	at org.gradle.internal.execution.steps.ResolveIncrementalCachingStateStep.executeDelegate(ResolveIncrementalCachingStateStep.java:49)
+	at org.gradle.internal.execution.steps.ResolveIncrementalCachingStateStep.executeDelegate(ResolveIncrementalCachingStateStep.java:27)
+	at org.gradle.internal.execution.steps.AbstractResolveCachingStateStep.execute(AbstractResolveCachingStateStep.java:71)
+	at org.gradle.internal.execution.steps.AbstractResolveCachingStateStep.execute(AbstractResolveCachingStateStep.java:39)
+	at org.gradle.internal.execution.steps.ResolveChangesStep.executeMutable(ResolveChangesStep.java:63)
+	at org.gradle.internal.execution.steps.ResolveChangesStep.executeMutable(ResolveChangesStep.java:34)
+	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:25)
+	at org.gradle.internal.execution.steps.ValidateStep.execute(ValidateStep.java:64)
+	at org.gradle.internal.execution.steps.ValidateStep.execute(ValidateStep.java:42)
+	at org.gradle.internal.execution.steps.AbstractCaptureStateBeforeExecutionStep.execute(AbstractCaptureStateBeforeExecutionStep.java:77)
+	at org.gradle.internal.execution.steps.AbstractCaptureStateBeforeExecutionStep.execute(AbstractCaptureStateBeforeExecutionStep.java:46)
+	at org.gradle.internal.execution.steps.AbstractSkipEmptyWorkStep.executeWithNonEmptySources(AbstractSkipEmptyWorkStep.java:133)
+	at org.gradle.internal.execution.steps.AbstractSkipEmptyWorkStep.execute(AbstractSkipEmptyWorkStep.java:64)
+	at org.gradle.internal.execution.steps.AbstractSkipEmptyWorkStep.execute(AbstractSkipEmptyWorkStep.java:36)
+	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsStartedStep.execute(MarkSnapshottingInputsStartedStep.java:38)
+	at org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.execute(LoadPreviousExecutionStateStep.java:36)
+	at org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.execute(LoadPreviousExecutionStateStep.java:23)
+	at org.gradle.internal.execution.steps.HandleStaleOutputsStep.executeMutable(HandleStaleOutputsStep.java:77)
+	at org.gradle.internal.execution.steps.HandleStaleOutputsStep.executeMutable(HandleStaleOutputsStep.java:43)
+	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:25)
+	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.lambda$execute$0(AssignMutableWorkspaceStep.java:35)
+	at org.gradle.api.internal.tasks.execution.TaskExecution$4.withWorkspace(TaskExecution.java:305)
+	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.execute(AssignMutableWorkspaceStep.java:31)
+	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.execute(AssignMutableWorkspaceStep.java:22)
+	at org.gradle.internal.execution.steps.ChoosePipelineStep.execute(ChoosePipelineStep.java:40)
+	at org.gradle.internal.execution.steps.ChoosePipelineStep.execute(ChoosePipelineStep.java:23)
+	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.lambda$execute$2(ExecuteWorkBuildOperationFiringStep.java:67)
+	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(ExecuteWorkBuildOperationFiringStep.java:67)
+	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(ExecuteWorkBuildOperationFiringStep.java:39)
+	at org.gradle.internal.execution.steps.IdentityCacheStep.execute(IdentityCacheStep.java:46)
+	at org.gradle.internal.execution.steps.IdentityCacheStep.execute(IdentityCacheStep.java:34)
+	at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:44)
+	at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:31)
+	at org.gradle.internal.execution.impl.DefaultExecutionEngine$1.execute(DefaultExecutionEngine.java:68)
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:132)
+	... 30 more
+Caused by: org.jetbrains.kotlin.gradle.tasks.CompilationErrorException: Compilation error. See log for more details
+	at org.jetbrains.kotlin.gradle.tasks.TasksUtilsKt.throwExceptionIfCompilationFailed(tasksUtils.kt:21)
+	at org.jetbrains.kotlin.compilerRunner.GradleKotlinCompilerWork.run(GradleKotlinCompilerWork.kt:119)
+	at org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction.execute(GradleCompilerRunnerWithWorkers.kt:74)
+	at org.gradle.workers.internal.DefaultWorkerServer.execute(DefaultWorkerServer.java:68)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:64)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:61)
+	at org.gradle.internal.classloader.ClassLoaderUtils.executeInClassloader(ClassLoaderUtils.java:102)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1.lambda$execute$0(NoIsolationWorkerFactory.java:61)
+	at org.gradle.workers.internal.AbstractWorker$1.call(AbstractWorker.java:44)
+	at org.gradle.workers.internal.AbstractWorker$1.call(AbstractWorker.java:41)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:209)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:204)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:166)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+	at org.gradle.workers.internal.AbstractWorker.executeWrappedInBuildOperation(AbstractWorker.java:41)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1.execute(NoIsolationWorkerFactory.java:58)
+	at org.gradle.workers.internal.DefaultWorkerExecutor.lambda$submitWork$0(DefaultWorkerExecutor.java:176)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.runExecution(DefaultConditionalExecutionQueue.java:194)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.access$700(DefaultConditionalExecutionQueue.java:127)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner$1.run(DefaultConditionalExecutionQueue.java:169)
+	at org.gradle.internal.Factories$1.create(Factories.java:30)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.lambda$withLocksAcquired$0(DefaultWorkerLeaseService.java:269)
+	at org.gradle.internal.work.ResourceLockStatistics$1.measure(ResourceLockStatistics.java:42)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocksAcquired(DefaultWorkerLeaseService.java:267)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocks(DefaultWorkerLeaseService.java:259)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:127)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:132)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.runBatch(DefaultConditionalExecutionQueue.java:164)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.run(DefaultConditionalExecutionQueue.java:133)
+	... 2 more
+
+
+BUILD FAILED in 42s
+32 actionable tasks: 13 executed, 19 from cache
