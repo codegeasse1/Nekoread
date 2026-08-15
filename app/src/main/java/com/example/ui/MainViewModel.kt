@@ -215,7 +215,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _detailError.value = null
             try {
                 repository.ensureMangaInDb(mangaId)
-                repository.loadChapters(mangaId)
+                // Force a chapter-list refresh so cached chapters get corrected 1..N numbers
+                // (they were once numbered inverted); loadChapters preserves read state.
+                repository.loadChapters(mangaId, force = true)
             } catch (e: Throwable) {
                 _detailError.value = e.describe()
             } finally {
