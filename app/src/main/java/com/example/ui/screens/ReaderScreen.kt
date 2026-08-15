@@ -23,10 +23,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -193,6 +193,11 @@ fun ReaderScreen(
     val context = LocalContext.current
     val imageLoader = LocalImageLoader.current
     val screenW = with(density) { configuration.screenWidthDp.dp.roundToPx() }
+    // Height budget for decoding webtoon pages: cap so an extremely tall page can't decode into a
+    // ~65MB bitmap (which, stacked across visible pages, blew up memory → freeze + crash). Coil
+    // fits the decode inside this box; pages taller than ~3 screens are downscaled slightly.
+    val screenH = with(density) { configuration.screenHeightDp.dp.roundToPx() }
+    val webtoonDecodeH = (screenH * 3).coerceAtLeast(1200)
     val activity = context as? Activity
 
     fun toggleRotation() {
@@ -214,14 +219,20 @@ fun ReaderScreen(
 
     val contentTextColor = if (readerBg == ReaderBg.CREAM || readerBg == ReaderBg.WHITE) Color.Black else Color.White
 
-    // Webtoon Vertical List State
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = (chapter.lastPageRead - 1).coerceAtLeast(0))
+    // Webtoon Vertical List State — keyed on the chapter so switching chapters resets the scroll
+    // to the new chapter's start (a stale index from a long previous list landed mid/end of the
+    // new chapter and re-triggered continuous-scroll queuing).
+    val listState = remember(chapter.id) {
+        LazyListState(firstVisibleItemIndex = (chapter.lastPageRead - 1).coerceAtLeast(0))
+    }
 
-    // Paged Reader State
-    val pagerState = rememberPagerState(
-        initialPage = (chapter.lastPageRead - 1).coerceAtLeast(0),
-        pageCount = { pages?.size ?: 0 }
-    )
+    // Paged Reader State — same reason: reset per chapter.
+    val pagerState = remember(chapter.id) {
+        PagerState(
+            currentPage = (chapter.lastPageRead - 1).coerceAtLeast(0),
+            pageCount = { pages?.size ?: 0 }
+        )
+    }
 
     val currentPage by remember {
         derivedStateOf {
@@ -530,14 +541,24 @@ fun ReaderScreen(
                                 else -> {
                                     val retries = pageRetries[i] ?: 0
                                     key(item, retries) {
+                                        // Memoize the request per page (keyed on the page object +
+                                        // retry count) so it's the SAME object across scroll
+                                        // recompositions. Coil's rememberAsyncImagePainter keys on
+                                        // the model — a fresh ImageRequest every recomposition made
+                                        // it restart the download on every scroll tick, leaving
+                                        // pages stuck on spinners, hammering the network (freeze)
+                                        // and blowing up memory (crash).
+                                        val model = remember(item, retries) {
+                                            ImageRequest.Builder(context)
+                                                .data(item)
+                                                .size(screenW, webtoonDecodeH)
+                                                .crossfade(false)
+                                                .build()
+                                        }
                                         Column(modifier = Modifier.fillMaxWidth()) {
                                             LoadableReaderImage(
                                                 stableKey = item,
-                                                model = ImageRequest.Builder(context)
-                                                    .data(item)
-                                                    .size(screenW, Int.MAX_VALUE)
-                                                    .crossfade(false)
-                                                    .build(),
+                                                model = model,
                                                 contentDescription = "Page ${i + 1}",
                                                 contentScale = ContentScale.FillWidth,
                                                 spinnerColor = contentTextColor,
