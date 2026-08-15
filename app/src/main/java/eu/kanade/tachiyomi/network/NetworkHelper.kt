@@ -109,7 +109,7 @@ class NetworkHelper(context: Context) {
                 val nh = NetworkHelper(app)
                 instance = nh
                 // Track the foreground activity so Cloudflare verification dialogs can show on it.
-                app.registerActivityLifecycleCallbacks(object : android.app.Application.ActivityLifecycleCallbacks {
+                (app as android.app.Application).registerActivityLifecycleCallbacks(object : android.app.Application.ActivityLifecycleCallbacks {
                     override fun onActivityResumed(activity: android.app.Activity) {
                         nh.currentActivity = activity
                     }
