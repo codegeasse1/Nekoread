@@ -127,15 +127,34 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
             }
         }
 
-    /** Fetch and persist the real chapter list for a manga. Returns true if new chapters were stored. */
+    /**
+     * Fetch and persist the real chapter list for a manga. Returns true if new chapters were
+     * stored. Always refreshes from the source so cached entries pick up renumbered/updated
+     * chapters (chapter numbers for -1 sources were once inverted), while read / bookmark /
+     * progress state is carried over from the existing rows.
+     */
     suspend fun loadChapters(fullMangaId: String, force: Boolean = false): Boolean = withContext(Dispatchers.IO) {
-        if (!force && db.chapterDao().getChaptersListForManga(fullMangaId).isNotEmpty()) {
+        val existing = db.chapterDao().getChaptersListForManga(fullMangaId)
+        if (!force && existing.isNotEmpty()) {
             return@withContext false
         }
         try {
             val chapters = SourceRegistry.source(fullMangaId.substringBefore(":")).getChapters(fullMangaId)
             if (chapters.isNotEmpty()) {
-                db.chapterDao().insertChapters(chapters)
+                val existingById = existing.associateBy { it.id }
+                db.chapterDao().insertChapters(
+                    chapters.map { ch ->
+                        val old = existingById[ch.id]
+                        if (old != null) {
+                            ch.copy(
+                                read = old.read,
+                                bookmarked = old.bookmarked,
+                                lastPageRead = old.lastPageRead,
+                                totalPages = old.totalPages
+                            )
+                        } else ch
+                    }
+                )
                 return@withContext true
             }
         } catch (e: Throwable) {
