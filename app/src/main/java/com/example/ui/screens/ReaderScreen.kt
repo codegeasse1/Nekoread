@@ -85,8 +85,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.app.Activity
 import android.content.pm.ActivityInfo
-import coil.compose.AsyncImage
 import coil.compose.LocalImageLoader
+import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
@@ -258,6 +258,27 @@ fun ReaderScreen(
         derivedStateOf { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
     }
 
+    // Stable reading order for the whole chapter list. Extension sources that leave the -1 default
+    // chapter number (TheBlank) can't be meaningfully sorted by number, so fall back to upload
+    // date. Powers the chapter sheet, prev/next navigation and continuous scroll.
+    val orderedChapters = remember(allChapters) {
+        if (allChapters.any { it.chapterNumber > 0f }) {
+            allChapters.sortedBy { it.chapterNumber }
+        } else {
+            allChapters.sortedWith(compareBy<ChapterEntity> { it.dateUpload }.thenBy { it.name })
+        }
+    }
+
+    fun nextChapterAfter(c: ChapterEntity): ChapterEntity? {
+        val idx = orderedChapters.indexOfFirst { it.id == c.id }
+        return if (idx >= 0 && idx < orderedChapters.size - 1) orderedChapters[idx + 1] else null
+    }
+
+    fun prevChapterBefore(c: ChapterEntity): ChapterEntity? {
+        val idx = orderedChapters.indexOfFirst { it.id == c.id }
+        return if (idx > 0) orderedChapters[idx - 1] else null
+    }
+
     // Append the next chapter when the reader scrolls near the end of the loaded pages.
     LaunchedEffect(lastVisibleEntry, entries.size, queuedChapters.size) {
         if (lastVisibleEntry < entries.size - 3) return@LaunchedEffect
@@ -265,8 +286,7 @@ fun ReaderScreen(
         val tailReady = if (tail == null) pages != null else (tail.pages != null && tail.error == null)
         if (!tailReady) return@LaunchedEffect
         val lastCh = tail?.chapter ?: chapter
-        val next = allChapters.sortedBy { it.chapterNumber }.firstOrNull { it.chapterNumber > lastCh.chapterNumber }
-            ?: return@LaunchedEffect
+        val next = nextChapterAfter(lastCh) ?: return@LaunchedEffect
         val cid = next.id
         queuedChapters.add(QueuedCh(next, null, null))
         val qi = queuedChapters.size - 1
@@ -301,7 +321,7 @@ fun ReaderScreen(
         if (readerMode != ReaderMode.WEBTOON || entries.isEmpty()) return@LaunchedEffect
         val loader = imageLoader
         val start = firstVisible.coerceIn(0, entries.size - 1)
-        val end = minOf(start + 4, entries.size - 1)
+        val end = minOf(start + 6, entries.size - 1)
         for (i in start..end) {
             val m = entries[i]
             if (m is DividerItem || m is LoadingItem) continue
@@ -311,13 +331,9 @@ fun ReaderScreen(
         }
     }
 
-    val prevChapter = remember(allChapters, chapter) {
-        allChapters.sortedBy { it.chapterNumber }.lastOrNull { it.chapterNumber < chapter.chapterNumber }
-    }
+    val prevChapter = remember(orderedChapters, chapter) { prevChapterBefore(chapter) }
 
-    val nextChapter = remember(allChapters, chapter) {
-        allChapters.sortedBy { it.chapterNumber }.firstOrNull { it.chapterNumber > chapter.chapterNumber }
-    }
+    val nextChapter = remember(orderedChapters, chapter) { nextChapterAfter(chapter) }
 
     // Source's base URL (for the Cloudflare / site-verification WebView button).
     val sourceBaseUrl = remember(manga) {
@@ -480,7 +496,7 @@ fun ReaderScreen(
                                     val retries = pageRetries[i] ?: 0
                                     key(item, retries) {
                                         Column(modifier = Modifier.fillMaxWidth()) {
-                                            AsyncImage(
+                                            SubcomposeAsyncImage(
                                                 model = ImageRequest.Builder(context)
                                                     .data(item)
                                                     .size(screenW, Int.MAX_VALUE)
@@ -493,23 +509,46 @@ fun ReaderScreen(
                                                 contentScale = ContentScale.FillWidth,
                                                 onError = { state ->
                                                     pageImageErrors = pageImageErrors + (i to (state.result.throwable.message ?: "image load failed"))
+                                                },
+                                                // A loading page keeps a minimum height (with a
+                                                // spinner, like Tadami) so the list stays scrollable
+                                                // instead of collapsing to zero height and getting
+                                                // stuck mid-chapter.
+                                                loading = {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .heightIn(min = 200.dp),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        CircularProgressIndicator(
+                                                            modifier = Modifier.size(28.dp),
+                                                            strokeWidth = 3.dp,
+                                                            color = contentTextColor
+                                                        )
+                                                    }
+                                                },
+                                                error = {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .heightIn(min = 180.dp)
+                                                            .background(Color(0x22000000))
+                                                            .clickable {
+                                                                pageImageErrors = pageImageErrors - i
+                                                                pageRetries[i] = (pageRetries[i] ?: 0) + 1
+                                                            },
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text(
+                                                            text = "Page ${i + 1} failed — tap to retry",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = contentTextColor.copy(alpha = 0.8f),
+                                                            textAlign = TextAlign.Center
+                                                        )
+                                                    }
                                                 }
                                             )
-                                            pageImageErrors[i]?.let { err ->
-                                                Text(
-                                                    text = "Page ${i + 1} failed: $err",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = Color(0xFFFF5252),
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .background(Color(0x66000000))
-                                                        .padding(8.dp)
-                                                        .clickable {
-                                                            pageImageErrors = pageImageErrors - i
-                                                            pageRetries[i] = (pageRetries[i] ?: 0) + 1
-                                                        }
-                                                )
-                                            }
                                         }
                                     }
                                 }
@@ -530,7 +569,7 @@ fun ReaderScreen(
                             val retries = pageRetries[pageIndex] ?: 0
                             key(pageUrl, retries) {
                                 Box(modifier = Modifier.fillMaxSize()) {
-                                    AsyncImage(
+                                    SubcomposeAsyncImage(
                                         model = pageUrl,
                                         contentDescription = "Page ${pageIndex + 1}",
                                         modifier = Modifier
@@ -540,25 +579,34 @@ fun ReaderScreen(
                                         contentScale = if (readerFit == ReaderFit.FIT_WIDTH) ContentScale.FillWidth else ContentScale.Fit,
                                         onError = { state ->
                                             pageImageErrors = pageImageErrors + (pageIndex to (state.result.throwable.message ?: "image load failed"))
+                                        },
+                                        loading = {
+                                            Box(
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                CircularProgressIndicator(color = contentTextColor)
+                                            }
+                                        },
+                                        error = {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .clickable {
+                                                        pageImageErrors = pageImageErrors - pageIndex
+                                                        pageRetries[pageIndex] = (pageRetries[pageIndex] ?: 0) + 1
+                                                    },
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = "Page ${pageIndex + 1} failed — tap to retry",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = Color(0xFFFF5252),
+                                                    textAlign = TextAlign.Center
+                                                )
+                                            }
                                         }
                                     )
-                                    pageImageErrors[pageIndex]?.let { err ->
-                                        Text(
-                                            text = "Page ${pageIndex + 1} failed: $err\n(tap to retry)",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = Color(0xFFFF5252),
-                                            textAlign = TextAlign.Center,
-                                            modifier = Modifier
-                                                .align(Alignment.BottomCenter)
-                                                .fillMaxWidth()
-                                                .background(Color(0x99000000))
-                                                .padding(10.dp)
-                                                .clickable {
-                                                    pageImageErrors = pageImageErrors - pageIndex
-                                                    pageRetries[pageIndex] = (pageRetries[pageIndex] ?: 0) + 1
-                                                }
-                                        )
-                                    }
                                 }
                             }
                         }
@@ -652,10 +700,13 @@ fun ReaderScreen(
 
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = if (readerMode == ReaderMode.WEBTOON && activeChapter != null)
-                                    "${formatChapterNum(activeChapter.chapterNumber)} • Page $pageInChapter / ${visibleRange?.count ?: 0}"
-                                else
-                                    "Page $currentPage / ${pages?.size ?: 0}",
+                                text = if (readerMode == ReaderMode.WEBTOON && activeChapter != null) {
+                                    val n = activeChapter.chapterNumber
+                                    val prefix = if (n > 0f) "Ch. ${formatChapterNum(n)} • " else ""
+                                    "$prefix Page $pageInChapter / ${visibleRange?.count ?: 0}"
+                                } else {
+                                    "Page $currentPage / ${pages?.size ?: 0}"
+                                },
                                 style = MaterialTheme.typography.labelLarge.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
@@ -862,7 +913,7 @@ fun ReaderScreen(
                         .fillMaxWidth()
                         .heightIn(max = 420.dp)
                 ) {
-                    items(allChapters.sortedBy { it.chapterNumber }, key = { it.id }) { c ->
+                    items(orderedChapters, key = { it.id }) { c ->
                         val isCurrent = c.id == activeId
                         Row(
                             modifier = Modifier
