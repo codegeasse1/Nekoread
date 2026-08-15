@@ -150,14 +150,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // URL, e.g. 4KHD's WordPress REST API 400s on page=0; ComicLand computes offset=(page-1)*20).
     // So the first catalog request must be page 1 — starting at 0 is what broke 4KHD with
     // "HTTP error 400 — ...&page=0..." while the same URL with page=1 returns 200.
+    private var lastCatalogKey: String? = null
+
     fun loadCatalog(sourceId: String = "", query: String = "", page: Int = 1) {
         if (sourceId.isBlank()) return
+        val key = "$sourceId\u0000$query\u0000$page"
+        // Re-running the exact same catalog fetch (e.g. returning to Browse after viewing a manga
+        // detail screen) is a no-op — the results are already on screen, so don't flash a reload.
+        if (key == lastCatalogKey && _catalogResults.value.isNotEmpty()) return
         viewModelScope.launch {
             _catalogLoading.value = true
             _catalogError.value = null
             try {
                 _catalogSourceName.value = repository.sourceForManga("$sourceId:x").name
                 _catalogResults.value = repository.searchCatalog(sourceId, query, page)
+                lastCatalogKey = key
             } catch (e: Throwable) {
                 _catalogResults.value = emptyList()
                 _catalogError.value = e.describe()
@@ -170,6 +177,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun clearCatalog() {
         _catalogResults.value = emptyList()
         _catalogError.value = null
+        lastCatalogKey = null
     }
 
     fun globalSearch(query: String) {
