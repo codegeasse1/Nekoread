@@ -71,10 +71,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
+import com.example.util.describe
 import com.example.ui.MainViewModel
 import com.example.ui.ReaderBg
 import com.example.ui.ReaderMode
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -112,9 +114,11 @@ fun ReaderScreen(
         pageError = null
         pageImageErrors = emptyMap()
         try {
-            pages = viewModel.repository.getChapterPageImageModels(chapter.id)
+            pages = withTimeout(120_000) {
+                viewModel.repository.getChapterPageImageModels(chapter.id)
+            }
         } catch (e: Throwable) {
-            pageError = e.message ?: "Failed to load chapter pages"
+            pageError = e.describe()
             pages = null
         } finally {
             pageLoading = false
