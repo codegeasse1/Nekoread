@@ -34,6 +34,14 @@ class NetworkHelper(context: Context) {
     /** Shared WebView cookie store; extensions' OkHttp clients and the Cloudflare WebView both use it. */
     val cookieJar = AndroidCookieJar()
 
+    /**
+     * Foreground activity (tracked via ActivityLifecycleCallbacks) so Cloudflare verification
+     * dialogs can be shown on a real Activity context — a Dialog built from the application
+     * context is unreliable on modern Android (can fail to appear or throw BadTokenException).
+     */
+    @Volatile
+    var currentActivity: android.app.Activity? = null
+
     private val clientBuilder: OkHttpClient.Builder = run {
         OkHttpClient.Builder()
             .cookieJar(cookieJar)
@@ -71,6 +79,7 @@ class NetworkHelper(context: Context) {
                 context = context,
                 cookieManager = cookieJar,
                 defaultUserAgentProvider = ::defaultUserAgentProvider,
+                activityContextProvider = { currentActivity },
             ),
         )
         .build()
@@ -99,6 +108,20 @@ class NetworkHelper(context: Context) {
                 val app = context.applicationContext
                 val nh = NetworkHelper(app)
                 instance = nh
+                // Track the foreground activity so Cloudflare verification dialogs can show on it.
+                app.registerActivityLifecycleCallbacks(object : android.app.Application.ActivityLifecycleCallbacks {
+                    override fun onActivityResumed(activity: android.app.Activity) {
+                        nh.currentActivity = activity
+                    }
+                    override fun onActivityPaused(activity: android.app.Activity) {
+                        if (nh.currentActivity === activity) nh.currentActivity = null
+                    }
+                    override fun onActivityCreated(activity: android.app.Activity, savedInstanceState: android.os.Bundle?) {}
+                    override fun onActivityStarted(activity: android.app.Activity) {}
+                    override fun onActivityStopped(activity: android.app.Activity) {}
+                    override fun onActivitySaveInstanceState(activity: android.app.Activity, outState: android.os.Bundle) {}
+                    override fun onActivityDestroyed(activity: android.app.Activity) {}
+                })
                 // Extensions resolve NetworkHelper (and the Application for source preferences)
                 // through the global injekt registry, exactly like Tadami does.
                 Injekt.addSingleton(nh)
