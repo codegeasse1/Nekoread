@@ -2,14 +2,17 @@ package eu.kanade.tachiyomi.network.interceptor
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.webkit.CookieManager
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.core.content.ContextCompat
+import android.widget.Toast
 import eu.kanade.tachiyomi.network.AndroidCookieJar
+import eu.kanade.tachiyomi.util.system.isOutdated
 import okhttp3.Cookie
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -22,6 +25,16 @@ interface CloudflareChallengeResolver {
     fun resolve(originalRequest: Request, oldCookie: Cookie?)
 }
 
+/**
+ * Resolves a Cloudflare challenge by loading the request URL in a WebView.
+ *
+ *  - Non-interactive interstitial challenges ("Just a moment…") are solved silently in a hidden
+ *    WebView and the resulting `cf_clearance` cookie is picked up automatically.
+ *  - Interactive challenges (Turnstile / "I am not a robot") surface a fullscreen dialog
+ *    ([CloudflareChallengeDialog]) so the user can complete them by hand; the dialog polls the
+ *    cookie store and auto-dismisses + retries the moment a fresh `cf_clearance` appears — no
+ *    hunting for a "verify" button on whatever screen the request happened on.
+ */
 internal class WebViewCloudflareChallengeResolver(
     private val context: Context,
     private val cookieManager: AndroidCookieJar,
@@ -34,38 +47,69 @@ internal class WebViewCloudflareChallengeResolver(
     @SuppressLint("SetJavaScriptEnabled")
     override fun resolve(originalRequest: Request, oldCookie: Cookie?) {
         val latch = CountDownLatch(1)
-
-        var webview: WebView? = null
-        var challengeFound = false
-        var cloudflareBypassed = false
-        var hasInteractiveWidget = false
-        var isWebViewOutdatedNow = false
-
         val origRequestUrl = originalRequest.url.toString()
         val headers = parseHeaders(originalRequest.headers)
+
+        var webview: WebView? = null
+        var challengeDialog: CloudflareChallengeDialog? = null
+        var cloudflareBypassed = false
+        var isWebViewOutdatedNow = false
 
         mainExecutor.execute {
             val createdWebView = createWebView(originalRequest)
             webview = createdWebView
 
+            fun hasFreshClearance(url: okhttp3.HttpUrl): Boolean {
+                val cookie = cookieManager.get(url).firstOrNull { it.name == "cf_clearance" }
+                return cookie != null && (url.host != originalRequest.url.host || cookie != oldCookie)
+            }
+
+            fun isSolved(): Boolean {
+                return listOfNotNull(originalRequest.url, createdWebView.url?.toHttpUrlOrNull())
+                    .distinctBy { it.host }
+                    .any { hasFreshClearance(it) }
+            }
+
+            fun finishSolved() {
+                if (!cloudflareBypassed) {
+                    cloudflareBypassed = true
+                    CookieManager.getInstance().flush()
+                    latch.countDown()
+                }
+            }
+
+            fun probeAndShowDialog(view: WebView) {
+                if (cloudflareBypassed || challengeDialog != null) return
+                detectInteractiveWidget(view) { detected ->
+                    if (detected && !cloudflareBypassed && challengeDialog == null) {
+                        val dlg = CloudflareChallengeDialog(
+                            context = context,
+                            webView = createdWebView,
+                            isSolved = ::isSolved,
+                            onSolved = ::finishSolved,
+                            onDismissed = { latch.countDown() },
+                        )
+                        challengeDialog = dlg
+                        dlg.show()
+                    }
+                }
+            }
+
             createdWebView.webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView, url: String) {
-                    if (hasNewCloudflareClearance(originalRequest, url, oldCookie)) {
-                        cloudflareBypassed = true
-                        CookieManager.getInstance().flush()
-                        latch.countDown()
+                    if (isSolved()) {
+                        finishSolved()
                         return
                     }
 
-                    if (challengeFound) {
-                        detectInteractiveWidget(view) { detected ->
-                            if (detected && !cloudflareBypassed) {
-                                hasInteractiveWidget = true
-                                latch.countDown()
-                            }
-                        }
-                    } else if (url == origRequestUrl || url.toHttpUrlOrNull()?.host != originalRequest.url.host) {
-                        latch.countDown()
+                    // Interactive widget present -> let the user complete it in a visible dialog
+                    // (auto-closes the moment the challenge is solved). Turnstile renders its
+                    // widget asynchronously, so re-probe for a few seconds after page finish.
+                    if (challengeDialog == null) {
+                        probeAndShowDialog(view)
+                        view.postDelayed({ probeAndShowDialog(view) }, 1500)
+                        view.postDelayed({ probeAndShowDialog(view) }, 3500)
+                        view.postDelayed({ probeAndShowDialog(view) }, 6000)
                     }
                 }
 
@@ -74,7 +118,7 @@ internal class WebViewCloudflareChallengeResolver(
                     request: WebResourceRequest,
                     error: WebResourceError,
                 ) {
-                    if (request.isForMainFrame) {
+                    if (request.isForMainFrame && challengeDialog == null) {
                         latch.countDown()
                     }
                 }
@@ -84,10 +128,8 @@ internal class WebViewCloudflareChallengeResolver(
                     request: WebResourceRequest,
                     errorResponse: WebResourceResponse,
                 ) {
-                    if (request.isForMainFrame) {
-                        if (errorResponse.statusCode in ERROR_CODES) {
-                            challengeFound = true
-                        } else {
+                    if (request.isForMainFrame && challengeDialog == null) {
+                        if (errorResponse.statusCode !in ERROR_CODES) {
                             latch.countDown()
                         }
                     }
@@ -95,19 +137,22 @@ internal class WebViewCloudflareChallengeResolver(
             }
 
             createdWebView.loadUrl(origRequestUrl, headers)
+
+            // Bail quickly (like Tadami's 30s) for challenges that never became interactive.
+            Handler(Looper.getMainLooper()).postDelayed({
+                if (!cloudflareBypassed && challengeDialog == null) {
+                    latch.countDown()
+                }
+            }, SILENT_SOLVE_TIMEOUT_MS)
         }
 
-        latch.awaitFor30Seconds()
-
-        if (!cloudflareBypassed) {
-            hasInteractiveWidget = detectInteractiveWidgetSync(webview)
-        }
+        latch.await(120, TimeUnit.SECONDS)
 
         mainExecutor.execute {
             if (!cloudflareBypassed) {
                 isWebViewOutdatedNow = webview?.let(isWebViewOutdated) == true
             }
-
+            challengeDialog?.dismiss()
             webview?.run {
                 stopLoading()
                 destroy()
@@ -116,30 +161,20 @@ internal class WebViewCloudflareChallengeResolver(
 
         if (!cloudflareBypassed) {
             if (isWebViewOutdatedNow) {
-                android.widget.Toast.makeText(
+                Toast.makeText(
                     context,
                     "Your WebView is outdated — update it (Play Store → Android System WebView) to complete Cloudflare challenges",
-                    android.widget.Toast.LENGTH_LONG,
+                    Toast.LENGTH_LONG,
                 ).show()
-            } else if (hasInteractiveWidget) {
-                android.widget.Toast.makeText(
+            } else if (challengeDialog != null) {
+                Toast.makeText(
                     context,
-                    "Interactive Cloudflare challenge detected — open the source in WebView and complete it manually",
-                    android.widget.Toast.LENGTH_LONG,
+                    "Cloudflare verification not completed — try again",
+                    Toast.LENGTH_LONG,
                 ).show()
-                throw CloudflareInteractiveChallengeException()
             }
             throw CloudflareBypassException()
         }
-    }
-
-    private fun hasNewCloudflareClearance(originalRequest: Request, currentUrl: String, oldCookie: Cookie?): Boolean {
-        return listOfNotNull(originalRequest.url, currentUrl.toHttpUrlOrNull())
-            .distinctBy { it.host }
-            .any { url ->
-                val cookie = cookieManager.get(url).firstOrNull { it.name == "cf_clearance" }
-                cookie != null && (url.host != originalRequest.url.host || cookie != oldCookie)
-            }
     }
 
     private fun detectInteractiveWidget(webview: WebView, onResult: (Boolean) -> Unit) {
@@ -150,24 +185,6 @@ internal class WebViewCloudflareChallengeResolver(
         } catch (_: Throwable) {
             onResult(false)
         }
-    }
-
-    private fun detectInteractiveWidgetSync(webview: WebView?): Boolean {
-        if (webview == null) return false
-        val checkLatch = CountDownLatch(1)
-        var detected = false
-        mainExecutor.execute {
-            try {
-                webview.evaluateJavascript(INTERACTIVE_WIDGET_PROBE) { result ->
-                    detected = result == "true"
-                    checkLatch.countDown()
-                }
-            } catch (_: Throwable) {
-                checkLatch.countDown()
-            }
-        }
-        checkLatch.await(2, TimeUnit.SECONDS)
-        return detected
     }
 }
 
@@ -181,9 +198,7 @@ internal val INTERACTIVE_WIDGET_PROBE = """
     })();
 """.trimIndent()
 
-private fun CountDownLatch.awaitFor30Seconds() {
-    await(30, TimeUnit.SECONDS)
-}
+private const val SILENT_SOLVE_TIMEOUT_MS = 35_000L
 
 internal open class CloudflareBypassException : Exception()
 internal class CloudflareInteractiveChallengeException : CloudflareBypassException()
