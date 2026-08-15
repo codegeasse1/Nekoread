@@ -176,6 +176,46 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         SourceRegistry.source(ch.mangaId.substringBefore(":")).getPageImageModels(ch.fetchUrl)
     }
 
+    /** Live page descriptors (request URL + image URL) for a chapter — the Tadami-style reader
+     *  input. Each page is downloaded individually via [getPageImageFile] and rendered with a
+     *  tiled view, so no giant full-page bitmap is ever decoded. */
+    suspend fun getChapterPageDescriptors(chapterId: String): List<MangaSource.PageDescriptor> =
+        withContext(Dispatchers.IO) {
+            val ch = db.chapterDao().getChapterById(chapterId) ?: return@withContext emptyList()
+            SourceRegistry.source(ch.mangaId.substringBefore(":")).getPageDescriptors(ch.fetchUrl)
+        }
+
+    /**
+     * Download one reader page's image bytes into a stable disk cache (Tadami HttpPageLoader
+     * model): returns the cached file on subsequent calls. Pages are fetched through the source's
+     * own client so hotlink protection (Referer/Origin) is honoured, exactly like extensions do.
+     */
+    suspend fun getPageImageFile(chapterId: String, pageUrl: String, imageUrl: String): File =
+        withContext(Dispatchers.IO) {
+            val ch = db.chapterDao().getChapterById(chapterId) ?: throw IllegalStateException("Chapter not found")
+            val source = SourceRegistry.source(ch.mangaId.substringBefore(":"))
+            val dir = File(app.cacheDir, "reader_pages")
+            dir.mkdirs()
+            val key = imageUrl.hashCode().toUInt().toString(16)
+            val target = File(dir, "$key.img")
+            if (target.exists() && target.length() > 0) return@withContext target
+
+            val tmp = File(dir, "$key.img.tmp")
+            tmp.delete()
+            try {
+                source.downloadPageImage(MangaSource.PageDescriptor(pageUrl, imageUrl), tmp)
+                if (!tmp.exists() || tmp.length() == 0L) throw java.io.IOException("Empty download for $imageUrl")
+                if (!tmp.renameTo(target)) {
+                    tmp.copyTo(target, overwrite = true)
+                    tmp.delete()
+                }
+                target
+            } catch (e: Throwable) {
+                tmp.delete()
+                throw e
+            }
+        }
+
     suspend fun toggleLibraryStatus(mangaId: String, category: String = "Reading") = withContext(Dispatchers.IO) {
         val manga = db.mangaDao().getMangaById(mangaId) ?: return@withContext
         val newInLibrary = !manga.inLibrary
