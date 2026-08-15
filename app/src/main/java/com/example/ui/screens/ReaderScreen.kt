@@ -32,12 +32,12 @@ import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FormatListBulleted
-import androidx.compose.material.icons.filled.FitScreen
 import androidx.compose.material.icons.filled.NavigateBefore
 import androidx.compose.material.icons.filled.NavigateNext
 import androidx.compose.material.icons.filled.ScreenRotation
@@ -751,10 +751,11 @@ fun ReaderScreen(
                                         model = model,
                                         contentDescription = "Page ${pageIndex + 1}",
                                         contentScale = when (readerFit) {
-                                            ReaderFit.FIT_WIDTH -> ContentScale.FillWidth
+                                            ReaderFit.FIT_WIDTH -> ContentScale.Fit
                                             ReaderFit.FIT_HEIGHT -> ContentScale.FillHeight
                                             ReaderFit.FIT -> ContentScale.Fit
                                         },
+                                        zoom = if (readerFit == ReaderFit.FIT_WIDTH) 1.2f else 1f,
                                         spinnerColor = contentTextColor,
                                         onError = { msg ->
                                             pageImageErrors = pageImageErrors + (pageIndex to msg)
@@ -1334,6 +1335,7 @@ private fun LoadableReaderImage(
     onError: (String) -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
+    zoom: Float = 1f,
 ) {
     // stableKey is the source model object (stable across recompositions); `model` may be a fresh
     // ImageRequest wrapper each recomposition, so never key state on it.
@@ -1353,7 +1355,9 @@ private fun LoadableReaderImage(
         Image(
             painter = painter,
             contentDescription = contentDescription,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (zoom != 1f) Modifier.scale(zoom) else Modifier),
             contentScale = contentScale
         )
         if (loading) {
