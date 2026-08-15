@@ -1001,13 +1001,15 @@ fun ReaderScreen(
                             mode = ReaderMode.WEBTOON,
                             label = "Long strip",
                             selected = readerMode == ReaderMode.WEBTOON,
-                            onClick = { viewModel.setReaderMode(ReaderMode.WEBTOON) }
+                            onClick = { viewModel.setReaderMode(ReaderMode.WEBTOON) },
+                            modifier = Modifier.weight(1f)
                         )
                         ModeTile(
                             mode = ReaderMode.WEBTOON_GAPS,
                             label = "Long strip\nwith gaps",
                             selected = readerMode == ReaderMode.WEBTOON_GAPS,
-                            onClick = { viewModel.setReaderMode(ReaderMode.WEBTOON_GAPS) }
+                            onClick = { viewModel.setReaderMode(ReaderMode.WEBTOON_GAPS) },
+                            modifier = Modifier.weight(1f)
                         )
                     }
 
@@ -1018,13 +1020,15 @@ fun ReaderScreen(
                             mode = ReaderMode.LEFT_TO_RIGHT,
                             label = "Paged\n(left to right)",
                             selected = readerMode == ReaderMode.LEFT_TO_RIGHT,
-                            onClick = { viewModel.setReaderMode(ReaderMode.LEFT_TO_RIGHT) }
+                            onClick = { viewModel.setReaderMode(ReaderMode.LEFT_TO_RIGHT) },
+                            modifier = Modifier.weight(1f)
                         )
                         ModeTile(
                             mode = ReaderMode.RIGHT_TO_LEFT,
                             label = "Paged\n(right to left)",
                             selected = readerMode == ReaderMode.RIGHT_TO_LEFT,
-                            onClick = { viewModel.setReaderMode(ReaderMode.RIGHT_TO_LEFT) }
+                            onClick = { viewModel.setReaderMode(ReaderMode.RIGHT_TO_LEFT) },
+                            modifier = Modifier.weight(1f)
                         )
                     }
 
@@ -1035,7 +1039,8 @@ fun ReaderScreen(
                             mode = ReaderMode.VERTICAL,
                             label = "Paged\n(vertical)",
                             selected = readerMode == ReaderMode.VERTICAL,
-                            onClick = { viewModel.setReaderMode(ReaderMode.VERTICAL) }
+                            onClick = { viewModel.setReaderMode(ReaderMode.VERTICAL) },
+                            modifier = Modifier.weight(1f)
                         )
                         Spacer(modifier = Modifier.weight(1f))
                     }
@@ -1206,7 +1211,8 @@ private fun ModeTile(
     mode: ReaderMode,
     label: String,
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val accent = MaterialTheme.colorScheme.primary
     Surface(
@@ -1214,9 +1220,7 @@ private fun ModeTile(
         shape = RoundedCornerShape(12.dp),
         color = if (selected) accent.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
         border = if (selected) BorderStroke(2.dp, accent) else null,
-        modifier = Modifier
-            .weight(1f)
-            .height(92.dp)
+        modifier = modifier.height(92.dp)
     ) {
         Column(
             modifier = Modifier
