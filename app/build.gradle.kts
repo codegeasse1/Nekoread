@@ -115,6 +115,12 @@ dependencies {
   implementation(libs.logging.interceptor)
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
+  // OkHttp 5 + brotli/zstd: extension-lib 1.6 sources (keiyoushi KeiSource) build their client
+  // with OkHttp 5's CompressionInterceptor and reference okhttp3.brotli/zstd — these must be on
+  // the app classpath or those extensions die with NoClassDefFoundError. Same set as Tadami.
+  implementation(libs.okhttp.brotli)
+  implementation(libs.okhttp.zstd)
+  implementation(libs.okio.zstd)
   // Tachiyomi-style extension engine (Tadami/Mihon compatible): these runtime libs are what
   // loaded extension APKs link against.
   implementation(libs.rxjava)
