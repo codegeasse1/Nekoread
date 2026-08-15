@@ -8,6 +8,8 @@ import android.webkit.WebView
 import android.widget.Toast
 import android.os.Handler
 import android.os.Looper
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
 import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.Request
@@ -130,6 +132,12 @@ private fun WebView.setDefaultSettings() {
         setSupportZoom(true)
         builtInZoomControls = true
         displayZoomControls = false
+    }
+
+    // Don't send X-Requested-With: <package> — Cloudflare treats it as a WebView fingerprint
+    // and keeps looping the Turnstile challenge for WebViews that leak it.
+    if (WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
+        WebSettingsCompat.setRequestedWithHeaderOriginAllowList(settings, emptySet())
     }
 
     CookieManager.getInstance().apply {
