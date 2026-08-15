@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FormatListBulleted
+import androidx.compose.material.icons.filled.FitScreen
 import androidx.compose.material.icons.filled.NavigateBefore
 import androidx.compose.material.icons.filled.NavigateNext
 import androidx.compose.material.icons.filled.ScreenRotation
@@ -51,7 +53,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -72,7 +73,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -128,6 +132,10 @@ fun ReaderScreen(
     val readerBg: ReaderBg by viewModel.readerBg.collectAsStateWithLifecycle()
     val readerFit: ReaderFit by viewModel.readerFit.collectAsStateWithLifecycle()
 
+    // Both long-strip modes render as one continuous vertical list (only the gap between pages
+    // differs); every check in the reader should treat them alike.
+    val isWebtoon = readerMode == ReaderMode.WEBTOON || readerMode == ReaderMode.WEBTOON_GAPS
+
     var pages by remember { mutableStateOf<List<Any>?>(null) }
     var pageError by remember { mutableStateOf<String?>(null) }
     var pageLoading by remember { mutableStateOf(true) }
@@ -143,11 +151,20 @@ fun ReaderScreen(
     // chapter is a (chapter, loaded-pages-or-null, error-or-null) entry.
     val queuedChapters = remember { mutableStateListOf<QueuedCh>() }
 
+    // Chapters BEFORE the current one, prepended to the strip when the reader scrolls near its top
+    // so Long strip scrolls back into earlier chapters — not just forward — without a chapter
+    // change or reload. Stored in reading order (earliest first); the strip renders them reversed.
+    val previousChapters = remember { mutableStateListOf<QueuedCh>() }
+    // True while a previous chapter's page list is being fetched, so the prepend effect never
+    // fires a second prepend into the same (still-loading) head of the strip.
+    var prependingPrevious by remember(chapter.id) { mutableStateOf(false) }
+
     LaunchedEffect(chapter.id, retryKey) {
         pageLoading = true
         pageError = null
         pageImageErrors = emptyMap()
         queuedChapters.clear()
+        previousChapters.clear()
         try {
             pages = withTimeout(MAIN_LOAD_TIMEOUT_MS) {
                 viewModel.repository.getChapterPageImageModels(chapter.id)
@@ -166,22 +183,45 @@ fun ReaderScreen(
     // queued chapter never blocks continuous scroll — the reader just shows the retry row.
     fun retryQueuedChapter(chapterId: String) {
         val i = queuedChapters.indexOfFirst { it.chapter.id == chapterId }
-        if (i < 0) return
-        val qc = queuedChapters[i]
-        queuedChapters[i] = QueuedCh(qc.chapter, null, null)
+        if (i >= 0) {
+            val qc = queuedChapters[i]
+            queuedChapters[i] = QueuedCh(qc.chapter, null, null)
+            coroutineScope.launch {
+                try {
+                    val p = withTimeout(QUEUED_LOAD_TIMEOUT_MS) {
+                        viewModel.repository.getChapterPageImageModels(qc.chapter.id)
+                    }
+                    val cur = queuedChapters.getOrNull(i)
+                    if (cur != null && cur.chapter.id == qc.chapter.id) {
+                        queuedChapters[i] = QueuedCh(qc.chapter, p, null)
+                    }
+                } catch (e: Throwable) {
+                    val cur = queuedChapters.getOrNull(i)
+                    if (cur != null && cur.chapter.id == qc.chapter.id) {
+                        queuedChapters[i] = QueuedCh(qc.chapter, null, e.describe())
+                    }
+                }
+            }
+            return
+        }
+        // Same for a previous chapter prepended above the current one.
+        val j = previousChapters.indexOfFirst { it.chapter.id == chapterId }
+        if (j < 0) return
+        val pc = previousChapters[j]
+        previousChapters[j] = QueuedCh(pc.chapter, null, null)
         coroutineScope.launch {
             try {
                 val p = withTimeout(QUEUED_LOAD_TIMEOUT_MS) {
-                    viewModel.repository.getChapterPageImageModels(qc.chapter.id)
+                    viewModel.repository.getChapterPageImageModels(pc.chapter.id)
                 }
-                val cur = queuedChapters.getOrNull(i)
-                if (cur != null && cur.chapter.id == qc.chapter.id) {
-                    queuedChapters[i] = QueuedCh(qc.chapter, p, null)
+                val cur = previousChapters.getOrNull(j)
+                if (cur != null && cur.chapter.id == pc.chapter.id) {
+                    previousChapters[j] = QueuedCh(pc.chapter, p, null)
                 }
             } catch (e: Throwable) {
-                val cur = queuedChapters.getOrNull(i)
-                if (cur != null && cur.chapter.id == qc.chapter.id) {
-                    queuedChapters[i] = QueuedCh(qc.chapter, null, e.describe())
+                val cur = previousChapters.getOrNull(j)
+                if (cur != null && cur.chapter.id == pc.chapter.id) {
+                    previousChapters[j] = QueuedCh(pc.chapter, null, e.describe())
                 }
             }
         }
@@ -245,7 +285,7 @@ fun ReaderScreen(
             val total = pages?.size ?: 0
             if (total == 0) {
                 0
-            } else if (readerMode == ReaderMode.WEBTOON) {
+            } else if (readerMode == ReaderMode.WEBTOON || readerMode == ReaderMode.WEBTOON_GAPS) {
                 (listState.firstVisibleItemIndex + 1).coerceAtMost(total)
             } else {
                 (pagerState.currentPage + 1).coerceAtMost(total)
@@ -256,15 +296,29 @@ fun ReaderScreen(
     // Save reading progress on page change (paged modes; webtoon continuous scroll saves the
     // chapter actually on screen, in the effect below).
     LaunchedEffect(currentPage) {
-        if (readerMode != ReaderMode.WEBTOON && currentPage > 0) {
+        if (!isWebtoon && currentPage > 0) {
             viewModel.saveProgress(manga.id, chapter.id, chapter.name, currentPage)
         }
     }
 
-    // ---- Continuous scroll (webtoon): pages + queued chapters flattened into one list ----
+    // ---- Continuous scroll (webtoon): previous + current + queued chapters flattened into one
+    // strip, so Long strip scrolls BOTH directions (back into earlier chapters and forward into
+    // later ones) with no chapter change or reload. ----
     val entries: List<Any> = buildList {
+        for (pc in previousChapters.asReversed()) {
+            val pp = pc.pages
+            if (pp != null) {
+                add(DividerItem(pc.chapter))
+                addAll(pp)
+            } else {
+                add(LoadingItem(pc.chapter, pc.error))
+            }
+        }
         val cur = pages
-        if (cur != null) addAll(cur)
+        if (cur != null) {
+            if (previousChapters.isNotEmpty()) add(DividerItem(chapter))
+            addAll(cur)
+        }
         for (qc in queuedChapters) {
             val qp = qc.pages
             if (qp != null) {
@@ -281,8 +335,18 @@ fun ReaderScreen(
     // tracking start offsets in the real item list).
     val pageRanges: List<PageRange> = buildList {
         var idx = 0
+        for (pc in previousChapters.asReversed()) {
+            val pp = pc.pages
+            if (pp != null) {
+                idx += 1 // divider item occupies one slot
+                add(PageRange(pc.chapter, idx, pp.size)); idx += pp.size
+            } else {
+                idx += 1 // loading item occupies one slot
+            }
+        }
         val cur = pages
         if (cur != null) {
+            if (previousChapters.isNotEmpty()) idx += 1 // divider before the current chapter
             add(PageRange(chapter, idx, cur.size)); idx += cur.size
         }
         for (qc in queuedChapters) {
@@ -327,7 +391,7 @@ fun ReaderScreen(
     }
 
     // Append the next chapter when the reader scrolls near the end of the loaded pages.
-    LaunchedEffect(lastVisibleEntry, entries.size, queuedChapters.size) {
+    LaunchedEffect(isWebtoon, lastVisibleEntry, entries.size, queuedChapters.size) {
         // Hard cap so a jump near the end can't queue every remaining chapter at once (each would
         // spawn a network load and block threads — the whole app freezes/lags).
         if (queuedChapters.size >= MAX_QUEUED_CHAPTERS) return@LaunchedEffect
@@ -353,8 +417,59 @@ fun ReaderScreen(
         }
     }
 
+    // Prepend the PREVIOUS chapter when the reader scrolls near the top of the strip, so Long
+    // strip scrolls back into earlier chapters too (not just forward), with no chapter change.
+    // Once a chapter's pages have loaded they stay in the list, so scrolling up and down across
+    // chapters never re-triggers a reload — that "loading again" behaviour is exactly what made
+    // webtoon scrolling up feel broken.
+    LaunchedEffect(isWebtoon, firstVisible, entries.size, previousChapters.size, prependingPrevious) {
+        if (!isWebtoon) return@LaunchedEffect
+        if (prependingPrevious) return@LaunchedEffect
+        if (previousChapters.size >= MAX_QUEUED_CHAPTERS) return@LaunchedEffect
+        if (firstVisible > 3) return@LaunchedEffect
+        val head = previousChapters.firstOrNull()
+        val headSettled = if (head == null) pages != null else (head.pages != null || head.error != null)
+        if (!headSettled) return@LaunchedEffect
+        val firstCh = head?.chapter ?: chapter
+        val prev = prevChapterBefore(firstCh) ?: return@LaunchedEffect
+        val pid = prev.id
+        // Capture the viewport before the insert so we can restore it once the pages arrive —
+        // prepending shifts every item index down, and without compensation the reader would jump
+        // away from the page you were looking at.
+        val savedIndex = listState.firstVisibleItemIndex
+        val savedOffset = listState.firstVisibleItemScrollOffset
+        prependingPrevious = true
+        previousChapters.add(0, QueuedCh(prev, null, null))
+        val pi = previousChapters.indexOfFirst { it.chapter.id == pid }
+        coroutineScope.launch {
+            try {
+                val p = withTimeout(QUEUED_LOAD_TIMEOUT_MS) { viewModel.repository.getChapterPageImageModels(pid) }
+                val cur = previousChapters.getOrNull(pi)
+                if (cur != null && cur.chapter.id == pid) {
+                    previousChapters[pi] = QueuedCh(prev, p, null)
+                    // The loading row became a divider + N pages. The FIRST prepend also makes a
+                    // divider appear before the current chapter (it had none while the strip held
+                    // only the current chapter), hence the extra +1 only when it's the first.
+                    val addedCurDiv = if (previousChapters.size == 1) 1 else 0
+                    val target = (savedIndex + 1 + p.size + addedCurDiv).coerceAtLeast(0)
+                    // Restore the viewport to the page that was on screen before the prepend —
+                    // but only if the reader is still near the top. If the user scrolled away
+                    // while the previous chapter's pages were loading, don't yank them back.
+                    if (listState.firstVisibleItemIndex < target + 3) {
+                        listState.scrollToItem(target, savedOffset)
+                    }
+                }
+            } catch (e: Throwable) {
+                val cur = previousChapters.getOrNull(pi)
+                if (cur != null && cur.chapter.id == pid) previousChapters[pi] = QueuedCh(prev, null, e.describe())
+            } finally {
+                prependingPrevious = false
+            }
+        }
+    }
+
     // Save progress + mark earlier chapters read as the reader crosses into queued chapters.
-    if (readerMode == ReaderMode.WEBTOON) {
+    if (isWebtoon) {
         val vis = visibleRange
         LaunchedEffect(vis?.chapter?.id, pageInChapter) {
             val v = vis
@@ -372,8 +487,8 @@ fun ReaderScreen(
     // sits on a spinner. Must use the SAME size as the display request (screenW/webtoonDecodeH)
     // so Coil's cache/in-flight coalescing reuses the result — a different size decodes a second,
     // full-height bitmap, which is what blew up memory (freeze/crash) and made pages re-download.
-    LaunchedEffect(firstVisible, entries.size) {
-        if (readerMode != ReaderMode.WEBTOON || entries.isEmpty()) return@LaunchedEffect
+    LaunchedEffect(isWebtoon, firstVisible, entries.size) {
+        if (!isWebtoon || entries.isEmpty()) return@LaunchedEffect
         val info = listState.layoutInfo
         val last = info.visibleItemsInfo.lastOrNull()?.index ?: firstVisible
         val visibleCount = info.visibleItemsInfo.size.coerceAtLeast(1)
@@ -485,7 +600,7 @@ fun ReaderScreen(
 
             else -> {
                 val pageList = pages!!
-                if (readerMode == ReaderMode.WEBTOON) {
+                if (isWebtoon) {
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize()
@@ -571,7 +686,17 @@ fun ReaderScreen(
                                                 .crossfade(false)
                                                 .build()
                                         }
-                                        Column(modifier = Modifier.fillMaxWidth()) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .then(
+                                                    if (readerMode == ReaderMode.WEBTOON_GAPS) {
+                                                        Modifier.padding(bottom = 16.dp)
+                                                    } else {
+                                                        Modifier
+                                                    }
+                                                )
+                                        ) {
                                             LoadableReaderImage(
                                                 stableKey = item,
                                                 model = model,
@@ -748,7 +873,7 @@ fun ReaderScreen(
 
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = if (readerMode == ReaderMode.WEBTOON && activeChapter != null) {
+                                text = if (isWebtoon && activeChapter != null) {
                                     val n = activeChapter.chapterNumber
                                     val prefix = if (n > 0f) "Ch. ${formatChapterNum(n)} • " else ""
                                     "$prefix Page $pageInChapter / ${visibleRange?.count ?: 0}"
@@ -793,22 +918,18 @@ fun ReaderScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         ReaderToolButton(Icons.Default.FormatListBulleted, "Chapters") { showChaptersSheet = true }
-                        if (readerMode != ReaderMode.WEBTOON) {
+                        if (!isWebtoon) {
                             ReaderToolButton(
                                 icon = Icons.Default.AspectRatio,
-                                label = when (readerFit) {
-                                    ReaderFit.FIT_WIDTH -> "Fit Width"
-                                    ReaderFit.FIT_HEIGHT -> "Fit Height"
-                                    ReaderFit.FIT -> "Fit Screen"
-                                }
+                                label = "Fit Width"
                             ) {
-                                viewModel.setReaderFit(
-                                    when (readerFit) {
-                                        ReaderFit.FIT_WIDTH -> ReaderFit.FIT_HEIGHT
-                                        ReaderFit.FIT_HEIGHT -> ReaderFit.FIT
-                                        ReaderFit.FIT -> ReaderFit.FIT_WIDTH
-                                    }
-                                )
+                                viewModel.setReaderFit(ReaderFit.FIT_WIDTH)
+                            }
+                            ReaderToolButton(
+                                icon = Icons.Default.FitScreen,
+                                label = "Fit Screen"
+                            ) {
+                                viewModel.setReaderFit(ReaderFit.FIT)
                             }
                         }
                         ReaderToolButton(
@@ -822,7 +943,7 @@ fun ReaderScreen(
                         // scroll happens ONCE on release. Per-tick scrollToItem calls stormed the
                         // list state, corrupted it, and left the reader stuck on endless loading
                         // icons for any source.
-                        value = sliderDragPage ?: if (readerMode == ReaderMode.WEBTOON) pageInChapter.toFloat() else currentPage.toFloat(),
+                        value = sliderDragPage ?: if (isWebtoon) pageInChapter.toFloat() else currentPage.toFloat(),
                         onValueChange = { sliderDragPage = it },
                         onValueChangeFinished = {
                             val p = sliderDragPage
@@ -830,7 +951,7 @@ fun ReaderScreen(
                             if (p != null) {
                                 val targetPage = p.toInt() - 1
                                 coroutineScope.launch {
-                                    if (readerMode == ReaderMode.WEBTOON) {
+                                    if (isWebtoon) {
                                         val maxIdx = (entries.size - 1).coerceAtLeast(0)
                                         listState.scrollToItem(((visibleRange?.start ?: 0) + targetPage).coerceIn(0, maxIdx))
                                     } else {
@@ -840,7 +961,7 @@ fun ReaderScreen(
                             }
                         },
                         valueRange = 1f..(
-                            if (readerMode == ReaderMode.WEBTOON)
+                            if (isWebtoon)
                                 (visibleRange?.count ?: 1).coerceAtLeast(1).toFloat()
                             else
                                 (pages?.size ?: 1).coerceAtLeast(1).toFloat()
@@ -873,62 +994,50 @@ fun ReaderScreen(
                         )
                     )
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.setReaderMode(ReaderMode.WEBTOON) }
-                    ) {
-                        RadioButton(
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ModeTile(
+                            mode = ReaderMode.WEBTOON,
+                            label = "Long strip",
                             selected = readerMode == ReaderMode.WEBTOON,
                             onClick = { viewModel.setReaderMode(ReaderMode.WEBTOON) }
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Webtoon")
+                        ModeTile(
+                            mode = ReaderMode.WEBTOON_GAPS,
+                            label = "Long strip\nwith gaps",
+                            selected = readerMode == ReaderMode.WEBTOON_GAPS,
+                            onClick = { viewModel.setReaderMode(ReaderMode.WEBTOON_GAPS) }
+                        )
                     }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.setReaderMode(ReaderMode.LEFT_TO_RIGHT) }
-                    ) {
-                        RadioButton(
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ModeTile(
+                            mode = ReaderMode.LEFT_TO_RIGHT,
+                            label = "Paged\n(left to right)",
                             selected = readerMode == ReaderMode.LEFT_TO_RIGHT,
                             onClick = { viewModel.setReaderMode(ReaderMode.LEFT_TO_RIGHT) }
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Left to Right")
-                    }
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.setReaderMode(ReaderMode.RIGHT_TO_LEFT) }
-                    ) {
-                        RadioButton(
+                        ModeTile(
+                            mode = ReaderMode.RIGHT_TO_LEFT,
+                            label = "Paged\n(right to left)",
                             selected = readerMode == ReaderMode.RIGHT_TO_LEFT,
                             onClick = { viewModel.setReaderMode(ReaderMode.RIGHT_TO_LEFT) }
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Right to Left")
                     }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.setReaderMode(ReaderMode.VERTICAL) }
-                    ) {
-                        RadioButton(
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ModeTile(
+                            mode = ReaderMode.VERTICAL,
+                            label = "Paged\n(vertical)",
                             selected = readerMode == ReaderMode.VERTICAL,
                             onClick = { viewModel.setReaderMode(ReaderMode.VERTICAL) }
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Vertical")
+                        Spacer(modifier = Modifier.weight(1f))
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -1088,6 +1197,93 @@ private fun ReaderBgChip(
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                 color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
             )
+        }
+    }
+}
+
+@Composable
+private fun ModeTile(
+    mode: ReaderMode,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val accent = MaterialTheme.colorScheme.primary
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) accent.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
+        border = if (selected) BorderStroke(2.dp, accent) else null,
+        modifier = Modifier
+            .weight(1f)
+            .height(92.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            ModeIcon(
+                mode = mode,
+                tint = if (selected) accent else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(34.dp)
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (selected) accent else MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+// Small page-layout glyphs for the reading-mode picker: two side-by-side pages (paged LTR/RTL),
+// one short page with a down-arrow (paged vertical), a full-height continuous strip (long strip)
+// and a strip with a visible gap between pages (long strip with gaps).
+@Composable
+private fun ModeIcon(mode: ReaderMode, tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val s = size.minDimension
+        val stroke = s * 0.085f
+
+        fun page(x: Float, y: Float, w: Float, h: Float) {
+            drawRect(color = tint, topLeft = Offset(x, y), size = Size(w, h), style = Stroke(width = stroke))
+        }
+
+        fun chevron(x: Float, y: Float, dx: Float, dy: Float) {
+            val l = s * 0.15f
+            drawLine(tint, Offset(x, y - l), Offset(x + dx, y), strokeWidth = stroke)
+            drawLine(tint, Offset(x + dx, y), Offset(x, y + l), strokeWidth = stroke)
+        }
+
+        when (mode) {
+            ReaderMode.LEFT_TO_RIGHT -> {
+                page(s * 0.14f, s * 0.28f, s * 0.30f, s * 0.44f)
+                page(s * 0.56f, s * 0.28f, s * 0.30f, s * 0.44f)
+                chevron(s * 0.50f, s * 0.50f, s * 0.07f, 0f)
+            }
+            ReaderMode.RIGHT_TO_LEFT -> {
+                page(s * 0.14f, s * 0.28f, s * 0.30f, s * 0.44f)
+                page(s * 0.56f, s * 0.28f, s * 0.30f, s * 0.44f)
+                chevron(s * 0.50f, s * 0.50f, -s * 0.07f, 0f)
+            }
+            ReaderMode.VERTICAL -> {
+                page(s * 0.14f, s * 0.22f, s * 0.72f, s * 0.34f)
+                chevron(s * 0.50f, s * 0.70f, 0f, s * 0.07f)
+            }
+            ReaderMode.WEBTOON -> {
+                page(s * 0.14f, s * 0.14f, s * 0.72f, s * 0.72f)
+            }
+            ReaderMode.WEBTOON_GAPS -> {
+                page(s * 0.14f, s * 0.14f, s * 0.72f, s * 0.28f)
+                page(s * 0.14f, s * 0.58f, s * 0.72f, s * 0.28f)
+            }
         }
     }
 }
