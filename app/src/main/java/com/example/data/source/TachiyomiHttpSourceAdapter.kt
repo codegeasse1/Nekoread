@@ -139,4 +139,7 @@ class TachiyomiHttpSourceAdapter(
             ExtensionPageImage(page.url, url, ext)
         }
     }
+
+    /** Covers go through the extension's own client + headers, so hotlink-protected CDNs accept them. */
+    override fun coverImageModel(coverUrl: String): Any = ExtensionCoverImage(coverUrl, ext)
 }
