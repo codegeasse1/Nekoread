@@ -52,6 +52,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -63,6 +65,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
@@ -101,10 +104,13 @@ fun ReaderScreen(
     var pageError by remember { mutableStateOf<String?>(null) }
     var pageLoading by remember { mutableStateOf(true) }
     var retryKey by remember { mutableStateOf(0) }
+    var pageImageErrors by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
+    val pageRetries = remember { mutableStateMapOf<Int, Int>() }
 
     LaunchedEffect(chapter.id, retryKey) {
         pageLoading = true
         pageError = null
+        pageImageErrors = emptyMap()
         try {
             pages = viewModel.repository.getChapterPageImageModels(chapter.id)
         } catch (e: Throwable) {
@@ -259,14 +265,37 @@ fun ReaderScreen(
                         modifier = Modifier.fillMaxSize()
                     ) {
                         itemsIndexed(pageList) { index, pageUrl ->
-                            AsyncImage(
-                                model = pageUrl,
-                                contentDescription = "Page ${index + 1}",
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("reader_page_$index"),
-                                contentScale = ContentScale.FillWidth
-                            )
+                            val retries = pageRetries[index] ?: 0
+                            key(pageUrl, retries) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    AsyncImage(
+                                        model = pageUrl,
+                                        contentDescription = "Page ${index + 1}",
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("reader_page_$index"),
+                                        contentScale = ContentScale.FillWidth,
+                                        onError = { state ->
+                                            pageImageErrors = pageImageErrors + (index to (state.result.throwable.message ?: "image load failed"))
+                                        }
+                                    )
+                                    pageImageErrors[index]?.let { err ->
+                                        Text(
+                                            text = "Page ${index + 1} failed: $err",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = Color(0xFFFF5252),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(Color(0x66000000))
+                                                .padding(8.dp)
+                                                .clickable {
+                                                    pageImageErrors = pageImageErrors - index
+                                                    pageRetries[index] = (pageRetries[index] ?: 0) + 1
+                                                }
+                                        )
+                                    }
+                                }
+                            }
                         }
 
                         // Next Chapter Prompt Footer
@@ -313,12 +342,40 @@ fun ReaderScreen(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            AsyncImage(
-                                model = pageList[pageIndex],
-                                contentDescription = "Page ${pageIndex + 1}",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Fit
-                            )
+                            val pageUrl = pageList[pageIndex]
+                            val retries = pageRetries[pageIndex] ?: 0
+                            key(pageUrl, retries) {
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    AsyncImage(
+                                        model = pageUrl,
+                                        contentDescription = "Page ${pageIndex + 1}",
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .testTag("reader_page_$pageIndex"),
+                                        contentScale = ContentScale.Fit,
+                                        onError = { state ->
+                                            pageImageErrors = pageImageErrors + (pageIndex to (state.result.throwable.message ?: "image load failed"))
+                                        }
+                                    )
+                                    pageImageErrors[pageIndex]?.let { err ->
+                                        Text(
+                                            text = "Page ${pageIndex + 1} failed: $err\n(tap to retry)",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = Color(0xFFFF5252),
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier
+                                                .align(Alignment.BottomCenter)
+                                                .fillMaxWidth()
+                                                .background(Color(0x99000000))
+                                                .padding(10.dp)
+                                                .clickable {
+                                                    pageImageErrors = pageImageErrors - pageIndex
+                                                    pageRetries[pageIndex] = (pageRetries[pageIndex] ?: 0) + 1
+                                                }
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -416,6 +473,17 @@ fun ReaderScreen(
                             ),
                             modifier = Modifier.testTag("page_indicator_text")
                         )
+
+                        if (pageImageErrors.isNotEmpty()) {
+                            Text(
+                                text = "  ${pageImageErrors.size} img failed",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFF5252)
+                                ),
+                                modifier = Modifier.testTag("page_errors_count")
+                            )
+                        }
 
                         IconButton(
                             onClick = { nextChapter?.let { onChapterChange(it.id) } },
