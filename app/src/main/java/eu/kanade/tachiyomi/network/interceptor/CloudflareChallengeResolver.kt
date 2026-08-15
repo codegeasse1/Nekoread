@@ -28,6 +28,7 @@ internal class WebViewCloudflareChallengeResolver(
     private val mainExecutor: Executor,
     private val createWebView: (Request) -> WebView,
     private val parseHeaders: (Headers) -> Map<String, String>,
+    private val isWebViewOutdated: (WebView) -> Boolean,
 ) : CloudflareChallengeResolver {
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -38,6 +39,7 @@ internal class WebViewCloudflareChallengeResolver(
         var challengeFound = false
         var cloudflareBypassed = false
         var hasInteractiveWidget = false
+        var isWebViewOutdatedNow = false
 
         val origRequestUrl = originalRequest.url.toString()
         val headers = parseHeaders(originalRequest.headers)
@@ -102,6 +104,10 @@ internal class WebViewCloudflareChallengeResolver(
         }
 
         mainExecutor.execute {
+            if (!cloudflareBypassed) {
+                isWebViewOutdatedNow = webview?.let(isWebViewOutdated) == true
+            }
+
             webview?.run {
                 stopLoading()
                 destroy()
@@ -109,10 +115,16 @@ internal class WebViewCloudflareChallengeResolver(
         }
 
         if (!cloudflareBypassed) {
-            if (hasInteractiveWidget) {
+            if (isWebViewOutdatedNow) {
                 android.widget.Toast.makeText(
                     context,
-                    "Interactive Cloudflare challenge detected — tap the source's \"Verify in WebView\" button and complete it manually",
+                    "Your WebView is outdated — update it (Play Store → Android System WebView) to complete Cloudflare challenges",
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+            } else if (hasInteractiveWidget) {
+                android.widget.Toast.makeText(
+                    context,
+                    "Interactive Cloudflare challenge detected — open the source in WebView and complete it manually",
                     android.widget.Toast.LENGTH_LONG,
                 ).show()
                 throw CloudflareInteractiveChallengeException()
