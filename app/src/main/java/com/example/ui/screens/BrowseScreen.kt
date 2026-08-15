@@ -121,9 +121,10 @@ private fun loadApkIcon(context: android.content.Context, apkPath: String): Imag
     return try {
         val pm = context.packageManager
         val info = pm.getPackageArchiveInfo(apkPath, PackageManager.GET_META_DATA) ?: return null
-        info.applicationInfo.sourceDir = apkPath
-        info.applicationInfo.publicSourceDir = apkPath
-        val icon = info.applicationInfo.loadIcon(pm) ?: return null
+        val appInfo = info.applicationInfo ?: return null
+        appInfo.sourceDir = apkPath
+        appInfo.publicSourceDir = apkPath
+        val icon = appInfo.loadIcon(pm) ?: return null
         val w = if (icon.intrinsicWidth > 0) icon.intrinsicWidth else 96
         val h = if (icon.intrinsicHeight > 0) icon.intrinsicHeight else 96
         icon.toBitmap(w, h).asImageBitmap()
@@ -143,7 +144,7 @@ private fun ExtensionIconView(
     val context = LocalContext.current
     val apkIcon = remember(packageName) {
         if (packageName.isNotBlank()) {
-            loadApkIcon(context, File(context.filesDir, "extensions/$packageName.apk"))
+            loadApkIcon(context, File(context.filesDir, "extensions/$packageName.apk").absolutePath)
         } else {
             null
         }
