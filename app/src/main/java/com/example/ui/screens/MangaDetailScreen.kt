@@ -152,12 +152,18 @@ fun MangaDetailScreen(
         }
     }
 
-    val sortedChapters = remember(chapters, isSortAscending) {
-        if (isSortAscending) chapters.sortedBy { it.chapterNumber } else chapters.sortedByDescending { it.chapterNumber }
+    val readOrder = remember(chapters) {
+        // Extension chapters without a real chapter_number (TheBlank leaves the -1 default) can't
+        // be meaningfully sorted by number — fall back to upload date.
+        if (chapters.any { it.chapterNumber > 0f }) chapters.sortedBy { it.chapterNumber }
+        else chapters.sortedBy { it.dateUpload }
+    }
+    val sortedChapters = remember(chapters, isSortAscending, readOrder) {
+        if (isSortAscending) readOrder else readOrder.asReversed()
     }
 
-    val firstUnreadChapter = remember(chapters) {
-        chapters.sortedBy { it.chapterNumber }.firstOrNull { !it.read } ?: chapters.firstOrNull()
+    val firstUnreadChapter = remember(readOrder) {
+        readOrder.firstOrNull { !it.read } ?: readOrder.firstOrNull()
     }
 
     Scaffold(
@@ -197,7 +203,12 @@ fun MangaDetailScreen(
                         Icon(Icons.Default.PlayArrow, contentDescription = "Start Reading")
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (manga.lastReadChapterName != null) "Resume ${manga.lastReadChapterName}" else "Read Ch. ${firstUnreadChapter.chapterNumber.toInt()}",
+                            text = if (manga.lastReadChapterName != null) {
+                                "Resume ${manga.lastReadChapterName}"
+                            } else {
+                                val n = firstUnreadChapter?.chapterNumber ?: 0f
+                                if (n > 0f) "Read Ch. ${n.toInt()}" else "Read First Chapter"
+                            },
                             fontWeight = FontWeight.Bold
                         )
                     }
