@@ -40,6 +40,13 @@ interface MangaSource {
      * pages.
      */
     suspend fun getPageImageModels(rawChapterId: String): List<Any> = getPageUrls(rawChapterId)
+
+    /**
+     * Coil image model for a manga cover. Default: the plain URL. Extension sources override this
+     * to return [ExtensionCoverImage] so covers are fetched through the extension's client +
+     * headers (Referer/Origin), fixing blank cover tiles on hotlink-protected CDNs.
+     */
+    fun coverImageModel(coverUrl: String): Any = coverUrl
 }
 
 object SourceRegistry {
