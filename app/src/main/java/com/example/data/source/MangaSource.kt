@@ -1,5 +1,6 @@
 package com.example.data.source
 
+import android.util.Base64
 import com.example.data.extension.ExtensionDexLoader
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
@@ -47,6 +48,22 @@ interface MangaSource {
      * headers (Referer/Origin), fixing blank cover tiles on hotlink-protected CDNs.
      */
     fun coverImageModel(coverUrl: String): Any = coverUrl
+
+    /**
+     * Canonical web URL for a manga's page, used by the Cloudflare/site-verification WebView.
+     * Extension sources build it through their own URL scheme (e.g. TheBlank: "baseUrl/serie/{slug}");
+     * the default joins the stored URL onto [baseUrl]. May resolve via a network request, so call
+     * it off the main thread.
+     */
+    suspend fun getMangaWebUrl(fullMangaId: String): String = runCatching {
+        val raw = fullMangaId.substringAfter(":")
+        val decoded = String(Base64.decode(raw, Base64.URL_SAFE or Base64.NO_WRAP), Charsets.UTF_8)
+        if (decoded.startsWith("http://") || decoded.startsWith("https://")) {
+            decoded
+        } else {
+            baseUrl.trimEnd('/') + "/" + decoded.trimStart('/')
+        }
+    }.getOrDefault(baseUrl)
 }
 
 object SourceRegistry {
