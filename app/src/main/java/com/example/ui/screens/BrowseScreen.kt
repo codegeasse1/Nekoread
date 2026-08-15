@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,12 +61,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.content.pm.PackageManager
+import androidx.core.graphics.drawable.toBitmap
 import coil.compose.AsyncImage
 import com.example.data.local.ExtensionEntity
 import com.example.data.local.ExtensionRepoEntity
@@ -81,6 +87,7 @@ import com.example.ui.theme.GlassSurface
 import com.example.ui.theme.NekoGoldBadge
 import com.example.ui.theme.NekoVioletPrimary
 import kotlinx.coroutines.delay
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -104,6 +111,61 @@ private fun contentWarningLabel(cw: String): String? = when (cw) {
     "CONTENT_WARNING_EROTICA" -> "Erotica"
     "CONTENT_WARNING_PORN" -> "Porn"
     else -> cw.ifBlank { null }
+}
+
+/**
+ * Loads the extension's launcher icon straight from its stored APK (the same source Tadami shows)
+ * without installing it. Falls back to the repo index icon URL when no APK is present or readable.
+ */
+private fun loadApkIcon(context: android.content.Context, apkPath: String): ImageBitmap? {
+    return try {
+        val pm = context.packageManager
+        val info = pm.getPackageArchiveInfo(apkPath, PackageManager.GET_META_DATA) ?: return null
+        info.applicationInfo.sourceDir = apkPath
+        info.applicationInfo.publicSourceDir = apkPath
+        val icon = info.applicationInfo.loadIcon(pm) ?: return null
+        val w = if (icon.intrinsicWidth > 0) icon.intrinsicWidth else 96
+        val h = if (icon.intrinsicHeight > 0) icon.intrinsicHeight else 96
+        icon.toBitmap(w, h).asImageBitmap()
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+@Composable
+private fun ExtensionIconView(
+    packageName: String,
+    iconUrl: String,
+    name: String,
+    nsfw: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val apkIcon = remember(packageName) {
+        if (packageName.isNotBlank()) {
+            loadApkIcon(context, File(context.filesDir, "extensions/$packageName.apk"))
+        } else {
+            null
+        }
+    }
+    if (apkIcon != null) {
+        Image(bitmap = apkIcon, contentDescription = null, modifier = modifier)
+    } else if (iconUrl.isNotBlank()) {
+        AsyncImage(model = iconUrl, contentDescription = null, modifier = modifier)
+    } else {
+        Box(
+            modifier = modifier.background(if (nsfw) NekoGoldBadge else NekoVioletPrimary),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = name.take(1),
+                style = MaterialTheme.typography.titleMedium.copy(
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                ),
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -489,31 +551,14 @@ fun SourcesTabContent(
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (source.iconUrl.isNotBlank()) {
-                            AsyncImage(
-                                model = source.iconUrl,
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(NekoVioletPrimary),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = source.name.take(1),
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                )
-                            }
-                        }
+                        ExtensionIconView(
+                            packageName = source.extensionPkg,
+                            iconUrl = source.iconUrl,
+                            name = source.name,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        )
 
                         Spacer(modifier = Modifier.width(12.dp))
 
@@ -944,31 +989,15 @@ fun ExtensionsTabContent(
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (ext.iconUrl.isNotBlank()) {
-                                AsyncImage(
-                                    model = ext.iconUrl,
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(if (ext.nsfw) NekoGoldBadge else NekoVioletPrimary),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = ext.name.take(1),
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    )
-                                }
-                            }
+                            ExtensionIconView(
+                                packageName = ext.packageName,
+                                iconUrl = ext.iconUrl,
+                                name = ext.name,
+                                nsfw = ext.nsfw,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                            )
 
                             Spacer(modifier = Modifier.width(12.dp))
 
