@@ -1,6 +1,5 @@
 package com.example.ui.screens
 
-import android.util.Base64
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -55,6 +54,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,6 +74,9 @@ import com.example.data.local.MangaEntity
 import com.example.ui.MainViewModel
 import com.example.ui.theme.NekoGoldBadge
 import com.example.ui.theme.NekoVioletPrimary
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -125,30 +128,27 @@ fun MangaDetailScreen(
     var isDescriptionExpanded by remember { mutableStateOf(false) }
     var isSortAscending by remember { mutableStateOf(false) }
     var showCategoryDialog by remember { mutableStateOf(false) }
-    var showWebview by remember { mutableStateOf(false) }
 
     val categories: List<CategoryEntity> by viewModel.categories.collectAsStateWithLifecycle()
 
     // For extension sources, the manga page URL + the exact UA its requests send, so a manually
     // solved Cloudflare challenge binds a cf_clearance that the chapter/detail requests accept.
-    val verifyTarget = remember(manga.id) {
-        if (manga.id.startsWith("ext_")) {
-            runCatching {
-                val src = viewModel.repository.sourceForManga(manga.id)
-                val raw = manga.id.substringAfter(":")
-                val decoded = Base64.decode(raw, Base64.URL_SAFE or Base64.NO_WRAP).toString(Charsets.UTF_8)
-                // Manga urls are stored without a leading slash (and sometimes without a slash at
-                // all, e.g. TheBlank's "serie/capitalist-harem"), so join with a "/" or the
-                // WebView opens a broken URL like "https://theblank.netcapitalist-harem".
-                val url = if (decoded.startsWith("http://") || decoded.startsWith("https://")) {
-                    decoded
-                } else {
-                    src.baseUrl.trimEnd('/') + "/" + decoded.trimStart('/')
-                }
-                url to src.userAgent
-            }.getOrNull()
-        } else {
-            null
+    // The URL is built by the source itself via HttpSource.getMangaUrl — extensions store bare
+    // slugs/paths as the manga url (TheBlank stores "a-naughty" whose real page is
+    // "https://theblank.net/serie/a-naughty"), so a naive "baseUrl + '/' + url" join opens a 404.
+    // getMangaWebUrl may hit the network (TheBlank's getMangaUrl boots tokens), so resolve off
+    // the main thread when the button is tapped.
+    val isExtensionManga = remember(manga.id) { manga.id.startsWith("ext_") }
+    val scope = rememberCoroutineScope()
+    var webviewTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
+
+    fun openVerifyWebView() {
+        scope.launch {
+            val src = viewModel.repository.sourceForManga(manga.id)
+            val url = withContext(Dispatchers.IO) {
+                runCatching { src.getMangaWebUrl(manga.id) }.getOrDefault(src.baseUrl)
+            }
+            webviewTarget = url to src.userAgent
         }
     }
 
@@ -369,9 +369,9 @@ fun MangaDetailScreen(
 
                     // Cloudflare / site verification — some sources challenge the chapter/detail
                     // pages too, so open the manga's own page here and solve it.
-                    if (verifyTarget != null) {
+                    if (isExtensionManga) {
                         OutlinedButton(
-                            onClick = { showWebview = true },
+                            onClick = { openVerifyWebView() },
                             modifier = Modifier.testTag("detail_verify_webview_button")
                         ) {
                             Icon(Icons.Default.Language, contentDescription = "Verify in WebView")
@@ -552,12 +552,13 @@ fun MangaDetailScreen(
         )
     }
 
-    if (showWebview && verifyTarget != null) {
+    val target = webviewTarget
+    if (target != null) {
         WebViewDialog(
-            url = verifyTarget.first,
-            userAgent = verifyTarget.second,
+            url = target.first,
+            userAgent = target.second,
             onDismiss = {
-                showWebview = false
+                webviewTarget = null
                 // Re-fetch chapters/details after verification so the solved cookies take effect.
                 onRetry()
             }
