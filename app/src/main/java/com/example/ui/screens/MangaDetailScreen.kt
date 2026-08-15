@@ -137,7 +137,15 @@ fun MangaDetailScreen(
                 val src = viewModel.repository.sourceForManga(manga.id)
                 val raw = manga.id.substringAfter(":")
                 val decoded = Base64.decode(raw, Base64.URL_SAFE or Base64.NO_WRAP).toString(Charsets.UTF_8)
-                (src.baseUrl + decoded) to src.userAgent
+                // Manga urls are stored without a leading slash (and sometimes without a slash at
+                // all, e.g. TheBlank's "serie/capitalist-harem"), so join with a "/" or the
+                // WebView opens a broken URL like "https://theblank.netcapitalist-harem".
+                val url = if (decoded.startsWith("http://") || decoded.startsWith("https://")) {
+                    decoded
+                } else {
+                    src.baseUrl.trimEnd('/') + "/" + decoded.trimStart('/')
+                }
+                url to src.userAgent
             }.getOrNull()
         } else {
             null
