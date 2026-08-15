@@ -129,10 +129,19 @@ object ExtensionNetwork {
     private fun parseLegacyExtension(item: JSONObject, indexDir: String): ParsedExtension? {
         val pkg = optStr(item, "pkg", "packageName")
         if (pkg.isBlank()) return null
+
+        // Some repos (including codegeasse-mihon-extension) publish absolute http(s) URLs in
+        // the apk/icon fields rather than paths relative to the repo base dir — use them as-is.
+        fun abs(base: String, raw: String): String = when {
+            raw.isBlank() -> ""
+            raw.startsWith("http://") || raw.startsWith("https://") -> raw
+            else -> base + raw
+        }
+
         val apk = optStr(item, "apk")
-        val apkUrl = if (apk.isNotBlank()) indexDir + "/apk/" + apk else ""
+        val apkUrl = abs(indexDir + "/apk/", apk)
         val icon = optStr(item, "icon")
-        val iconUrl = if (icon.isNotBlank()) indexDir + "/" + icon else ""
+        val iconUrl = abs(indexDir + "/", icon)
         val sources = if (item.has("sources")) parseSources(item.getJSONArray("sources")) else emptyList()
         return ParsedExtension(
             packageName = pkg,
