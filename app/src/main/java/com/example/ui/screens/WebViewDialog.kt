@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -48,6 +49,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
+import kotlinx.coroutines.delay
 
 /**
  * Fullscreen overlay used for Cloudflare / DDoS-Guard / site verification, shown as a Dialog so
@@ -78,6 +80,7 @@ fun WebViewDialog(
     var progress by remember { mutableIntStateOf(0) }
     var canGoBack by remember { mutableStateOf(false) }
     var currentUrl by remember { mutableStateOf(url) }
+    var verified by remember { mutableStateOf(false) }
 
     val headers = remember(userAgent) {
         if (!userAgent.isNullOrBlank()) mapOf("User-Agent" to userAgent) else emptyMap()
@@ -250,6 +253,20 @@ fun WebViewDialog(
                         .testTag("webview_progress"),
                 )
 
+                if (verified) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(0xFF0D3B22),
+                    ) {
+                        Text(
+                            text = "Verification complete ✓",
+                            color = Color(0xFF7CF5A4),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+
                 AndroidView(
                     factory = { ctx ->
                         val frame = FrameLayout(ctx)
@@ -322,6 +339,24 @@ fun WebViewDialog(
 
     LaunchedEffect(mainWebView) {
         mainWebView?.loadUrl(url, headers)
+    }
+
+    // Auto-close the moment a fresh cf_clearance appears (the challenge is solved) so the caller's
+    // retry — which shares this cookie store — succeeds without the user hunting for a button.
+    LaunchedEffect(mainWebView) {
+        while (true) {
+            delay(600)
+            val wv = mainWebView ?: break
+            val current = wv.url ?: url
+            val cookies = runCatching { CookieManager.getInstance().getCookie(current) }.getOrNull()
+            if (cookies != null && cookies.contains("cf_clearance")) {
+                verified = true
+                CookieManager.getInstance().flush()
+                delay(1000)
+                onDismiss()
+                break
+            }
+        }
     }
 
     DisposableEffect(Unit) {
