@@ -44,6 +44,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import coil.Coil
 import coil.ImageLoader
+import com.example.data.source.ExtensionCoverImageFetcherFactory
 import com.example.data.source.ExtensionPageImageFetcherFactory
 import com.example.data.source.ExtensionPageImageKeyer
 import com.example.ui.MainViewModel
@@ -85,6 +86,7 @@ class MainActivity : ComponentActivity() {
                 .okHttpClient(NetworkHelper.getInstance().client)
                 .components {
                     add(ExtensionPageImageFetcherFactory())
+                    add(ExtensionCoverImageFetcherFactory())
                     add(ExtensionPageImageKeyer())
                 }
                 .crossfade(true)
