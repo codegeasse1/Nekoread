@@ -1,0 +1,306 @@
+Initialized native services in: /home/runner/.gradle/native
+Initialized jansi services in: /home/runner/.gradle/native
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Starting process 'Gradle build daemon'. Working directory: /home/runner/.gradle/daemon/9.3.1 Command: /usr/lib/jvm/temurin-17-jdk-amd64/bin/java --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-opens=java.base/java.nio.charset=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.xml/javax.xml.namespace=ALL-UNNAMED --add-opens=java.base/java.time=ALL-UNNAMED -Xmx4g -Dfile.encoding=UTF-8 -Duser.country -Duser.language=en -Duser.variant -cp /home/runner/.gradle/wrapper/dists/gradle-9.3.1-bin/23ovyewtku6u96viwx3xl3oks/gradle-9.3.1/lib/gradle-daemon-main-9.3.1.jar -javaagent:/home/runner/.gradle/wrapper/dists/gradle-9.3.1-bin/23ovyewtku6u96viwx3xl3oks/gradle-9.3.1/lib/agents/gradle-instrumentation-agent-9.3.1.jar org.gradle.launcher.daemon.bootstrap.GradleDaemon 9.3.1
+Successfully started process 'Gradle build daemon'
+An attempt to start the daemon took 1.494 secs.
+The client will now receive all logging from the daemon (pid: 2884). The daemon log file: /home/runner/.gradle/daemon/9.3.1/daemon-2884.out.log
+Daemon will be stopped at the end of the build 
+Using 4 worker leases.
+Operational build model parameters: {requiresToolingModels=false, parallelProjectExecution=true, configureOnDemand=false, configurationCache=false, configurationCacheParallelStore=false, configurationCacheParallelLoad=true, isolatedProjects=false, parallelProjectConfiguration=false, intermediateModelCache=false, parallelToolingApiActions=true, invalidateCoupledProjects=false, modelAsProjectDependency=false, resilientModelBuilding=false}
+Received JVM installation metadata from '/usr/lib/jvm/temurin-17-jdk-amd64': {JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64, JAVA_VERSION=17.0.20, JAVA_VENDOR=Eclipse Adoptium, RUNTIME_NAME=OpenJDK Runtime Environment, RUNTIME_VERSION=17.0.20+8, VM_NAME=OpenJDK 64-Bit Server VM, VM_VERSION=17.0.20+8, VM_VENDOR=Eclipse Adoptium, OS_ARCH=amd64}
+Watching the file system is configured to be enabled if available
+Now considering [/home/runner/work/Nekoread/Nekoread] as hierarchies to watch
+File system watching is active
+Starting Build
+Resolved plugin [id: 'org.gradle.toolchains.foojay-resolver-convention', version: '1.0.0']
+Settings evaluated using settings file '/home/runner/work/Nekoread/Nekoread/settings.gradle.kts'.
+Using local directory build cache for the root build (location = /home/runner/.gradle/caches/build-cache-1, remove unused entries = after 7 days).
+Caching disabled for generation of dependency accessors for libs because:
+  Not worth caching.
+Projects loaded. Root project using build file '/home/runner/work/Nekoread/Nekoread/build.gradle.kts'.
+Included projects: [root project 'NekoRead', project ':app']
+
+> Configure project :
+Evaluating root project 'NekoRead' using build file '/home/runner/work/Nekoread/Nekoread/build.gradle.kts'.
+Build cache key for Kotlin DSL version catalog plugin accessors for classpath '3b25c74c63d1cfe442ffbb25b8ff189b' is e75f86795557a637a4d2aed41bfb465b
+Stored cache entry for Kotlin DSL version catalog plugin accessors for classpath '3b25c74c63d1cfe442ffbb25b8ff189b' with cache key e75f86795557a637a4d2aed41bfb465b
+Build cache key for Kotlin DSL plugin specs accessors for classpath '3b25c74c63d1cfe442ffbb25b8ff189b' is 2a98e88567b73193fac8f31af18875fb
+Stored cache entry for Kotlin DSL plugin specs accessors for classpath '3b25c74c63d1cfe442ffbb25b8ff189b' with cache key 2a98e88567b73193fac8f31af18875fb
+Build cache key for Kotlin DSL script compilation (Project/TopLevel/stage1) is b28334047dbeabb56c117d6f608106e6
+Stored cache entry for Kotlin DSL script compilation (Project/TopLevel/stage1) with cache key b28334047dbeabb56c117d6f608106e6
+Resolved plugin [id: 'com.android.application', version: '9.1.1', apply: false]
+Resolved plugin [id: 'org.jetbrains.kotlin.plugin.compose', version: '2.2.10', apply: false]
+Resolved plugin [id: 'com.google.devtools.ksp', version: '2.2.10-2.0.2', apply: false]
+Resolved plugin [id: 'io.github.takahirom.roborazzi', version: '1.59.0', apply: false]
+Resolved plugin [id: 'com.google.android.libraries.mapsplatform.secrets-gradle-plugin', version: '2.0.1', apply: false]
+Resolved plugin [id: 'com.google.gms.google-services', version: '4.5.0', apply: false]
+
+> Configure project :app
+Evaluating project ':app' using build file '/home/runner/work/Nekoread/Nekoread/app/build.gradle.kts'.
+Build cache key for Kotlin DSL script compilation (Project/TopLevel/stage1) is f43f70cd1fbf31883ad435099b6a7b04
+Stored cache entry for Kotlin DSL script compilation (Project/TopLevel/stage1) with cache key f43f70cd1fbf31883ad435099b6a7b04
+Resolved plugin [id: 'com.android.application', version: '9.1.1']
+Resolved plugin [id: 'org.jetbrains.kotlin.plugin.compose', version: '2.2.10']
+Resolved plugin [id: 'com.google.devtools.ksp', version: '2.2.10-2.0.2']
+Resolved plugin [id: 'io.github.takahirom.roborazzi', version: '1.59.0']
+Resolved plugin [id: 'com.google.android.libraries.mapsplatform.secrets-gradle-plugin', version: '2.0.1']
+Resolved plugin [id: 'com.google.gms.google-services', version: '4.5.0']
+WARNING: The option setting 'android.disallowKotlinSourceSets=false' is experimental.
+The current default is 'true'.
+Build ec8ac1bd-b8b6-46a2-bd8a-66a10c9e1642 is started
+Using default execution profile
+Build cache key for Kotlin DSL accessors for project ':app' is 3e572e49a040461d050429753b53a170
+Stored cache entry for Kotlin DSL accessors for project ':app' with cache key 3e572e49a040461d050429753b53a170
+Build cache key for Kotlin DSL script compilation (Project/TopLevel/stage2) is 01a54ede693a4b823dfb53d343e09212
+Stored cache entry for Kotlin DSL script compilation (Project/TopLevel/stage2) with cache key 01a54ede693a4b823dfb53d343e09212
+Detected Android Gradle Plugin compose compiler configuration
+Detected Android Gradle Plugin compose compiler configuration
+Detected Android Gradle Plugin compose compiler configuration
+Detected Android Gradle Plugin compose compiler configuration
+All projects evaluated.
+Task path ':app:assembleDebug' matched project ':app'
+Task name matched 'assembleDebug'
+Selected primary task 'assembleDebug' from project :app
+Adding -Xuse-inline-scopes-numbers Kotlin compiler flag for task :app:compileDebugKotlin
+Tasks to be executed: [task ':app:preBuild', task ':app:preDebugBuild', task ':app:mergeDebugNativeDebugMetadata', task ':app:generateDebugBuildConfig', task ':app:generateDebugResources', task ':app:processDebugGoogleServices', task ':app:packageDebugResources', task ':app:processDebugNavigationResources', task ':app:parseDebugLocalResources', task ':app:generateDebugRFile', task ':app:kspDebugKotlin', task ':app:compileDebugKotlin', task ':app:javaPreCompileDebug', task ':app:compileDebugJavaWithJavac', task ':app:generateDebugAssets', task ':app:mergeDebugAssets', task ':app:compressDebugAssets', task ':app:processDebugJavaRes', task ':app:mergeDebugJavaResource', task ':app:checkDebugDuplicateClasses', task ':app:desugarDebugFileDependencies', task ':app:mergeExtDexDebug', task ':app:mergeLibDexDebug', task ':app:checkDebugAarMetadata', task ':app:mapDebugSourceSetPaths', task ':app:compileDebugNavigationResources', task ':app:mergeDebugResources', task ':app:createDebugCompatibleScreenManifests', task ':app:extractDeepLinksDebug', task ':app:processDebugMainManifest', task ':app:processDebugManifest', task ':app:processDebugManifestForPackage', task ':app:processDebugResources', task ':app:dexBuilderDebug', task ':app:mergeProjectDexDebug', task ':app:mergeDebugJniLibFolders', task ':app:mergeDebugNativeLibs', task ':app:stripDebugDebugSymbols', task ':app:validateSigningDebug', task ':app:writeDebugAppMetadata', task ':app:writeDebugSigningConfigVersions', task ':app:packageDebug', task ':app:createDebugApkListingFileRedirect', task ':app:assembleDebug']
+Tasks that were excluded: []
+Resolve mutations for :app:preBuild (Thread[Execution worker,5,main]) started.
+:app:preBuild (Thread[Execution worker,5,main]) started.
+
+> Task :app:preBuild UP-TO-DATE
+Skipping task ':app:preBuild' as it has no actions.
+Resolve mutations for :app:preDebugBuild (Thread[Execution worker,5,main]) started.
+:app:preDebugBuild (Thread[Execution worker,5,main]) started.
+
+> Task :app:preDebugBuild UP-TO-DATE
+Skipping task ':app:preDebugBuild' as it has no actions.
+Resolve mutations for :app:mergeDebugNativeDebugMetadata (Thread[Execution worker,5,main]) started.
+:app:mergeDebugNativeDebugMetadata (Thread[included builds,5,main]) started.
+
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+Skipping task ':app:mergeDebugNativeDebugMetadata' as it has no source files and no previous output files.
+Resolve mutations for :app:generateDebugBuildConfig (Thread[included builds,5,main]) started.
+:app:generateDebugBuildConfig (Thread[Execution worker,5,main]) started.
+
+> Task :app:generateDebugBuildConfig
+Build cache key for task ':app:generateDebugBuildConfig' is 8ea6d37c27d78d1ca4714693a74efae0
+Task ':app:generateDebugBuildConfig' is not up-to-date because:
+  No history is available.
+Stored cache entry for task ':app:generateDebugBuildConfig' with cache key 8ea6d37c27d78d1ca4714693a74efae0
+Resolve mutations for :app:generateDebugResources (Thread[Execution worker,5,main]) started.
+:app:generateDebugResources (Thread[Execution worker,5,main]) started.
+
+> Task :app:generateDebugResources
+Build cache key for task ':app:generateDebugResources' is a6b09f30e882dd03071e54ae73887c38
+Task ':app:generateDebugResources' is not up-to-date because:
+  No history is available.
+Stored cache entry for task ':app:generateDebugResources' with cache key a6b09f30e882dd03071e54ae73887c38
+Resolve mutations for :app:processDebugGoogleServices (Thread[Execution worker,5,main]) started.
+:app:processDebugGoogleServices (Thread[Execution worker,5,main]) started.
+
+> Task :app:processDebugGoogleServices
+Build cache key for task ':app:processDebugGoogleServices' is b94920e28a4809442abfa07e90e14fc8
+Task ':app:processDebugGoogleServices' is not up-to-date because:
+  No history is available.
+File google-services.json is missing.
+The Google Services Plugin cannot function without it.
+Searched locations: /home/runner/work/Nekoread/Nekoread/app/src/debug/google-services.json, /home/runner/work/Nekoread/Nekoread/app/src/debug/google-services.json, /home/runner/work/Nekoread/Nekoread/app/src/google-services.json, /home/runner/work/Nekoread/Nekoread/app/src/debug/google-services.json, /home/runner/work/Nekoread/Nekoread/app/src/Debug/google-services.json, /home/runner/work/Nekoread/Nekoread/app/google-services.json
+Stored cache entry for task ':app:processDebugGoogleServices' with cache key b94920e28a4809442abfa07e90e14fc8
+Resolve mutations for :app:packageDebugResources (Thread[Execution worker,5,main]) started.
+:app:packageDebugResources (Thread[Execution worker,5,main]) started.
+
+> Task :app:packageDebugResources
+Build cache key for task ':app:packageDebugResources' is 0fe9aa39b935d51e80a99d32cfb81d8a
+Task ':app:packageDebugResources' is not up-to-date because:
+  No history is available.
+The input changes require a full rebuild for incremental task ':app:packageDebugResources'.
+[MergeResources] Inputs are non-incremental full task action.
+Stored cache entry for task ':app:packageDebugResources' with cache key 0fe9aa39b935d51e80a99d32cfb81d8a
+Resolve mutations for :app:processDebugNavigationResources (Thread[Execution worker,5,main]) started.
+:app:processDebugNavigationResources (Thread[Execution worker,5,main]) started.
+
+> Task :app:processDebugNavigationResources FAILED
+Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/squareup/okhttp3/okhttp/5.4.0/okhttp-5.4.0.pom]
+Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/squareup/okhttp3/okhttp-brotli/5.4.0/okhttp-brotli-5.4.0.pom]
+Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/squareup/okhttp3/logging-interceptor/5.4.0/logging-interceptor-5.4.0.pom]
+Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/squareup/okhttp3/okhttp-zstd/5.4.0/okhttp-zstd-5.4.0.pom]
+Downloading https://repo.maven.apache.org/maven2/com/squareup/okhttp3/okhttp-zstd/5.4.0/okhttp-zstd-5.4.0.pom to /home/runner/.gradle/.tmp/gradle_download6173642393587138911bin
+Downloading https://repo.maven.apache.org/maven2/com/squareup/okhttp3/okhttp/5.4.0/okhttp-5.4.0.pom to /home/runner/.gradle/.tmp/gradle_download3517435540341990456bin
+Downloading https://repo.maven.apache.org/maven2/com/squareup/okhttp3/okhttp-brotli/5.4.0/okhttp-brotli-5.4.0.pom to /home/runner/.gradle/.tmp/gradle_download12779373877816624529bin
+Downloading https://repo.maven.apache.org/maven2/com/squareup/okhttp3/logging-interceptor/5.4.0/logging-interceptor-5.4.0.pom to /home/runner/.gradle/.tmp/gradle_download12104671120358095700bin
+Downloading https://repo.maven.apache.org/maven2/com/squareup/okhttp3/okhttp/5.4.0/okhttp-5.4.0.module to /home/runner/.gradle/.tmp/gradle_download5670126572658221073bin
+Downloading https://repo.maven.apache.org/maven2/com/squareup/okhttp3/okhttp-zstd/5.4.0/okhttp-zstd-5.4.0.module to /home/runner/.gradle/.tmp/gradle_download8314699934627036607bin
+Downloading https://repo.maven.apache.org/maven2/com/squareup/okhttp3/okhttp-brotli/5.4.0/okhttp-brotli-5.4.0.module to /home/runner/.gradle/.tmp/gradle_download17398149395626805431bin
+Downloading https://repo.maven.apache.org/maven2/com/squareup/okhttp3/logging-interceptor/5.4.0/logging-interceptor-5.4.0.module to /home/runner/.gradle/.tmp/gradle_download2119750629702866186bin
+Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/org/jsoup/jsoup/1.19.1/jsoup-1.19.1.pom]
+Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/squareup/okio/okio-zstd/3.10.2/okio-zstd-3.10.2.pom]
+Downloading https://repo.maven.apache.org/maven2/org/jsoup/jsoup/1.19.1/jsoup-1.19.1.pom to /home/runner/.gradle/.tmp/gradle_download15514276922920676187bin
+Resource missing. [HTTP GET: https://repo.maven.apache.org/maven2/com/squareup/okio/okio-zstd/3.10.2/okio-zstd-3.10.2.pom]
+Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/squareup/okhttp3/okhttp-android/5.4.0/okhttp-android-5.4.0.pom]
+Downloading https://repo.maven.apache.org/maven2/com/squareup/okhttp3/okhttp-android/5.4.0/okhttp-android-5.4.0.pom to /home/runner/.gradle/.tmp/gradle_download13616170175554181283bin
+Downloading https://repo.maven.apache.org/maven2/com/squareup/okhttp3/okhttp-android/5.4.0/okhttp-android-5.4.0.module to /home/runner/.gradle/.tmp/gradle_download11575757361019526502bin
+Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/org/brotli/dec/0.1.2/dec-0.1.2.pom]
+Downloading https://repo.maven.apache.org/maven2/org/brotli/dec/0.1.2/dec-0.1.2.pom to /home/runner/.gradle/.tmp/gradle_download2394294773295565513bin
+Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/org/brotli/parent/0.1.2/parent-0.1.2.pom]
+Downloading https://repo.maven.apache.org/maven2/org/brotli/parent/0.1.2/parent-0.1.2.pom to /home/runner/.gradle/.tmp/gradle_download8220463250573689203bin
+Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/squareup/zstd/zstd-kmp-okio/0.4.0/zstd-kmp-okio-0.4.0.pom]
+Downloading https://repo.maven.apache.org/maven2/com/squareup/zstd/zstd-kmp-okio/0.4.0/zstd-kmp-okio-0.4.0.pom to /home/runner/.gradle/.tmp/gradle_download14823533047869688256bin
+Downloading https://repo.maven.apache.org/maven2/com/squareup/zstd/zstd-kmp-okio/0.4.0/zstd-kmp-okio-0.4.0.module to /home/runner/.gradle/.tmp/gradle_download8722333078967560156bin
+Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/squareup/okio/okio/3.17.0/okio-3.17.0.pom]
+Downloading https://repo.maven.apache.org/maven2/com/squareup/okio/okio/3.17.0/okio-3.17.0.pom to /home/runner/.gradle/.tmp/gradle_download1726223429148994843bin
+Downloading https://repo.maven.apache.org/maven2/com/squareup/okio/okio/3.17.0/okio-3.17.0.module to /home/runner/.gradle/.tmp/gradle_download9288531033809605332bin
+Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.2.21/kotlin-stdlib-2.2.21.pom]
+Downloading https://dl.google.com/dl/android/maven2/androidx/annotation/annotation/1.10.0/annotation-1.10.0.pom to /home/runner/.gradle/.tmp/gradle_download7356650363200411430bin
+Downloading https://dl.google.com/dl/android/maven2/androidx/annotation/annotation/1.10.0/annotation-1.10.0.module to /home/runner/.gradle/.tmp/gradle_download10009178422603701608bin
+Downloading https://dl.google.com/dl/android/maven2/androidx/startup/startup-runtime/1.2.0/startup-runtime-1.2.0.pom to /home/runner/.gradle/.tmp/gradle_download12705693024656269786bin
+Downloading https://dl.google.com/dl/android/maven2/androidx/startup/startup-runtime/1.2.0/startup-runtime-1.2.0.module to /home/runner/.gradle/.tmp/gradle_download8750137057904273716bin
+Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/squareup/zstd/zstd-kmp-okio-android/0.4.0/zstd-kmp-okio-android-0.4.0.pom]
+Downloading https://repo.maven.apache.org/maven2/com/squareup/zstd/zstd-kmp-okio-android/0.4.0/zstd-kmp-okio-android-0.4.0.pom to /home/runner/.gradle/.tmp/gradle_download16090368316721060136bin
+Downloading https://repo.maven.apache.org/maven2/com/squareup/zstd/zstd-kmp-okio-android/0.4.0/zstd-kmp-okio-android-0.4.0.module to /home/runner/.gradle/.tmp/gradle_download6028146601274926700bin
+Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/squareup/okio/okio-jvm/3.17.0/okio-jvm-3.17.0.pom]
+Downloading https://repo.maven.apache.org/maven2/com/squareup/okio/okio-jvm/3.17.0/okio-jvm-3.17.0.pom to /home/runner/.gradle/.tmp/gradle_download14279497677517869780bin
+Downloading https://repo.maven.apache.org/maven2/com/squareup/okio/okio-jvm/3.17.0/okio-jvm-3.17.0.module to /home/runner/.gradle/.tmp/gradle_download3309271053478723436bin
+Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/org/jetbrains/kotlin/kotlin-stdlib-common/2.2.21/kotlin-stdlib-common-2.2.21.pom]
+Downloading https://dl.google.com/dl/android/maven2/androidx/annotation/annotation-jvm/1.10.0/annotation-jvm-1.10.0.pom to /home/runner/.gradle/.tmp/gradle_download10768363094556605070bin
+Downloading https://dl.google.com/dl/android/maven2/androidx/annotation/annotation-jvm/1.10.0/annotation-jvm-1.10.0.module to /home/runner/.gradle/.tmp/gradle_download17250697323106670096bin
+Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/squareup/zstd/zstd-kmp/0.4.0/zstd-kmp-0.4.0.pom]
+Downloading https://repo.maven.apache.org/maven2/com/squareup/zstd/zstd-kmp/0.4.0/zstd-kmp-0.4.0.pom to /home/runner/.gradle/.tmp/gradle_download12443800732028276921bin
+Downloading https://repo.maven.apache.org/maven2/com/squareup/zstd/zstd-kmp/0.4.0/zstd-kmp-0.4.0.module to /home/runner/.gradle/.tmp/gradle_download7631034923615754434bin
+Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/squareup/zstd/zstd-kmp-android/0.4.0/zstd-kmp-android-0.4.0.pom]
+Downloading https://repo.maven.apache.org/maven2/com/squareup/zstd/zstd-kmp-android/0.4.0/zstd-kmp-android-0.4.0.pom to /home/runner/.gradle/.tmp/gradle_download1944832589041491462bin
+Downloading https://repo.maven.apache.org/maven2/com/squareup/zstd/zstd-kmp-android/0.4.0/zstd-kmp-android-0.4.0.module to /home/runner/.gradle/.tmp/gradle_download4043984162997783611bin
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_3-1786784425698.json
+Build ec8ac1bd-b8b6-46a2-bd8a-66a10c9e1642 is closed
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:processDebugNavigationResources'.
+> Could not resolve all files for configuration ':app:debugRuntimeClasspath'.
+   > Could not find com.squareup.okio:okio-zstd:3.10.2.
+     Searched in the following locations:
+       - https://dl.google.com/dl/android/maven2/com/squareup/okio/okio-zstd/3.10.2/okio-zstd-3.10.2.pom
+       - https://repo.maven.apache.org/maven2/com/squareup/okio/okio-zstd/3.10.2/okio-zstd-3.10.2.pom
+     Required by:
+         project ':app'
+
+* Try:
+> Run with --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+* Exception is:
+org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:processDebugNavigationResources'.
+	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:38)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.executeTask(EventFiringTaskExecuter.java:77)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(EventFiringTaskExecuter.java:55)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(EventFiringTaskExecuter.java:52)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:209)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:204)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:166)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter.execute(EventFiringTaskExecuter.java:52)
+	at org.gradle.execution.plan.DefaultNodeExecutor.executeLocalTaskNode(DefaultNodeExecutor.java:55)
+	at org.gradle.execution.plan.DefaultNodeExecutor.execute(DefaultNodeExecutor.java:34)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$InvokeNodeExecutorsAction.execute(DefaultTaskExecutionGraph.java:355)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$InvokeNodeExecutorsAction.execute(DefaultTaskExecutionGraph.java:343)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.lambda$execute$0(DefaultTaskExecutionGraph.java:339)
+	at org.gradle.internal.operations.CurrentBuildOperationRef.with(CurrentBuildOperationRef.java:84)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(DefaultTaskExecutionGraph.java:339)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(DefaultTaskExecutionGraph.java:328)
+	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.execute(DefaultPlanExecutor.java:459)
+	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.run(DefaultPlanExecutor.java:376)
+	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)
+	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:47)
+Caused by: org.gradle.api.internal.artifacts.ivyservice.TypedResolveException: Could not resolve all files for configuration ':app:debugRuntimeClasspath'.
+	at org.gradle.api.internal.artifacts.ResolveExceptionMapper.mapFailure(ResolveExceptionMapper.java:73)
+	at org.gradle.api.internal.artifacts.ResolveExceptionMapper.mapFailures(ResolveExceptionMapper.java:65)
+	at org.gradle.api.internal.artifacts.configurations.DefaultConfiguration$DefaultResolutionHost.consolidateFailures(DefaultConfiguration.java:1740)
+	at org.gradle.api.internal.artifacts.configurations.ResolutionHost.rethrowFailuresAndReportProblems(ResolutionHost.java:75)
+	at org.gradle.api.internal.artifacts.configurations.ResolutionBackedFileCollection.maybeThrowResolutionFailures(ResolutionBackedFileCollection.java:86)
+	at org.gradle.api.internal.artifacts.configurations.ResolutionBackedFileCollection.visitContents(ResolutionBackedFileCollection.java:76)
+	at org.gradle.api.internal.file.AbstractFileCollection.visitStructure(AbstractFileCollection.java:361)
+	at org.gradle.api.internal.file.collections.DefaultConfigurableFileCollection.lambda$calculateFinalizedValue$1(DefaultConfigurableFileCollection.java:423)
+	at org.gradle.api.internal.file.collections.UnpackingVisitor.add(UnpackingVisitor.java:66)
+	at org.gradle.api.internal.file.collections.DefaultConfigurableFileCollection$UnresolvedItemsCollector.visitContents(DefaultConfigurableFileCollection.java:635)
+	at org.gradle.api.internal.file.collections.DefaultConfigurableFileCollection.calculateFinalizedValue(DefaultConfigurableFileCollection.java:423)
+	at org.gradle.api.internal.file.collections.DefaultConfigurableFileCollection.finalizeNow(DefaultConfigurableFileCollection.java:125)
+	at org.gradle.api.internal.file.collections.DefaultConfigurableFileCollection.lambda$visitChildren$2(DefaultConfigurableFileCollection.java:447)
+	at org.gradle.api.internal.provider.ValueState.finalizeOnReadIfNeeded(ValueState.java:142)
+	at org.gradle.api.internal.file.collections.DefaultConfigurableFileCollection.visitChildren(DefaultConfigurableFileCollection.java:447)
+	at org.gradle.api.internal.file.CompositeFileCollection.visitContents(CompositeFileCollection.java:112)
+	at org.gradle.api.internal.file.AbstractFileCollection.visitStructure(AbstractFileCollection.java:361)
+	at org.gradle.api.internal.file.CompositeFileCollection.lambda$visitContents$0(CompositeFileCollection.java:112)
+	at org.gradle.api.internal.file.collections.UnpackingVisitor.add(UnpackingVisitor.java:66)
+	at org.gradle.api.internal.file.collections.UnpackingVisitor.add(UnpackingVisitor.java:91)
+	at org.gradle.api.internal.file.DefaultFileCollectionFactory$ResolvingFileCollection.visitChildren(DefaultFileCollectionFactory.java:311)
+	at org.gradle.api.internal.file.CompositeFileCollection.visitContents(CompositeFileCollection.java:112)
+	at org.gradle.api.internal.file.AbstractFileCollection.visitStructure(AbstractFileCollection.java:361)
+	at org.gradle.api.internal.file.CompositeFileCollection.lambda$visitContents$0(CompositeFileCollection.java:112)
+	at org.gradle.api.internal.tasks.PropertyFileCollection.visitChildren(PropertyFileCollection.java:48)
+	at org.gradle.api.internal.file.CompositeFileCollection.visitContents(CompositeFileCollection.java:112)
+	at org.gradle.api.internal.file.AbstractFileCollection.visitStructure(AbstractFileCollection.java:361)
+	at org.gradle.internal.fingerprint.impl.DefaultFileCollectionSnapshotter.snapshot(DefaultFileCollectionSnapshotter.java:48)
+	at org.gradle.internal.execution.impl.DefaultInputFingerprinter$InputCollectingVisitor.visitInputFileProperty(DefaultInputFingerprinter.java:151)
+	at org.gradle.api.internal.tasks.execution.TaskExecution.visitMutableInputs(TaskExecution.java:340)
+	at org.gradle.internal.execution.impl.DefaultInputFingerprinter.fingerprintInputProperties(DefaultInputFingerprinter.java:77)
+	at org.gradle.internal.execution.steps.AbstractCaptureStateBeforeExecutionStep.captureExecutionStateWithOutputs(AbstractCaptureStateBeforeExecutionStep.java:123)
+	at org.gradle.internal.execution.steps.AbstractCaptureStateBeforeExecutionStep.lambda$captureExecutionState$0(AbstractCaptureStateBeforeExecutionStep.java:88)
+	at org.gradle.internal.execution.steps.BuildOperationStep$1.call(BuildOperationStep.java:38)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:209)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:204)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:166)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+	at org.gradle.internal.execution.steps.BuildOperationStep.operation(BuildOperationStep.java:35)
+	at org.gradle.internal.execution.steps.AbstractCaptureStateBeforeExecutionStep.captureExecutionState(AbstractCaptureStateBeforeExecutionStep.java:83)
+	at org.gradle.internal.execution.steps.AbstractCaptureStateBeforeExecutionStep.execute(AbstractCaptureStateBeforeExecutionStep.java:66)
+	at org.gradle.internal.execution.steps.AbstractCaptureStateBeforeExecutionStep.execute(AbstractCaptureStateBeforeExecutionStep.java:46)
+	at org.gradle.internal.execution.steps.AbstractSkipEmptyWorkStep.executeWithNonEmptySources(AbstractSkipEmptyWorkStep.java:133)
+	at org.gradle.internal.execution.steps.AbstractSkipEmptyWorkStep.execute(AbstractSkipEmptyWorkStep.java:59)
+	at org.gradle.internal.execution.steps.AbstractSkipEmptyWorkStep.execute(AbstractSkipEmptyWorkStep.java:36)
+	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsStartedStep.execute(MarkSnapshottingInputsStartedStep.java:38)
+	at org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.execute(LoadPreviousExecutionStateStep.java:36)
+	at org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.execute(LoadPreviousExecutionStateStep.java:23)
+	at org.gradle.internal.execution.steps.HandleStaleOutputsStep.executeMutable(HandleStaleOutputsStep.java:77)
+	at org.gradle.internal.execution.steps.HandleStaleOutputsStep.executeMutable(HandleStaleOutputsStep.java:43)
+	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:25)
+	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.lambda$execute$0(AssignMutableWorkspaceStep.java:35)
+	at org.gradle.api.internal.tasks.execution.TaskExecution$4.withWorkspace(TaskExecution.java:305)
+	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.execute(AssignMutableWorkspaceStep.java:31)
+	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.execute(AssignMutableWorkspaceStep.java:22)
+	at org.gradle.internal.execution.steps.ChoosePipelineStep.execute(ChoosePipelineStep.java:40)
+	at org.gradle.internal.execution.steps.ChoosePipelineStep.execute(ChoosePipelineStep.java:23)
+	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.lambda$execute$2(ExecuteWorkBuildOperationFiringStep.java:67)
+	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(ExecuteWorkBuildOperationFiringStep.java:67)
+	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(ExecuteWorkBuildOperationFiringStep.java:39)
+	at org.gradle.internal.execution.steps.IdentityCacheStep.execute(IdentityCacheStep.java:46)
+	at org.gradle.internal.execution.steps.IdentityCacheStep.execute(IdentityCacheStep.java:34)
+	at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:44)
+	at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:31)
+	at org.gradle.internal.execution.impl.DefaultExecutionEngine$1.execute(DefaultExecutionEngine.java:68)
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:132)
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.execute(ExecuteActionsTaskExecuter.java:121)
+	at org.gradle.api.internal.tasks.execution.ProblemsTaskPathTrackingTaskExecuter.execute(ProblemsTaskPathTrackingTaskExecuter.java:41)
+	at org.gradle.api.internal.tasks.execution.FinalizePropertiesTaskExecuter.execute(FinalizePropertiesTaskExecuter.java:46)
+	at org.gradle.api.internal.tasks.execution.ResolveTaskExecutionModeExecuter.execute(ResolveTaskExecutionModeExecuter.java:51)
+	at org.gradle.api.internal.tasks.execution.SkipTaskWithNoActionsExecuter.execute(SkipTaskWithNoActionsExecuter.java:57)
+	at org.gradle.api.internal.tasks.execution.SkipOnlyIfTaskExecuter.execute(SkipOnlyIfTaskExecuter.java:74)
+	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
+	... 23 more
+Caused by: org.gradle.internal.resolve.ModuleVersionNotFoundException: Could not find com.squareup.okio:okio-zstd:3.10.2.
+Searched in the following locations:
+  - https://dl.google.com/dl/android/maven2/com/squareup/okio/okio-zstd/3.10.2/okio-zstd-3.10.2.pom
+  - https://repo.maven.apache.org/maven2/com/squareup/okio/okio-zstd/3.10.2/okio-zstd-3.10.2.pom
+Required by:
+    project ':app'
+
+
+BUILD FAILED in 24s
+5 actionable tasks: 5 executed
