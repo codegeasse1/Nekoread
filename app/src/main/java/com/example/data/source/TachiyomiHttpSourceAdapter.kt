@@ -5,12 +5,15 @@ import com.example.data.extension.ExtensionDexLoader
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import java.io.File
+import java.io.IOException
 
 /**
  * Bridges a DexClassLoader-loaded Tachiyomi [HttpSource] (from an installed extension APK) onto
@@ -153,6 +156,39 @@ class TachiyomiHttpSourceAdapter(
             page.imageUrl = url
             ExtensionPageImage(page.url, url, ext)
         }
+    }
+
+    override suspend fun getPageDescriptors(rawChapterId: String): List<MangaSource.PageDescriptor> =
+        withContext(Dispatchers.IO) {
+            loading("pages") { ext.getPageList(ch(rawChapterId)) }
+                .map { page ->
+                    val url = page.imageUrl ?: ext.getImageUrl(page)
+                    page.imageUrl = url
+                    MangaSource.PageDescriptor(page.url, url)
+                }
+        }
+
+    /** Downloads one page through the extension's own getImage() (exact Tadami path: the source's
+     *  imageRequest headers + client), so hotlink-protected CDNs and signed URLs work. */
+    override suspend fun downloadPageImage(
+        page: MangaSource.PageDescriptor,
+        target: File,
+    ): File = withContext(Dispatchers.IO) {
+        val spage = Page(0, url = page.pageUrl, imageUrl = page.imageUrl)
+        val response = ext.getImage(spage)
+        val body = response.body ?: throw IOException("Empty image body for ${page.imageUrl.take(80)}")
+        try {
+            if (!response.isSuccessful) {
+                throw IOException("HTTP ${response.code} for ${page.imageUrl.take(80)}")
+            }
+            target.parentFile?.mkdirs()
+            body.byteStream().use { input ->
+                target.outputStream().use { out -> input.copyTo(out) }
+            }
+        } finally {
+            body.close()
+        }
+        target
     }
 
     /** Covers go through the extension's own client + headers, so hotlink-protected CDNs accept them. */
