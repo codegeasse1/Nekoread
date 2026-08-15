@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.app.Activity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -20,7 +21,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -83,7 +86,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -264,6 +270,15 @@ fun ReaderScreen(
     }
 
     val contentTextColor = if (readerBg == ReaderBg.CREAM || readerBg == ReaderBg.WHITE) Color.Black else Color.White
+
+    // The reader draws fullscreen behind the system bars, so the status-bar icons must follow
+    // the reader background (light reader -> dark icons, dark reader -> light icons).
+    val view = LocalView.current
+    LaunchedEffect(bgColor) {
+        val window = (view.context as? Activity)?.window ?: return@LaunchedEffect
+        WindowCompat.getInsetsController(window, window.decorView)
+            .isAppearanceLightStatusBars = readerBg == ReaderBg.CREAM || readerBg == ReaderBg.WHITE
+    }
 
     // Webtoon Vertical List State — keyed on the chapter so switching chapters resets the scroll
     // to the new chapter's start (a stale index from a long previous list landed mid/end of the
@@ -798,7 +813,8 @@ fun ReaderScreen(
         ) {
             Surface(
                 color = Color(0xD9161926),
-                contentColor = Color.White
+                contentColor = Color.White,
+                modifier = Modifier.statusBarsPadding()
             ) {
                 TopAppBar(
                     windowInsets = WindowInsets(0),
@@ -849,7 +865,8 @@ fun ReaderScreen(
         ) {
             Surface(
                 color = Color(0xD9161926),
-                contentColor = Color.White
+                contentColor = Color.White,
+                modifier = Modifier.navigationBarsPadding()
             ) {
                 Column(
                     modifier = Modifier
