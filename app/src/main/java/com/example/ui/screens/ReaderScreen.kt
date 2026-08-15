@@ -757,15 +757,17 @@ fun ReaderScreen(
                         value = sliderDragPage ?: if (readerMode == ReaderMode.WEBTOON) pageInChapter.toFloat() else currentPage.toFloat(),
                         onValueChange = { sliderDragPage = it },
                         onValueChangeFinished = {
-                            val p = sliderDragPage ?: return@onValueChangeFinished
+                            val p = sliderDragPage
                             sliderDragPage = null
-                            val targetPage = p.toInt() - 1
-                            coroutineScope.launch {
-                                if (readerMode == ReaderMode.WEBTOON) {
-                                    val maxIdx = (entries.size - 1).coerceAtLeast(0)
-                                    listState.scrollToItem(((visibleRange?.start ?: 0) + targetPage).coerceIn(0, maxIdx))
-                                } else {
-                                    pagerState.scrollToPage(targetPage.coerceIn(0, (pages?.size ?: 1) - 1))
+                            if (p != null) {
+                                val targetPage = p.toInt() - 1
+                                coroutineScope.launch {
+                                    if (readerMode == ReaderMode.WEBTOON) {
+                                        val maxIdx = (entries.size - 1).coerceAtLeast(0)
+                                        listState.scrollToItem(((visibleRange?.start ?: 0) + targetPage).coerceIn(0, maxIdx))
+                                    } else {
+                                        pagerState.scrollToPage(targetPage.coerceIn(0, (pages?.size ?: 1) - 1))
+                                    }
                                 }
                             }
                         },
