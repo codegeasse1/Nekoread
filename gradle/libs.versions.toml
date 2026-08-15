@@ -15,14 +15,14 @@ navigationCompose = "2.8.9"
 roomRuntime = "2.7.0"
 roomKtx = "2.7.0"
 roomCompiler = "2.7.0"
-kotlinxCoroutinesTest = "1.10.2"
+kotlinxCoroutinesTest = "1.11.0"
 core = "1.6.1"
 runner = "1.6.2"
 coilCompose = "2.7.0"
 retrofit = "2.12.0"
 converterMoshi = "2.12.0"
-kotlinxCoroutinesAndroid = "1.10.2"
-kotlinxCoroutinesCore = "1.10.2"
+kotlinxCoroutinesAndroid = "1.11.0"
+kotlinxCoroutinesCore = "1.11.0"
 accompanistPermissions = "0.37.3"
 playServicesLocation = "21.3.0"
 cameraCamera2 = "1.5.0"
@@ -36,7 +36,7 @@ zstdKmpOkio = "0.4.0"
 rxjava = "1.3.8"
 rxandroid = "1.2.1"
 jsoup = "1.19.1"
-serializationJson = "1.6.3"
+serializationJson = "1.8.1"
 moshiKotlin = "1.15.2"
 moshiKotlinCodegen = "1.15.2"
 datastorePreferences = "1.1.7"
@@ -98,6 +98,8 @@ rxandroid = { group = "io.reactivex", name = "rxandroid", version.ref = "rxandro
 jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serializationJson" }
 kotlinx-serialization-json-okio = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json-okio", version.ref = "serializationJson" }
+kotlinx-serialization-protobuf = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-protobuf", version.ref = "serializationJson" }
+kotlin-reflect = { group = "org.jetbrains.kotlin", name = "kotlin-reflect", version.ref = "kotlin" }
 moshi-kotlin = { group = "com.squareup.moshi", name = "moshi-kotlin", version.ref = "moshiKotlin" }
 moshi-kotlin-codegen = { group = "com.squareup.moshi", name = "moshi-kotlin-codegen", version.ref = "moshiKotlinCodegen" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }
@@ -124,3 +126,4 @@ google-devtools-ksp = { id = "com.google.devtools.ksp", version.ref = "googleDev
 roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }
 secrets = { id = "com.google.android.libraries.mapsplatform.secrets-gradle-plugin", version.ref = "secretsGradlePlugin" }
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
+serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
