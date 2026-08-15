@@ -96,6 +96,7 @@ import com.example.ui.ReaderBg
 import com.example.ui.ReaderFit
 import com.example.ui.ReaderMode
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -121,7 +122,14 @@ fun ReaderScreen(
         return
     }
 
-    var showHud by remember { mutableStateOf(true) }
+    // HUD starts hidden; a tap on the page shows it, another tap (or a ~2.5s auto-timer) hides it.
+    var showHud by remember { mutableStateOf(false) }
+    LaunchedEffect(showHud) {
+        if (showHud) {
+            delay(2500)
+            showHud = false
+        }
+    }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showChaptersSheet by remember { mutableStateOf(false) }
     var rotationLocked by remember { mutableStateOf(false) }
@@ -134,6 +142,9 @@ fun ReaderScreen(
     var pageError by remember { mutableStateOf<String?>(null) }
     var pageLoading by remember { mutableStateOf(true) }
     var retryKey by remember { mutableStateOf(0) }
+    // One silent auto-retry after a failed first load (transient Cloudflare/network hiccups);
+    // afterwards the error screen with Retry takes over.
+    var autoRetried by remember(chapter.id) { mutableStateOf(false) }
     // Slider thumb while the user is dragging it; the actual scroll happens once on release so a
     // drag can't fire a storm of conflicting scrollToItem calls into unloaded content.
     var sliderDragPage by remember { mutableStateOf<Float?>(null) }
@@ -146,20 +157,32 @@ fun ReaderScreen(
     // chapter is a (chapter, loaded-pages-or-null, error-or-null) entry.
     val queuedChapters = remember { mutableStateListOf<QueuedCh>() }
 
+    // While actually reading, the HUD follows showHud (tap to show, tap/auto-timer to hide).
+    // In the loading / error / no-pages states the HUD stays visible so back + settings are always
+    // reachable.
+    val showHudEffective = showHud || pageLoading || pageError != null || chapterPages.isEmpty()
+
     LaunchedEffect(chapter.id, retryKey) {
         pageLoading = true
         pageError = null
         queuedChapters.clear()
         chapterPages.clear()
+        var success = false
         try {
             val descriptors = withTimeout(MAIN_LOAD_TIMEOUT_MS) {
                 viewModel.repository.getChapterPageDescriptors(chapter.id)
             }
             chapterPages.addAll(descriptors.toPageItems(chapter.id))
+            success = true
         } catch (e: Throwable) {
             pageError = e.describe()
         } finally {
             pageLoading = false
+        }
+        if (!success && !autoRetried) {
+            autoRetried = true
+            delay(1500)
+            retryKey++
         }
     }
 
@@ -436,7 +459,7 @@ fun ReaderScreen(
     ) {
         // Reader Content (loading / error / pages)
         when {
-            pageLoading || chapterPages.isEmpty() -> {
+            pageLoading -> {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -490,6 +513,30 @@ fun ReaderScreen(
                                     Text("Verify in WebView")
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            chapterPages.isEmpty() -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        modifier = Modifier.padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "No pages available in this chapter",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = contentTextColor
+                            )
+                        )
+                        Button(onClick = { retryKey++ }) {
+                            Text("Retry")
                         }
                     }
                 }
@@ -633,7 +680,7 @@ fun ReaderScreen(
 
         // Top HUD Bar
         AnimatedVisibility(
-            visible = showHud,
+            visible = showHudEffective,
             enter = slideInVertically(initialOffsetY = { -it }),
             exit = slideOutVertically(targetOffsetY = { -it }),
             modifier = Modifier.align(Alignment.TopCenter)
@@ -684,7 +731,7 @@ fun ReaderScreen(
 
         // Bottom HUD Bar
         AnimatedVisibility(
-            visible = showHud,
+            visible = showHudEffective,
             enter = slideInVertically(initialOffsetY = { it }),
             exit = slideOutVertically(targetOffsetY = { it }),
             modifier = Modifier.align(Alignment.BottomCenter)
@@ -1088,7 +1135,7 @@ private fun formatChapterNum(n: Float): String =
     if (n % 1f == 0f) n.toInt().toString() else n.toString()
 
 // Timeout for the first chapter's page list (must also cover a Cloudflare silent solve).
-private const val MAIN_LOAD_TIMEOUT_MS = 60_000L
+private const val MAIN_LOAD_TIMEOUT_MS = 90_000L
 
 // Continuous-scroll queued chapters: shorter timeout (a stalled queued chapter shows a retry row
 // instead of an endless spinner) and a hard cap so a jump to the end can't queue every remaining
