@@ -13,6 +13,7 @@ import com.example.data.local.ExtensionSourceEntity
 import com.example.data.local.ExtensionEntity
 import com.example.data.local.MangaEntity
 import com.example.data.repository.MangaRepository
+import com.example.util.describe
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -147,7 +148,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _catalogResults.value = repository.searchCatalog(sourceId, query, page)
             } catch (e: Throwable) {
                 _catalogResults.value = emptyList()
-                _catalogError.value = e.message ?: "Failed to load catalog"
+                _catalogError.value = e.describe()
             } finally {
                 _catalogLoading.value = false
             }
@@ -175,7 +176,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _globalResults.value = repository.searchAllInstalledSources(q)
             } catch (e: Throwable) {
                 _globalResults.value = emptyList()
-                _globalError.value = e.message ?: "Global search failed"
+                _globalError.value = e.describe()
             } finally {
                 _globalLoading.value = false
             }
@@ -196,7 +197,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 repository.ensureMangaInDb(mangaId)
                 repository.loadChapters(mangaId)
             } catch (e: Throwable) {
-                _detailError.value = e.message ?: "Failed to load manga"
+                _detailError.value = e.describe()
             } finally {
                 _detailLoading.value = false
             }
