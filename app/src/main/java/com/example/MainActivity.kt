@@ -8,6 +8,7 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -23,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -160,11 +162,16 @@ fun MainAppScreen(viewModel: MainViewModel) {
 
     val showBottomBar = currentRoute in bottomNavScreens.map { it.route }
 
+    // The reader is a true fullscreen experience (like Tadami): page content draws behind the
+    // system bars, with the reader's own chrome handling the safe-area insets.
+    val isReader = (currentRoute ?: "").startsWith("reader/")
+
     val libraryManga by viewModel.libraryManga.collectAsStateWithLifecycle()
     val historyManga by viewModel.readingHistory.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = Color.Transparent,
+        contentWindowInsets = if (isReader) WindowInsets(0) else ScaffoldDefaults.contentWindowInsets,
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar(
@@ -204,7 +211,7 @@ fun MainAppScreen(viewModel: MainViewModel) {
         NavHost(
             navController = navController,
             startDestination = Screen.Library.route,
-            modifier = Modifier.padding(innerPadding)
+            modifier = if (isReader) Modifier.fillMaxSize() else Modifier.padding(innerPadding)
         ) {
             composable(Screen.Library.route) {
                 LibraryScreen(
