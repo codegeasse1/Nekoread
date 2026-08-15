@@ -414,6 +414,11 @@ fun BrowseScreen(
                 webviewTarget = null
                 // Re-load the active source so a freshly solved cf_clearance takes effect.
                 viewModel.loadCatalog(activeSourceId, searchQuery)
+                // If the user was verifying from the global search tab, re-run that search too —
+                // a source that just got verified will now return its results.
+                if (selectedTabIndex == TAB_GLOBAL && globalQuery.isNotBlank()) {
+                    viewModel.globalSearch(globalQuery)
+                }
             }
         )
     }
