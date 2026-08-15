@@ -82,7 +82,7 @@ fun Call.asObservableSuccess(): Observable<Response> {
     return asObservable().doOnNext { response ->
         if (!response.isSuccessful) {
             response.close()
-            throw HttpException(response.code)
+            throw HttpException(response.code, response.request.url.toString())
         }
     }
 }
@@ -132,7 +132,7 @@ suspend fun Call.awaitSuccess(): Response {
     val response = await(callStack)
     if (!response.isSuccessful) {
         response.close()
-        throw HttpException(response.code).apply { stackTrace = callStack }
+        throw HttpException(response.code, response.request.url.toString()).apply { stackTrace = callStack }
     }
     return response
 }
@@ -176,5 +176,8 @@ fun <T> decodeFromJsonResponse(
  *
  * @since extensions-lib 1.5
  * @param code [Int] the HTTP status code
+ * @param url [String] the request URL that produced the error, when known.
  */
-class HttpException(val code: Int) : IllegalStateException("HTTP error $code")
+class HttpException(val code: Int, val url: String = "") : IllegalStateException(
+    "HTTP error $code" + if (url.isNotBlank()) " — $url" else "",
+)
