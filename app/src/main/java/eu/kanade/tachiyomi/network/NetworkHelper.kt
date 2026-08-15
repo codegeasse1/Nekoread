@@ -7,10 +7,12 @@ import eu.kanade.tachiyomi.network.interceptor.ApexWwwRetryInterceptor
 import eu.kanade.tachiyomi.network.interceptor.CloudflareInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UncaughtExceptionInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UserAgentInterceptor
+import eu.kanade.tachiyomi.util.defaultJson
 import okhttp3.Cache
 import okhttp3.OkHttpClient
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
+import uy.kohesive.injekt.api.addSingletonFactory
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -101,6 +103,14 @@ class NetworkHelper(context: Context) {
                 // through the global injekt registry, exactly like Tadami does.
                 Injekt.addSingleton(nh)
                 Injekt.addSingleton(app as Application)
+
+                // Old-style extensions (extension-lib ≤1.3, e.g. keiyoushi ComicLand v1.4) pull app
+                // singletons out of the GLOBAL injekt scope through their generated InjektFactory —
+                // `Injekt.get<Json>()` via a FullTypeReference. Without a Json (and OkHttpClient)
+                // registered here, loading their catalog crashed with
+                // "InjektionException: No registered instance or factory for type Json".
+                Injekt.addSingleton(defaultJson)
+                Injekt.addSingletonFactory<OkHttpClient> { nh.client }
             }
         }
 
