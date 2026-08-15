@@ -150,6 +150,13 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         SourceRegistry.source(ch.mangaId.substringBefore(":")).getPageUrls(ch.fetchUrl)
     }
 
+    /** Live page-image Coil models for a chapter. Extension sources return source-aware models so
+     *  pages load through the extension's own client + headers (see MangaSource.getPageImageModels). */
+    suspend fun getChapterPageImageModels(chapterId: String): List<Any> = withContext(Dispatchers.IO) {
+        val ch = db.chapterDao().getChapterById(chapterId) ?: return@withContext emptyList()
+        SourceRegistry.source(ch.mangaId.substringBefore(":")).getPageImageModels(ch.fetchUrl)
+    }
+
     suspend fun toggleLibraryStatus(mangaId: String, category: String = "Reading") = withContext(Dispatchers.IO) {
         val manga = db.mangaDao().getMangaById(mangaId) ?: return@withContext
         val newInLibrary = !manga.inLibrary
