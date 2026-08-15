@@ -42,6 +42,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import coil.Coil
+import coil.ImageLoader
 import com.example.ui.MainViewModel
 import com.example.ui.screens.BrowseScreen
 import com.example.ui.screens.LibraryScreen
@@ -56,6 +58,7 @@ import com.example.ui.theme.GlassCardBorder
 import com.example.ui.theme.GlowCyan
 import com.example.ui.theme.GlowViolet
 import com.example.ui.theme.NekoReadTheme
+import eu.kanade.tachiyomi.network.NetworkHelper
 
 class MainActivity : ComponentActivity() {
 
@@ -63,6 +66,20 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Network stack (shared by loaded extensions + Cloudflare WebView) before anything else.
+        NetworkHelper.init(applicationContext)
+
+        // All cover thumbnails go through the SAME client the extension requests use — so they
+        // carry the cf_clearance cookies (and UA) that Cloudflare-protected sources require.
+        // Without this, catalog covers on CF sources always came back blank.
+        Coil.setImageLoader(
+            ImageLoader.Builder(this)
+                .okHttpClient(NetworkHelper.getInstance().client)
+                .crossfade(true)
+                .build(),
+        )
+
         enableEdgeToEdge()
         setContent {
             NekoReadTheme {
