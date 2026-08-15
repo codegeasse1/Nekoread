@@ -194,11 +194,13 @@ fun ReaderScreen(
     val context = LocalContext.current
     val imageLoader = LocalImageLoader.current
     val screenW = with(density) { configuration.screenWidthDp.dp.roundToPx() }
-    // Height budget for decoding webtoon pages: cap so an extremely tall page can't decode into a
-    // ~65MB bitmap (which, stacked across visible pages, blew up memory → freeze + crash). Coil
-    // fits the decode inside this box; pages taller than ~3 screens are downscaled slightly.
+    // Decode webtoon pages at most this tall (in pixels). Keeps every bitmap under the GPU's
+    // ~4096px max texture size — taller bitmaps render with a BLACK BAND cutting the image in
+    // half (the hardware renderer can't texture the middle). Pages taller than this are downscaled
+    // (they're read one screen at a time, so on-screen quality is preserved), and memory stays
+    // bounded (a 1080x3400 bitmap is ~15MB, not ~60MB).
     val screenH = with(density) { configuration.screenHeightDp.dp.roundToPx() }
-    val webtoonDecodeH = (screenH * 3).coerceAtLeast(1200)
+    val webtoonDecodeH = minOf(screenH * 3, 3400)
     // Loading placeholder height = one viewport (like Tadami): keeps the list's layout stable
     // while pages stream in, so content doesn't jump and re-layout when each image lands.
     val webtoonPlaceholderH = configuration.screenHeightDp.dp
@@ -607,10 +609,21 @@ fun ReaderScreen(
                             val pageUrl = pageList[pageIndex]
                             val retries = pageRetries[pageIndex] ?: 0
                             key(pageUrl, retries) {
+                                // Sized + memoized request: paged pages were decoded at full
+                                // resolution before — tall pages exceeded the GPU texture limit
+                                // (black band) and ate memory. Same cap as webtoon, so the request
+                                // is also reused via Coil's cache when flipping back.
+                                val model = remember(pageUrl, retries) {
+                                    ImageRequest.Builder(context)
+                                        .data(pageUrl)
+                                        .size(screenW, webtoonDecodeH)
+                                        .crossfade(false)
+                                        .build()
+                                }
                                 Box(modifier = Modifier.fillMaxSize()) {
                                     LoadableReaderImage(
                                         stableKey = pageUrl,
-                                        model = pageUrl,
+                                        model = model,
                                         contentDescription = "Page ${pageIndex + 1}",
                                         contentScale = when (readerFit) {
                                             ReaderFit.FIT_WIDTH -> ContentScale.FillWidth
