@@ -99,6 +99,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.io.File
 
@@ -566,7 +567,7 @@ fun ReaderScreen(
                                 }
                                 else -> {
                                     val page = item as PageItem
-                                    key(page.id) {
+                                    key(page.imageUrl) {
                                         // Tadami-style page: the bytes are already downloaded by
                                         // the coordinator above, and SubsamplingScaleImageView
                                         // decodes only the visible region at full resolution, so
@@ -590,7 +591,7 @@ fun ReaderScreen(
                 } else {
                     val pageContent: @Composable (Int) -> Unit = { pageIndex ->
                         val page = chapterPages[pageIndex]
-                        key(page.id) {
+                        key(page.imageUrl) {
                             Box(
                                 modifier = Modifier.fillMaxSize(),
                                 contentAlignment = Alignment.Center
@@ -1131,7 +1132,7 @@ private fun SubsamplingReaderImage(
         AndroidView(
             factory = { ctx ->
                 SubsamplingScaleImageView(ctx).apply {
-                    this.minimumScaleType = scaleType
+                    setMinimumScaleType(scaleType)
                     setMinimumDpi(1)
                     if (webtoon) {
                         // Scroll-only pages: panning off lets drags reach the LazyColumn (the view
