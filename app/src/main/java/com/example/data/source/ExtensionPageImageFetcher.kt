@@ -24,6 +24,7 @@ import java.io.IOException
  */
 data class ExtensionPageImage(
     val pageUrl: String,
+    val imageUrl: String,
     val source: HttpSource,
 )
 
@@ -40,8 +41,15 @@ class ExtensionPageImageFetcherFactory : Fetcher.Factory<ExtensionPageImage> {
     ): Fetcher? {
         return object : Fetcher {
             override suspend fun fetch(): FetchResult? {
-                val page = Page(0, imageUrl = data.pageUrl)
-                val response = data.source.getImage(page)
+                // Build a real Page carrying both the page's request URL and its image URL, so
+                // source-specific imageRequest()/imageUrlRequest() overrides (e.g. keiyoushi
+                // sources that build the Referer from page.url) behave exactly as in Tadami.
+                val page = Page(0, url = data.pageUrl, imageUrl = data.imageUrl)
+                val response = try {
+                    data.source.getImage(page)
+                } catch (e: Exception) {
+                    throw IOException("${data.source.name} page load failed (${data.imageUrl.take(80)}): ${e.message}", e)
+                }
                 val body = response.body ?: throw IOException("Null response body")
                 return SourceResult(
                     source = ImageSource(
