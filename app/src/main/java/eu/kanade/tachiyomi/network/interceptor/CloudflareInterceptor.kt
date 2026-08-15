@@ -29,11 +29,13 @@ class CloudflareInterceptor(
     private val cookieManager: AndroidCookieJar,
     defaultUserAgentProvider: () -> String,
     private val challengeResolver: CloudflareChallengeResolver? = null,
+    private val activityContextProvider: () -> Context? = { null },
 ) : WebViewInterceptor(context, defaultUserAgentProvider) {
 
     private val challengeLockByHost = ConcurrentHashMap<String, Any>()
     private val webViewChallengeResolver = challengeResolver ?: WebViewCloudflareChallengeResolver(
         context = context,
+        dialogContextProvider = activityContextProvider,
         cookieManager = cookieManager,
         mainExecutor = ContextCompat.getMainExecutor(context),
         createWebView = this::createWebView,
