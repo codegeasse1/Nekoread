@@ -716,6 +716,7 @@ fun ReaderScreen(
                                                 model = model,
                                                 contentDescription = "Page ${i + 1}",
                                                 contentScale = ContentScale.FillWidth,
+                                                zoom = if (readerFit == ReaderFit.FIT_WIDTH) 1.2f else 1f,
                                                 spinnerColor = contentTextColor,
                                                 onError = { msg ->
                                                     pageImageErrors = pageImageErrors + (i to msg)
@@ -731,6 +732,7 @@ fun ReaderScreen(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
                                                     .heightIn(min = webtoonPlaceholderH)
+                                                    .clipToBounds()
                                                     .testTag("reader_page_$i")
                                             )
                                         }
@@ -811,7 +813,7 @@ fun ReaderScreen(
             modifier = Modifier.align(Alignment.TopCenter)
         ) {
             Surface(
-                color = Color(0xD9161926),
+                color = Color(0xA6161926),
                 contentColor = Color.White,
                 modifier = Modifier.statusBarsPadding()
             ) {
@@ -863,7 +865,7 @@ fun ReaderScreen(
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
             Surface(
-                color = Color(0xD9161926),
+                color = Color(0xA6161926),
                 contentColor = Color.White,
                 modifier = Modifier.navigationBarsPadding()
             ) {
