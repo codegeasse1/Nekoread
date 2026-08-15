@@ -148,8 +148,25 @@ class TachiyomiHttpSourceAdapter(
      * [HttpSource.getMangaUrl]. The app's naive "baseUrl + '/' + url" join 404s on sources like
      * TheBlank, whose stored manga url is a bare slug ("a-naughty") whose real page is
      * "https://theblank.net/serie/a-naughty".
+     *
+     * getMangaUrl can fail while the Cloudflare challenge it is meant to solve is still up (its
+     * token bootstrap hits the challenged homepage), so bound the wait and fall back to the source
+     * homepage — a real page that reliably triggers the challenge, which is all the verification
+     * WebView needs to issue a host-wide cf_clearance.
      */
-    override suspend fun getMangaWebUrl(fullMangaId: String): String = runCatching {
-        ext.getMangaUrl(sm(mangaUrl(fullMangaId)))
-    }.getOrDefault(super.getMangaWebUrl(fullMangaId))
+    override suspend fun getMangaWebUrl(fullMangaId: String): String {
+        val stored = runCatching { mangaUrl(fullMangaId) }.getOrNull() ?: ""
+        if (stored.isNotBlank()) {
+            val canonical = runCatching {
+                withTimeout(8_000) { ext.getMangaUrl(sm(stored)) }
+            }.getOrNull()
+            if (!canonical.isNullOrBlank()) {
+                val trimmed = canonical.trimEnd('/')
+                if (trimmed.isNotBlank() && trimmed != ext.baseUrl.trimEnd('/')) {
+                    return canonical
+                }
+            }
+        }
+        return ext.baseUrl
+    }
 }
