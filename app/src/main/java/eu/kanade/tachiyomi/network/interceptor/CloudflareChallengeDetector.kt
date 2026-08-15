@@ -51,6 +51,58 @@ object CloudflareChallengeDetector {
         val lower = body.lowercase(Locale.ROOT)
         return allMarkers.any { it in lower }
     }
+
+    /** Is there a marker of an interactive ("human") challenge in the body. */
+    fun hasInteractiveMarkers(body: String): Boolean {
+        val lower = body.lowercase(Locale.ROOT)
+        return interactiveMarkers.any { it in lower }
+    }
+
+    /**
+     * Full classification of a response. `bodyPeek` is the first kilobyte(s) of the body
+     * (challenge markers always appear near the top of the document).
+     */
+    fun classify(
+        code: Int,
+        server: String?,
+        cfMitigated: String?,
+        bodyPeek: String,
+    ): CloudflareChallengeType {
+        if (code !in ERROR_CODES || !isCloudflareServer(server)) {
+            return CloudflareChallengeType.NONE
+        }
+        val lower = bodyPeek.lowercase(Locale.ROOT)
+        if (interactiveMarkers.any { it in lower }) {
+            return CloudflareChallengeType.INTERACTIVE
+        }
+        if (isManagedChallenge(cfMitigated)) {
+            return CloudflareChallengeType.MANAGED
+        }
+        if (interstitialMarkers.any { it in lower }) {
+            return CloudflareChallengeType.INTERSTITIAL
+        }
+        if (errorMarkers.any { it in lower }) {
+            return CloudflareChallengeType.ERROR
+        }
+        return CloudflareChallengeType.NONE
+    }
+}
+
+enum class CloudflareChallengeType {
+    /** Not a challenge (normal response or not a Cloudflare server). */
+    NONE,
+
+    /** JS interstitial ("Just a moment…") — passes automatically. */
+    INTERSTITIAL,
+
+    /** Managed challenge (`cf-mitigated: challenge`) without an explicit widget. */
+    MANAGED,
+
+    /** Turnstile / interactive widget — needs a human. */
+    INTERACTIVE,
+
+    /** Challenge error page. */
+    ERROR,
 }
 
 internal val ERROR_CODES = listOf(403, 503)
