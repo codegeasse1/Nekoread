@@ -30,6 +30,10 @@ enum class ReaderBg {
     PURE_BLACK, DARK_GRAY, CREAM, WHITE
 }
 
+enum class ReaderFit {
+    FIT, FIT_WIDTH
+}
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val repository: MangaRepository = MangaRepository(AppDatabase.getInstance(application), application)
@@ -58,11 +62,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _showPageNumber = MutableStateFlow(true)
     val showPageNumber: StateFlow<Boolean> = _showPageNumber.asStateFlow()
 
+    private val _readerFit = MutableStateFlow(ReaderFit.FIT)
+    val readerFit: StateFlow<ReaderFit> = _readerFit.asStateFlow()
+
     init {
         // Load persisted reader settings (stored in SharedPreferences, survives app restarts).
         _readerMode.value = ReaderMode.valueOf(prefs.getString("reader_mode", ReaderMode.WEBTOON.name)!!)
         _readerBg.value = ReaderBg.valueOf(prefs.getString("reader_bg", ReaderBg.PURE_BLACK.name)!!)
         _showPageNumber.value = prefs.getBoolean("show_page_number", true)
+        _readerFit.value = ReaderFit.valueOf(prefs.getString("reader_fit", ReaderFit.FIT.name)!!)
     }
 
     // Library Filter & Search
@@ -138,7 +146,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _detailError = MutableStateFlow<String?>(null)
     val detailError: StateFlow<String?> = _detailError.asStateFlow()
 
-    fun loadCatalog(sourceId: String = "", query: String = "", page: Int = 0) {
+    // Extension catalog pages are 1-BASED (keiyoushi sources pass `page` straight into the request
+    // URL, e.g. 4KHD's WordPress REST API 400s on page=0; ComicLand computes offset=(page-1)*20).
+    // So the first catalog request must be page 1 — starting at 0 is what broke 4KHD with
+    // "HTTP error 400 — ...&page=0..." while the same URL with page=1 returns 200.
+    fun loadCatalog(sourceId: String = "", query: String = "", page: Int = 1) {
         if (sourceId.isBlank()) return
         viewModelScope.launch {
             _catalogLoading.value = true
@@ -212,6 +224,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setReaderBg(bg: ReaderBg) {
         _readerBg.value = bg
         prefs.edit().putString("reader_bg", bg.name).apply()
+    }
+
+    fun setReaderFit(fit: ReaderFit) {
+        _readerFit.value = fit
+        prefs.edit().putString("reader_fit", fit.name).apply()
     }
 
     fun setShowPageNumber(show: Boolean) {
