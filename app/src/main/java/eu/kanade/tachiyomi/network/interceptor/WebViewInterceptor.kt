@@ -1,15 +1,14 @@
 package eu.kanade.tachiyomi.network.interceptor
 
 import android.content.Context
-import android.content.pm.PackageManager
-import android.webkit.CookieManager
+import android.os.Handler
+import android.os.Looper
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.widget.Toast
-import android.os.Handler
-import android.os.Looper
-import androidx.webkit.WebSettingsCompat
-import androidx.webkit.WebViewFeature
+import eu.kanade.tachiyomi.util.system.WebViewUtil
+import eu.kanade.tachiyomi.util.system.sanitizeCloudflareRequestHeaders
+import eu.kanade.tachiyomi.util.system.setDefaultSettings
 import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.Request
@@ -20,7 +19,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Base interceptor that spins up a hidden WebView to solve anti-bot challenges (Cloudflare and
- * friends), ported from Tadami.
+ * friends). Ported verbatim from Tadami.
  *
  * The critical detail: the WebView is created with the **same User-Agent the original request
  * used** and loads the URL with the request's (sanitized) headers — so the resulting
@@ -32,12 +31,15 @@ abstract class WebViewInterceptor(
     private val defaultUserAgentProvider: () -> String,
 ) : Interceptor {
 
-    /** Touch the WebView init lazily off the request path where possible. */
+    /**
+     * When this is called, it initializes the WebView if it wasn't already. We use this to avoid
+     * blocking the main thread too much.
+     */
     private val initWebView by lazy {
         try {
             WebSettings.getDefaultUserAgent(context)
         } catch (_: Exception) {
-            // Avoid crashes while Chrome/WebView is being updated.
+            // Avoid some crashes like when Chrome/WebView is being updated.
         }
     }
 
@@ -52,7 +54,7 @@ abstract class WebViewInterceptor(
             return response
         }
 
-        if (!supportsWebView()) {
+        if (!WebViewUtil.supportsWebView(context)) {
             Handler(Looper.getMainLooper()).post {
                 Toast.makeText(
                     context,
@@ -67,18 +69,9 @@ abstract class WebViewInterceptor(
         return intercept(chain, request, response)
     }
 
-    private fun supportsWebView(): Boolean {
-        try {
-            CookieManager.getInstance() // throws if WebView is missing
-        } catch (e: Throwable) {
-            return false
-        }
-        return context.packageManager.hasSystemFeature(PackageManager.FEATURE_WEBVIEW)
-    }
-
     fun parseHeaders(headers: Headers): Map<String, String> {
         val safeHeaders = headers
-            // Keeping unsafe headers makes the WebView throw net::ERR_INVALID_ARGUMENT.
+            // Keeping unsafe headers makes the webview throw [net::ERR_INVALID_ARGUMENT]
             .filter { (name, value) ->
                 isRequestHeaderSafe(name, value)
             }
@@ -86,7 +79,11 @@ abstract class WebViewInterceptor(
             .mapValues { it.value.getOrNull(0).orEmpty() }
         // Strip headers that fingerprint Android WebView for anti-bot services like
         // Cloudflare (sec-ch-ua client hints + the X-Requested-With package name).
-        return sanitizeCloudflareRequestHeaders(safeHeaders)
+        return sanitizeCloudflareRequestHeaders(
+            requestHeaders = safeHeaders,
+            contextPackageName = context.packageName,
+            spoofedPackageName = WebViewUtil.spoofedPackageName(context),
+        )
     }
 
     fun CountDownLatch.awaitFor30Seconds() {
@@ -99,50 +96,6 @@ abstract class WebViewInterceptor(
             // Avoid sending an empty User-Agent, Chromium resets to the default if empty.
             settings.userAgentString = request.header("User-Agent") ?: defaultUserAgentProvider()
         }
-    }
-
-    private fun sanitizeCloudflareRequestHeaders(requestHeaders: Map<String, String>): Map<String, String> {
-        val packageName = context.packageName
-        val spoofedPackageName = runCatching { context.packageManager.getPackageInfo("com.android.chrome", 0) }
-            .recoverCatching { context.packageManager.getPackageInfo("com.android.settings", 0) }
-            .getOrNull()?.packageName ?: "com.android.settings"
-
-        return requestHeaders.filterNot { (name, value) ->
-            when (name.lowercase(Locale.ROOT)) {
-                "x-requested-with" -> value == packageName || value == spoofedPackageName
-                in cloudflareBlockedHeaders -> true
-                else -> false
-            }
-        }
-    }
-}
-
-private fun WebView.setDefaultSettings() {
-    with(settings) {
-        javaScriptEnabled = true
-        domStorageEnabled = true
-        useWideViewPort = true
-        loadWithOverviewMode = true
-        cacheMode = WebSettings.LOAD_DEFAULT
-
-        // Handle popups properly (needed for Cloudflare Turnstile).
-        setSupportMultipleWindows(true)
-
-        // Allow zooming.
-        setSupportZoom(true)
-        builtInZoomControls = true
-        displayZoomControls = false
-    }
-
-    // Don't send X-Requested-With: <package> — Cloudflare treats it as a WebView fingerprint
-    // and keeps looping the Turnstile challenge for WebViews that leak it.
-    if (WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
-        WebSettingsCompat.setRequestedWithHeaderOriginAllowList(settings, emptySet())
-    }
-
-    CookieManager.getInstance().apply {
-        setAcceptCookie(true)
-        setAcceptThirdPartyCookies(this@setDefaultSettings, true)
     }
 }
 
@@ -167,8 +120,3 @@ private val unsafeHeaderNames =
         "transfer-encoding",
         "set-cookie",
     )
-
-private val cloudflareBlockedHeaders = setOf(
-    "sec-ch-ua",
-    "sec-ch-ua-full-version-list",
-)
