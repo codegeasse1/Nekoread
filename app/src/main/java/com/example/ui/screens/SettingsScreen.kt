@@ -60,6 +60,7 @@ import com.example.ui.MainViewModel
 import com.example.ui.ReaderBg
 import com.example.ui.ReaderMode
 import com.example.ui.theme.NekoVioletPrimary
+import com.example.util.BuildInfo
 import kotlinx.coroutines.launch
 
 private fun readerModeLabel(mode: ReaderMode): String = when (mode) {
@@ -147,11 +148,19 @@ fun SettingsScreen(
             TopAppBar(
                 windowInsets = WindowInsets(0),
                 title = {
-                    Text(
-                        text = "Settings",
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleLarge
-                    )
+                    Column {
+                        Text(
+                            text = "Settings",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                        Text(
+                            text = "Build ${BuildInfo.VERSION}",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        )
+                    }
                 }
             )
         },
