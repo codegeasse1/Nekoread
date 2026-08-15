@@ -64,9 +64,10 @@ import com.example.util.BuildInfo
 import kotlinx.coroutines.launch
 
 private fun readerModeLabel(mode: ReaderMode): String = when (mode) {
-    ReaderMode.WEBTOON -> "Webtoon (Continuous Vertical)"
-    ReaderMode.LEFT_TO_RIGHT -> "Manga Left to Right"
-    ReaderMode.RIGHT_TO_LEFT -> "Manga Right to Left"
+    ReaderMode.WEBTOON -> "Webtoon"
+    ReaderMode.LEFT_TO_RIGHT -> "Left to Right"
+    ReaderMode.RIGHT_TO_LEFT -> "Right to Left"
+    ReaderMode.VERTICAL -> "Vertical"
 }
 
 private fun readerBgLabel(bg: ReaderBg): String = when (bg) {
