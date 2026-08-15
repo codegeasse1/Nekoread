@@ -4,6 +4,7 @@ import android.util.Base64
 import com.example.data.extension.ExtensionDexLoader
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
+import java.io.File
 
 /**
  * A "source" is the real equivalent of a Tachiyomi/Mihon extension.
@@ -34,13 +35,24 @@ interface MangaSource {
     suspend fun getPageUrls(rawChapterId: String): List<String>
 
     /**
-     * Coil image models for each page of a chapter, in order. Default: the plain page URLs (which
-     * Coil loads directly). Extension-backed sources override this to return [ExtensionPageImage]
-     * models so each page is fetched through the extension's own client + imageRequest headers,
-     * exactly like Tadami — plain URL loading is what made hotlink-protected CDNs return blank
-     * pages.
+     * Page descriptors (source request URL + final image URL) for a chapter, in order. This is the
+     * Tadami-style reader input: each page is downloaded through the source's own client
+     * ([downloadPageImage]) rather than decoded into a giant full-image bitmap by Coil — the reader
+     * renders them with a tiled (SubsamplingScaleImageView) view, so visible regions decode at full
+     * resolution with bounded memory. Default: the plain URLs (request URL empty).
      */
-    suspend fun getPageImageModels(rawChapterId: String): List<Any> = getPageUrls(rawChapterId)
+    data class PageDescriptor(val pageUrl: String, val imageUrl: String)
+
+    suspend fun getPageDescriptors(rawChapterId: String): List<PageDescriptor> =
+        getPageUrls(rawChapterId).map { PageDescriptor("", it) }
+
+    /**
+     * Download one page's image bytes into [target] (overwriting it), using the source's own HTTP
+     * client + imageRequest headers (Referer/Origin etc.), exactly like Tadami's HttpPageLoader.
+     * Extension sources override this to route through the extension's getImage().
+     */
+    suspend fun downloadPageImage(page: PageDescriptor, target: File): File =
+        throw UnsupportedOperationException("downloadPageImage not implemented for $name")
 
     /**
      * Coil image model for a manga cover. Default: the plain URL. Extension sources override this
