@@ -37,6 +37,7 @@ interface CloudflareChallengeResolver {
  */
 internal class WebViewCloudflareChallengeResolver(
     private val context: Context,
+    private val dialogContextProvider: () -> Context?,
     private val cookieManager: AndroidCookieJar,
     private val mainExecutor: Executor,
     private val createWebView: (Request) -> WebView,
@@ -54,6 +55,9 @@ internal class WebViewCloudflareChallengeResolver(
         var challengeDialog: CloudflareChallengeDialog? = null
         var cloudflareBypassed = false
         var isWebViewOutdatedNow = false
+        // Released once the visible verification dialog for THIS request is gone, so the next
+        // source's dialog can take the stage (global search hits several CF sources in parallel).
+        val dialogDone = CountDownLatch(1)
 
         mainExecutor.execute {
             val createdWebView = createWebView(originalRequest)
@@ -78,20 +82,62 @@ internal class WebViewCloudflareChallengeResolver(
                 }
             }
 
-            fun probeAndShowDialog(view: WebView) {
+            // Surface the challenge in a visible fullscreen dialog so it can be completed (Turnstile
+            // needs a real on-screen widget; some interstitials only finish in a visible WebView).
+            // Only one such dialog is shown at a time app-wide — the wait runs on a background
+            // thread so the UI thread never blocks.
+            fun showDialogWhenFree() {
+                if (cloudflareBypassed || challengeDialog != null) return
+                Thread {
+                    synchronized(dialogGate) {
+                        if (cloudflareBypassed || challengeDialog != null) return@synchronized
+                        val dialogShown = CountDownLatch(1)
+                        try {
+                            mainExecutor.execute {
+                                try {
+                                    if (cloudflareBypassed || challengeDialog != null) {
+                                        dialogDone.countDown()
+                                        return@execute
+                                    }
+                                    val dlg = CloudflareChallengeDialog(
+                                        context = dialogContextProvider() ?: context,
+                                        webView = createdWebView,
+                                        isSolved = ::isSolved,
+                                        onSolved = {
+                                            dialogDone.countDown()
+                                            finishSolved()
+                                        },
+                                        onDismissed = {
+                                            dialogDone.countDown()
+                                            latch.countDown()
+                                        },
+                                    )
+                                    challengeDialog = dlg
+                                    dlg.show()
+                                } catch (e: Exception) {
+                                    dialogDone.countDown()
+                                } finally {
+                                    dialogShown.countDown()
+                                }
+                            }
+                            if (!dialogShown.await(30, TimeUnit.SECONDS)) {
+                                dialogDone.countDown()
+                                return@synchronized
+                            }
+                            // Hold the gate until THIS dialog is gone so the next source waits.
+                            dialogDone.await(90, TimeUnit.SECONDS)
+                        } catch (e: Exception) {
+                            dialogDone.countDown()
+                        }
+                    }
+                }.start()
+            }
+
+            fun probeAndShowDialog(view: WebView, force: Boolean = false) {
                 if (cloudflareBypassed || challengeDialog != null) return
                 detectInteractiveWidget(view) { detected ->
-                    if (detected && !cloudflareBypassed && challengeDialog == null) {
-                        val dlg = CloudflareChallengeDialog(
-                            context = context,
-                            webView = createdWebView,
-                            isSolved = ::isSolved,
-                            onSolved = ::finishSolved,
-                            onDismissed = { latch.countDown() },
-                        )
-                        challengeDialog = dlg
-                        dlg.show()
-                    }
+                    if (cloudflareBypassed || challengeDialog != null) return@detectInteractiveWidget
+                    if (detected || force) showDialogWhenFree()
                 }
             }
 
@@ -110,6 +156,10 @@ internal class WebViewCloudflareChallengeResolver(
                         view.postDelayed({ probeAndShowDialog(view) }, 1500)
                         view.postDelayed({ probeAndShowDialog(view) }, 3500)
                         view.postDelayed({ probeAndShowDialog(view) }, 6000)
+                        // If it still isn't solved silently after ~9s, surface it visibly — a
+                        // challenge that stays unsolved is exactly the "search returns nothing"
+                        // failure the user hit, because the hidden WebView can't finish it.
+                        view.postDelayed({ probeAndShowDialog(view, force = true) }, 9000)
                     }
                 }
 
@@ -185,6 +235,12 @@ internal class WebViewCloudflareChallengeResolver(
         } catch (_: Throwable) {
             onResult(false)
         }
+    }
+
+    companion object {
+        // Serializes visible Cloudflare verification dialogs across all hosts/requests, so a
+        // parallel global search can't stack fullscreen dialogs on top of each other.
+        private val dialogGate = Object()
     }
 }
 
