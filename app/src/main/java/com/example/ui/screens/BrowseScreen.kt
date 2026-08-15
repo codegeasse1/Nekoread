@@ -54,8 +54,10 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -176,7 +178,10 @@ fun BrowseScreen(
     onMangaClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var selectedTabIndex by remember { mutableStateOf(TAB_SOURCES) }
+    // rememberSaveable (not remember): the user's tab/source/search must survive navigating to a
+    // manga detail screen and back — with plain `remember` the whole Browse composable resets to
+    // the Sources tab on return, which felt like being "thrown out" of the catalog.
+    var selectedTabIndex by rememberSaveable { mutableIntStateOf(TAB_SOURCES) }
     val tabs = listOf("Sources", "Global", "Catalog", "Extensions", "Repos")
 
     val extensionSources: List<ExtensionSourceEntity> by viewModel.extensionSources.collectAsStateWithLifecycle()
@@ -195,10 +200,10 @@ fun BrowseScreen(
     val globalError: String? by viewModel.globalError.collectAsStateWithLifecycle()
     val globalSearchedSources: Int by viewModel.globalSearchedSources.collectAsStateWithLifecycle()
 
-    var searchQuery by remember { mutableStateOf("") }
-    var globalQuery by remember { mutableStateOf("") }
-    var activeSourceId by remember { mutableStateOf("") }
-    var activeSourceBaseUrl by remember { mutableStateOf("") }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var globalQuery by rememberSaveable { mutableStateOf("") }
+    var activeSourceId by rememberSaveable { mutableStateOf("") }
+    var activeSourceBaseUrl by rememberSaveable { mutableStateOf("") }
     var showAddRepoDialog by remember { mutableStateOf(false) }
     var repoUrlInput by remember { mutableStateOf("") }
     var repoNameInput by remember { mutableStateOf("") }
