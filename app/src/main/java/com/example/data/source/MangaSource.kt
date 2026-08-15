@@ -35,6 +35,12 @@ interface MangaSource {
     suspend fun getPageUrls(rawChapterId: String): List<String>
 
     /**
+     * Coil image models for a chapter's pages. Default: the plain URLs. Extension sources override
+     * this to return source-aware models loaded through the extension's own client + headers.
+     */
+    suspend fun getPageImageModels(rawChapterId: String): List<Any> = getPageUrls(rawChapterId)
+
+    /**
      * Page descriptors (source request URL + final image URL) for a chapter, in order. This is the
      * Tadami-style reader input: each page is downloaded through the source's own client
      * ([downloadPageImage]) rather than decoded into a giant full-image bitmap by Coil — the reader
