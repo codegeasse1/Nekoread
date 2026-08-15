@@ -405,7 +405,11 @@ fun BrowseScreen(
         WebViewDialog(
             url = url,
             userAgent = ua,
-            onDismiss = { webviewTarget = null }
+            onDismiss = {
+                webviewTarget = null
+                // Re-load the active source so a freshly solved cf_clearance takes effect.
+                viewModel.loadCatalog(activeSourceId, searchQuery)
+            }
         )
     }
 }
