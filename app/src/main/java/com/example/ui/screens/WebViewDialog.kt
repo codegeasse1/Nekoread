@@ -80,7 +80,7 @@ fun WebViewDialog(
     var currentUrl by remember { mutableStateOf(url) }
 
     val headers = remember(userAgent) {
-        if (userAgent.isNotBlank()) mapOf("User-Agent" to userAgent) else emptyMap()
+        if (!userAgent.isNullOrBlank()) mapOf("User-Agent" to userAgent) else emptyMap()
     }
 
     fun configureWebView(wv: WebView) {
