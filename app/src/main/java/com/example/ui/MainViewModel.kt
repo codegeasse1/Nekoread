@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 enum class ReaderMode {
-    WEBTOON, LEFT_TO_RIGHT, RIGHT_TO_LEFT
+    WEBTOON, LEFT_TO_RIGHT, RIGHT_TO_LEFT, VERTICAL
 }
 
 enum class ReaderBg {
@@ -31,7 +31,7 @@ enum class ReaderBg {
 }
 
 enum class ReaderFit {
-    FIT, FIT_WIDTH
+    FIT, FIT_WIDTH, FIT_HEIGHT
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
