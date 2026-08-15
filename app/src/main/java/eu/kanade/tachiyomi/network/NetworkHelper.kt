@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.network
 import android.app.Application
 import android.content.Context
 import eu.kanade.tachiyomi.AppInfo
+import eu.kanade.tachiyomi.network.interceptor.ApexWwwRetryInterceptor
 import eu.kanade.tachiyomi.network.interceptor.CloudflareInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UncaughtExceptionInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UserAgentInterceptor
