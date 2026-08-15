@@ -28,9 +28,9 @@ data class ExtensionPageImage(
     val source: HttpSource,
 )
 
-/** Memory-cache pages by URL so scrolling the reader doesn't re-fetch them. */
+/** Memory-cache pages by their unique image URL so scrolling the reader doesn't re-fetch them. */
 class ExtensionPageImageKeyer : Keyer<ExtensionPageImage> {
-    override fun key(data: ExtensionPageImage, options: Options): String = data.pageUrl
+    override fun key(data: ExtensionPageImage, options: Options): String = data.imageUrl
 }
 
 class ExtensionPageImageFetcherFactory : Fetcher.Factory<ExtensionPageImage> {
