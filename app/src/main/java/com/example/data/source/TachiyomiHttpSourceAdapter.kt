@@ -121,4 +121,19 @@ class TachiyomiHttpSourceAdapter(
             page.imageUrl ?: ext.fetchImageUrl(page).toBlocking().first()
         }
     }
+
+    /**
+     * Coil models that load each page through the extension's own client + `imageRequest(page)`
+     * headers (Referer/Origin/etc.) — the exact path Tadami's reader uses. Without this, pages
+     * were fetched as bare URLs via Coil's generic client, so hotlink-protected CDNs rejected
+     * them (blank/black pages).
+     */
+    override suspend fun getPageImageModels(rawChapterId: String): List<Any> = withContext(Dispatchers.IO) {
+        val pages = ext.fetchPageList(ch(rawChapterId)).toBlocking().first()
+        pages.map { page ->
+            val url = page.imageUrl ?: ext.fetchImageUrl(page).toBlocking().first()
+            page.imageUrl = url
+            ExtensionPageImage(url, ext)
+        }
+    }
 }
