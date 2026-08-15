@@ -701,7 +701,11 @@ fun ReaderScreen(
                                                 stableKey = item,
                                                 model = model,
                                                 contentDescription = "Page ${i + 1}",
-                                                contentScale = ContentScale.FillWidth,
+                                                contentScale = when (readerFit) {
+                                                    ReaderFit.FIT_WIDTH -> ContentScale.FillWidth
+                                                    ReaderFit.FIT -> ContentScale.Fit
+                                                    ReaderFit.FIT_HEIGHT -> ContentScale.Fit
+                                                },
                                                 spinnerColor = contentTextColor,
                                                 onError = { msg ->
                                                     pageImageErrors = pageImageErrors + (i to msg)
@@ -918,19 +922,17 @@ fun ReaderScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         ReaderToolButton(Icons.Default.FormatListBulleted, "Chapters") { showChaptersSheet = true }
-                        if (!isWebtoon) {
-                            ReaderToolButton(
-                                icon = Icons.Default.AspectRatio,
-                                label = "Fit Width"
-                            ) {
-                                viewModel.setReaderFit(ReaderFit.FIT_WIDTH)
-                            }
-                            ReaderToolButton(
-                                icon = Icons.Default.FitScreen,
-                                label = "Fit Screen"
-                            ) {
-                                viewModel.setReaderFit(ReaderFit.FIT)
-                            }
+                        ReaderToolButton(
+                            icon = Icons.Default.AspectRatio,
+                            label = "Fit Width"
+                        ) {
+                            viewModel.setReaderFit(ReaderFit.FIT_WIDTH)
+                        }
+                        ReaderToolButton(
+                            icon = Icons.Default.FitScreen,
+                            label = "Fit Screen"
+                        ) {
+                            viewModel.setReaderFit(ReaderFit.FIT)
                         }
                         ReaderToolButton(
                             icon = Icons.Default.ScreenRotation,
