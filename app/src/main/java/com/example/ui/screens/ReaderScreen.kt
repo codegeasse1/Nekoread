@@ -240,7 +240,7 @@ fun ReaderScreen(
             try {
                 val p = viewModel.repository.getChapterPageImageModels(next.id)
                 streamQueue = streamQueue + next
-                streamSegments = streamSegments + p
+                streamSegments = streamSegments + listOf(p)
             } catch (e: Throwable) {
                 webtoonError = e.message ?: "Failed to load next chapter"
             } finally {
