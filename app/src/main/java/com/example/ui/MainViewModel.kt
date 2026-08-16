@@ -297,19 +297,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun installExtension(packageName: String) {
+    fun installExtension(packageName: String, repoId: String) {
         viewModelScope.launch {
-            _opBusy.value = "install_$packageName"
-            val error = repository.installExtension(packageName)
+            _opBusy.value = "install_${packageName}_$repoId"
+            val error = repository.installExtension(packageName, repoId)
             _opBusy.value = null
             if (error != null) _opMessage.value = error
         }
     }
 
-    fun uninstallExtension(packageName: String) {
+    fun uninstallExtension(packageName: String, repoId: String) {
         viewModelScope.launch {
-            _opBusy.value = "uninstall_$packageName"
-            val error = repository.uninstallExtension(packageName)
+            _opBusy.value = "uninstall_${packageName}_$repoId"
+            val error = repository.uninstallExtension(packageName, repoId)
             _opBusy.value = null
             _opMessage.value = error ?: "Extension uninstalled"
         }
