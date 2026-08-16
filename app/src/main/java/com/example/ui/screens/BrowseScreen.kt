@@ -230,6 +230,24 @@ fun BrowseScreen(
         }
     }
 
+    // A tag/genre chip tapped on a manga detail screen routes here: open that source's catalog
+    // pre-filled with the tag as the search query (e.g. "tag:Action" -> all Action manga).
+    val pendingSearch by viewModel.pendingCatalogSearch.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingSearch) {
+        val ps = pendingSearch
+        if (ps != null) {
+            viewModel.consumePendingCatalogSearch()
+            val (sourceId, tag) = ps
+            if (sourceId.isNotBlank()) {
+                activeSourceId = sourceId
+                activeSourceBaseUrl = extensionSources.firstOrNull { it.id == sourceId }?.baseUrl ?: ""
+                searchQuery = "tag:$tag"
+                selectedTabIndex = TAB_CATALOG
+                viewModel.loadCatalog(sourceId, "tag:$tag")
+            }
+        }
+    }
+
     // Debounced real search against the active source.
     LaunchedEffect(searchQuery, activeSourceId) {
         if (selectedTabIndex == TAB_CATALOG && activeSourceId.isNotBlank()) {
@@ -880,7 +898,12 @@ fun CatalogTabContent(
                         shape = CircleShape
                     ) {
                         Text(
-                            text = if (searchQuery.isBlank()) "Latest from $sourceName" else "Results from $sourceName",
+                            text = when {
+                                searchQuery.startsWith("tag:") ->
+                                    "Tag: ${searchQuery.removePrefix("tag:")} • $sourceName"
+                                searchQuery.isBlank() -> "Latest from $sourceName"
+                                else -> "Results from $sourceName"
+                            },
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                             style = MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.onPrimaryContainer)
                         )
