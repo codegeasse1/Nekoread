@@ -47,7 +47,7 @@ class ExtensionPageImageKeyer : Keyer<ExtensionPageImage> {
  */
 class ReaderPageCacheFetcherFactory : Fetcher.Factory<String> {
     override fun create(data: String, options: Options, imageLoader: ImageLoader): Fetcher? {
-        val key = data.hashCode().toUInt().toString(16)
+        val key = pageCacheKey(data)
         val cached = File(options.context.cacheDir, "reader_pages/$key.img")
         if (!cached.exists() || cached.length() == 0L) return null
         return object : Fetcher {
@@ -144,7 +144,7 @@ class ExtensionPageImageFetcherFactory : Fetcher.Factory<ExtensionPageImage> {
                 // there — no network round-trip at all. (The prefetcher and this fetcher compute
                 // the same cache key from the image URL.) This is what makes scrolling feel
                 // weightless: by the time a page scrolls into view its bytes are already local.
-                val key = data.imageUrl.hashCode().toUInt().toString(16)
+                val key = pageCacheKey(data.imageUrl)
                 val cached = File(options.context.cacheDir, "reader_pages/$key.img")
                 if (cached.exists() && cached.length() > 0L) {
                     return SourceResult(
