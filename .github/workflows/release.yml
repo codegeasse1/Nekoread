@@ -45,9 +45,10 @@ jobs:
 
       - name: Prepare signing keystore
         env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 || vars.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || vars.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || vars.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS || vars.KEY_ALIAS }}
         run: |
           set -e
           if [ -n "$KEYSTORE_BASE64" ]; then
@@ -72,8 +73,10 @@ jobs:
             echo "::warning::Generated a FRESH release keystore for this build. To sign future releases with the SAME key, download my-upload-key.jks from this run's artifacts and add it to repo secrets as KEYSTORE_BASE64 (base64 of the .jks), STORE_PASSWORD and KEY_PASSWORD."
             echo "Fresh keystore password: $SP"
           fi
+          echo "KEYSTORE_PATH=$PWD/my-upload-key.jks" >> "$GITHUB_ENV"
           echo "STORE_PASSWORD=$SP" >> "$GITHUB_ENV"
           echo "KEY_PASSWORD=$KP" >> "$GITHUB_ENV"
+          echo "KEY_ALIAS=${KEY_ALIAS:-upload}" >> "$GITHUB_ENV"
 
       - name: Build release APK
         run: |
@@ -131,9 +134,8 @@ jobs:
           Latest release APKs (if any) appear here too, but the official release downloads
           are on the Releases page: https://github.com/codegeasse1/Nekoread/releases
 
-          The debug APK is signed with a throwaway debug key. If you want a release you can
-          actually update in-place, use a proper release from the Releases page (built with
-          the real signing key).
+          The release APK is signed with the repo's real signing key (from secrets when configured,
+          otherwise a freshly generated key).
           EOF
 
           git add "Nekoread-$VERSION.apk" README.md
