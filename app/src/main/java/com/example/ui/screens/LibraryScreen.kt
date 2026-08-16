@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,19 +18,25 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -48,17 +57,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImagePainter
+import coil.compose.SubcomposeAsyncImage
+import coil.compose.SubcomposeAsyncImageContent
 import com.example.data.local.CategoryEntity
 import com.example.data.local.MangaEntity
 import com.example.ui.MainViewModel
 import com.example.ui.components.MangaGridCard
 import com.example.ui.components.MangaListCard
+import com.example.ui.components.coverModelFor
+import com.example.ui.theme.GlassCardBorder
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,6 +95,23 @@ fun LibraryScreen(
     val searchQuery by viewModel.librarySearchQuery.collectAsStateWithLifecycle()
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
     val categories: List<CategoryEntity> by viewModel.categories.collectAsStateWithLifecycle()
+
+    // Tadami-style home: a "Continue Reading" hero banner on top, a horizontal "Recently Read"
+    // row beneath it, then the full library grid below. Only shown on the unfiltered library
+    // view (no search, "All" category).
+    val showHomeSections = searchQuery.isBlank() && selectedCategory == "All"
+    val continueManga = if (showHomeSections) {
+        mangaList.asSequence()
+            .filter { it.lastReadChapterId != null }
+            .maxByOrNull { it.lastReadTimestamp }
+    } else null
+    val recentlyRead = if (continueManga != null) {
+        mangaList.asSequence()
+            .filter { it.lastReadChapterId != null && it.id != continueManga.id }
+            .sortedByDescending { it.lastReadTimestamp }
+            .take(8)
+            .toList()
+    } else emptyList()
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -264,6 +298,26 @@ fun LibraryScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
+                        if (continueManga != null) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                ContinueReadingHero(
+                                    manga = continueManga,
+                                    onResume = {
+                                        continueManga.lastReadChapterId?.let { onReadClick(continueManga.id, it) }
+                                    },
+                                    onOpen = { onMangaClick(continueManga.id) }
+                                )
+                            }
+                            if (recentlyRead.isNotEmpty()) {
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    RecentlyReadRow(
+                                        mangaList = recentlyRead,
+                                        onMangaClick = onMangaClick,
+                                        onReadClick = onReadClick
+                                    )
+                                }
+                            }
+                        }
                         items(mangaList, key = { it.id }) { manga ->
                             MangaGridCard(
                                 manga = manga,
@@ -280,6 +334,26 @@ fun LibraryScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
+                        if (continueManga != null) {
+                            item {
+                                ContinueReadingHero(
+                                    manga = continueManga,
+                                    onResume = {
+                                        continueManga.lastReadChapterId?.let { onReadClick(continueManga.id, it) }
+                                    },
+                                    onOpen = { onMangaClick(continueManga.id) }
+                                )
+                            }
+                            if (recentlyRead.isNotEmpty()) {
+                                item {
+                                    RecentlyReadRow(
+                                        mangaList = recentlyRead,
+                                        onMangaClick = onMangaClick,
+                                        onReadClick = onReadClick
+                                    )
+                                }
+                            }
+                        }
                         items(mangaList, key = { it.id }) { manga ->
                             MangaListCard(
                                 manga = manga,
@@ -324,5 +398,123 @@ fun LibraryScreen(
                 }
             }
         )
+    }
+}
+
+/** Tadami-style hero banner: the manga you were most recently reading, with a Resume button. */
+@Composable
+private fun ContinueReadingHero(
+    manga: MangaEntity,
+    onResume: () -> Unit,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(210.dp)
+            .clickable { onOpen() }
+            .testTag("continue_reading_hero"),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, GlassCardBorder),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            SubcomposeAsyncImage(
+                model = coverModelFor(manga),
+                contentDescription = manga.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                when (painter.state) {
+                    is AsyncImagePainter.State.Error -> Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    )
+                    else -> SubcomposeAsyncImageContent()
+                }
+            }
+            // Bottom scrim so the title/Resume stay readable over any cover.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000))))
+            )
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = "CONTINUE READING",
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = manga.title,
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Chapter ${manga.lastReadChapterName ?: "1"}",
+                    style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFFB9C0D6)),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = onResume,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = Color.White
+                    )
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Resume")
+                }
+            }
+        }
+    }
+}
+
+/** Tadami-style horizontal row of recently read titles, shown under the hero banner. */
+@Composable
+private fun RecentlyReadRow(
+    mangaList: List<MangaEntity>,
+    onMangaClick: (String) -> Unit,
+    onReadClick: (String, String) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "Recently Read",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+        )
+        LazyRow(
+            contentPadding = PaddingValues(end = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(mangaList, key = { it.id }) { manga ->
+                MangaGridCard(
+                    manga = manga,
+                    onClick = { onMangaClick(manga.id) },
+                    onReadClick = manga.lastReadChapterId?.let { { onReadClick(manga.id, it) } },
+                    modifier = Modifier.width(120.dp)
+                )
+            }
+        }
     }
 }
