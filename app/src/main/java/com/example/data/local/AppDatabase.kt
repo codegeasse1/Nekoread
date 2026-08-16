@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [
@@ -14,7 +16,7 @@ import androidx.room.RoomDatabase
         ExtensionSourceEntity::class,
         CategoryEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -27,6 +29,44 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
+        /**
+         * v2 -> v3: extensions were keyed on packageName only, so two repos shipping the same
+         * package (keiyoushi's newer "The Blank"/"4KHD" + a personal older fork) REPLACED each
+         * other — only one ever showed. Rebuild the table with the composite (packageName, repoId)
+         * key, preserving every existing row (and the user's library) in the process.
+         */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS extensions_new (
+                        packageName TEXT NOT NULL,
+                        repoId TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        versionName TEXT NOT NULL,
+                        versionCode TEXT NOT NULL,
+                        libVersion TEXT NOT NULL,
+                        contentWarning TEXT NOT NULL DEFAULT '',
+                        apkUrl TEXT NOT NULL,
+                        iconUrl TEXT NOT NULL DEFAULT '',
+                        nsfw INTEGER NOT NULL,
+                        isInstalled INTEGER NOT NULL,
+                        installedVersionName TEXT,
+                        installError TEXT,
+                        sourcesJson TEXT NOT NULL DEFAULT '',
+                        PRIMARY KEY(packageName, repoId)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "INSERT INTO extensions_new (packageName, repoId, name, versionName, versionCode, libVersion, contentWarning, apkUrl, iconUrl, nsfw, isInstalled, installedVersionName, installError, sourcesJson) " +
+                        "SELECT packageName, repoId, name, versionName, versionCode, libVersion, contentWarning, apkUrl, iconUrl, nsfw, isInstalled, installedVersionName, installError, sourcesJson FROM extensions"
+                )
+                db.execSQL("DROP TABLE extensions")
+                db.execSQL("ALTER TABLE extensions_new RENAME TO extensions")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -34,6 +74,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "nekoread.db"
                 )
+                .addMigrations(MIGRATION_2_3)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance
