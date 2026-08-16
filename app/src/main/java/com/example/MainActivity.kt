@@ -59,9 +59,6 @@ import coil.memory.MemoryCache
 import kotlinx.coroutines.Dispatchers
 import com.example.data.source.ExtensionCoverImageFetcherFactory
 import com.example.data.source.ExtensionCoverImageKeyer
-import com.example.data.source.ExtensionPageImageFetcherFactory
-import com.example.data.source.ExtensionPageImageKeyer
-import com.example.data.source.ReaderPageCacheFetcherFactory
 import com.example.ui.MainViewModel
 import com.example.ui.screens.BrowseScreen
 import com.example.ui.screens.LibraryScreen
@@ -87,15 +84,9 @@ class MainActivity : ComponentActivity() {
 
         // Network stack (shared by loaded extensions + Cloudflare WebView) before anything else.
         NetworkHelper.init(applicationContext)
-
         // All cover thumbnails go through the SAME client the extension requests use — so they
         // carry the cf_clearance cookies (and UA) that Cloudflare-protected sources require.
         // Without this, catalog covers on CF sources always came back blank.
-        //
-        // The ExtensionPageImage fetcher is what makes READER PAGES load like Tadami: each page is
-        // fetched through the extension's own client + imageRequest(page) headers (Referer/Origin),
-        // not as a bare URL via the generic client — bare URLs were rejected by hotlink-protected
-        // CDNs and showed as blank/black pages.
         Coil.setImageLoader(
             ImageLoader.Builder(this)
                 .okHttpClient(NetworkHelper.getInstance().client)
@@ -122,10 +113,7 @@ class MainActivity : ComponentActivity() {
                 // don't occupy threads). 4 is plenty: visible pages + a couple ahead.
                 .dispatcher(Dispatchers.IO.limitedParallelism(4))
                 .components {
-                    add(ExtensionPageImageFetcherFactory())
                     add(ExtensionCoverImageFetcherFactory())
-                    add(ReaderPageCacheFetcherFactory())
-                    add(ExtensionPageImageKeyer())
                     add(ExtensionCoverImageKeyer())
                 }
                 .crossfade(true)
@@ -370,7 +358,7 @@ fun MainAppScreen(viewModel: MainViewModel) {
 /** Switch to a bottom-nav tab, always landing on its top-level screen. */
 private fun NavHostController.navigateToTab(route: String) {
     if (currentDestination?.route == route) {
-        // Already on this tab — pop back to its top-level screen if we went deeper.
+        // Already on this tab â pop back to its top-level screen if we went deeper.
         popBackStack(route, inclusive = false)
         return
     }
