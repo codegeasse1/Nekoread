@@ -55,6 +55,7 @@ import coil.Coil
 import coil.ImageLoader
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
+import kotlinx.coroutines.Dispatchers
 import com.example.data.source.ExtensionCoverImageFetcherFactory
 import com.example.data.source.ExtensionCoverImageKeyer
 import com.example.data.source.ExtensionPageImageFetcherFactory
@@ -114,6 +115,11 @@ class MainActivity : ComponentActivity() {
                         .maxSizePercent(0.02)
                         .build()
                 }
+                // Bound concurrent image fetches+decodes so the reader never fires a burst of
+                // parallel requests at the CDN (which throttles every request to the host and turns
+                // instant page loads into 20-30s hangs). Memory-cache hits are unaffected (they
+                // don't occupy threads). 4 is plenty: visible pages + a couple ahead.
+                .dispatcher(Dispatchers.IO.limitedParallelism(4))
                 .components {
                     add(ExtensionPageImageFetcherFactory())
                     add(ExtensionCoverImageFetcherFactory())
