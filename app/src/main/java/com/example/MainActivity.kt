@@ -58,6 +58,8 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import kotlinx.coroutines.Dispatchers
 import com.example.data.source.ExtensionCoverImageFetcherFactory
+import com.example.data.source.ExtensionPageImageFetcherFactory
+import com.example.data.source.ExtensionPageImageKeyer
 import com.example.data.source.ExtensionCoverImageKeyer
 import com.example.ui.MainViewModel
 import com.example.ui.screens.BrowseScreen
@@ -113,6 +115,8 @@ class MainActivity : ComponentActivity() {
                 // don't occupy threads). 4 is plenty: visible pages + a couple ahead.
                 .dispatcher(Dispatchers.IO.limitedParallelism(4))
                 .components {
+                    add(ExtensionPageImageFetcherFactory())
+                    add(ExtensionPageImageKeyer())
                     add(ExtensionCoverImageFetcherFactory())
                     add(ExtensionCoverImageKeyer())
                 }
