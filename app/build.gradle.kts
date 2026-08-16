@@ -29,14 +29,18 @@ android {
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
       storeFile = file(keystorePath)
       storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
+      keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
       keyPassword = System.getenv("KEY_PASSWORD")
     }
+    // The debug build uses the REAL signing key from repo secrets when the workflow provides
+    // one (KEYSTORE_PATH + passwords), falling back to a throwaway debug.keystore otherwise.
+    // With a stable real key, each new debug APK installs in-place over the previous one.
     create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
-      storePassword = "android"
-      keyAlias = "androiddebugkey"
-      keyPassword = "android"
+      val envKeystorePath = System.getenv("KEYSTORE_PATH")
+      storeFile = if (!envKeystorePath.isNullOrBlank()) file(envKeystorePath) else file("${rootDir}/debug.keystore")
+      storePassword = System.getenv("STORE_PASSWORD") ?: "android"
+      keyAlias = System.getenv("KEY_ALIAS") ?: "androiddebugkey"
+      keyPassword = System.getenv("KEY_PASSWORD") ?: "android"
     }
   }
 
