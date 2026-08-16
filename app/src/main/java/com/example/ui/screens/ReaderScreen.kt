@@ -571,7 +571,6 @@ fun ReaderScreen(
                     .data(m)
                     .size(screenW, webtoonDecodeH)
                     .crossfade(false)
-                    .respectCacheHeaders(false)
                     .build()
             )
         }
@@ -766,7 +765,6 @@ fun ReaderScreen(
                                                 .data(item)
                                                 .size(screenW, webtoonDecodeH)
                                                 .crossfade(false)
-                                                .respectCacheHeaders(false)
                                                 .build()
                                         }
                                         Column(
@@ -834,7 +832,6 @@ fun ReaderScreen(
                                         .data(pageUrl)
                                         .size(screenW, webtoonDecodeH)
                                         .crossfade(false)
-                                        .respectCacheHeaders(false)
                                         .build()
                                 }
                                 Box(modifier = Modifier.fillMaxSize()) {
