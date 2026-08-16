@@ -1027,9 +1027,20 @@ fun ExtensionsTabContent(
     onUninstall: (ExtensionEntity) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
-    val filtered = remember(extensions, query) {
-        if (query.isBlank()) extensions
-        else extensions.filter {
+    // The same extension can be listed by several repos (e.g. keiyoushi + a mirror hosting the
+    // same packages). Show each package once — prefer the installed copy, else the newest version.
+    val uniqueExtensions = remember(extensions) {
+        extensions
+            .groupBy { it.packageName }
+            .map { (_, group) ->
+                group.firstOrNull { it.isInstalled }
+                    ?: group.maxByOrNull { it.versionCode.toIntOrNull() ?: 0 }
+                    ?: group.first()
+            }
+    }
+    val filtered = remember(uniqueExtensions, query) {
+        if (query.isBlank()) uniqueExtensions
+        else uniqueExtensions.filter {
             it.name.contains(query, ignoreCase = true) ||
                 it.packageName.contains(query, ignoreCase = true)
         }
@@ -1040,17 +1051,17 @@ fun ExtensionsTabContent(
             GlassSearchBar(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = "Search ${extensions.size} extensions..."
+                placeholder = "Search ${uniqueExtensions.size} extensions..."
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Extensions (${filtered.size} of ${extensions.size}) — install to add its sources",
+                text = "Extensions (${filtered.size} of ${uniqueExtensions.size}) — install to add its sources",
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.primary
             )
         }
 
-        if (extensions.isEmpty()) {
+        if (uniqueExtensions.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1071,7 +1082,7 @@ fun ExtensionsTabContent(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            items(filtered, key = { "${it.packageName}_${it.repoId}" }) { ext ->
+            items(filtered, key = { it.packageName }) { ext ->
                 val repoName = repoNameById[ext.repoId] ?: "Custom Repo"
                 val isBusy = busyKey == "install_${ext.packageName}_${ext.repoId}" || busyKey == "uninstall_${ext.packageName}_${ext.repoId}"
                 val cwLabel = contentWarningLabel(ext.contentWarning)
