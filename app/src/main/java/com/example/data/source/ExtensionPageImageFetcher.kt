@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit
  * Coil model for a reader page served by a Tachiyomi extension.
  *
  * The dedicated [Fetcher] loads the image through the extension's own client and its
- * [HttpSource.getImage] path â which builds the request via the source's `imageRequest(page)`
+ * [HttpSource.getImage] path Ã¢ÂÂ which builds the request via the source's `imageRequest(page)`
  * (carrying the source's Referer/Origin/custom headers) and runs it through the source's client
  * (including source-specific interceptors like Comix's Descrambler and 404-fallback). This is
  * exactly how Tadami/Mihon's reader loads online pages; loading the bare URL through a generic
@@ -75,7 +75,7 @@ class ExtensionPageImageFetcherFactory : Fetcher.Factory<ExtensionPageImage> {
  *
  * The dedicated [Fetcher] loads the cover through the extension's OWN client and headers
  * ([HttpSource.headers] = the source's User-Agent + Referer/Origin etc.) so hotlink-protected
- * CDNs accept it â the same reason reader pages go through [ExtensionPageImage]. Loading the bare
+ * CDNs accept it Ã¢ÂÂ the same reason reader pages go through [ExtensionPageImage]. Loading the bare
  * URL through the generic client omitted the source's Referer, which is why covers on sources like
  * 18 Porn Comic / TheBlank came back as blank gray tiles even after their API worked.
  */
@@ -93,7 +93,7 @@ class ExtensionCoverImageKeyer : Keyer<ExtensionCoverImage> {
 class ExtensionCoverImageFetcherFactory : Fetcher.Factory<ExtensionCoverImage> {
 
     // Covers must never hang for minutes behind a burst of reader page requests on the same host
-    // (per-host request cap + long call timeouts on the shared client) â a stuck cover just shows
+    // (per-host request cap + long call timeouts on the shared client) Ã¢ÂÂ a stuck cover just shows
     // a blank tile until restart. Use a per-source clone with short timeouts so a slow/failing
     // cover fails fast, lets Coil show the placeholder, and retries cleanly on next composition.
     private val coverClients = ConcurrentHashMap<HttpSource, OkHttpClient>()
@@ -114,9 +114,23 @@ class ExtensionCoverImageFetcherFactory : Fetcher.Factory<ExtensionCoverImage> {
     ): Fetcher? {
         return object : Fetcher {
             override suspend fun fetch(): FetchResult? {
+                // Some extensions return relative cover paths (e.g. "/uploads/x.jpg"); resolve them
+                // against the source's own base URL or the request will fail outright.
+                val coverUrl = if (data.imageUrl.startsWith("http")) data.imageUrl
+                    else data.source.baseUrl.trimEnd('/') + "/" + data.imageUrl.trimStart('/')
+                // Referer fallback: many CDNs only serve hotlinked images when the request carries a
+                // Referer. HttpSource.headers usually includes one, but when it doesn't, use the
+                // source's own homepage so the CDN sees a legit referrer.
+                val headers = data.source.headers.newBuilder()
+                    .apply {
+                        if (get("Referer").isNullOrBlank() && data.source.baseUrl.isNotBlank()) {
+                            set("Referer", data.source.baseUrl)
+                        }
+                    }
+                    .build()
                 val request = okhttp3.Request.Builder()
-                    .url(data.imageUrl)
-                    .headers(data.source.headers)
+                    .url(coverUrl)
+                    .headers(headers)
                     .build()
                 val response = try {
                     coverClient(data.source).newCall(request).execute()
