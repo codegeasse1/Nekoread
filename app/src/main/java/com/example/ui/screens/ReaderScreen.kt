@@ -108,6 +108,7 @@ import com.example.ui.MainViewModel
 import com.example.ui.ReaderBg
 import com.example.ui.ReaderFit
 import com.example.ui.ReaderMode
+import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
@@ -242,11 +243,13 @@ fun ReaderScreen(
 
     // Reading floods Coil's shared in-memory cache with page bitmaps, which can evict (or leave
     // stale) extension covers — library thumbnails then render as blank tiles until the app is
-    // restarted. Clear the image memory cache when the reader leaves composition so covers are
-    // re-fetched cleanly the next time the library/detail screen shows them.
+    // restarted. Clear the image memory cache and stop the source's background page-list prefetches
+    // when the reader leaves composition so covers are re-fetched cleanly (and aren't starved by
+    // leftover background downloads) the next time the library/detail screen shows them.
     DisposableEffect(Unit) {
         onDispose {
             runCatching { imageLoader?.memoryCache?.clear() }
+            HttpSource.cancelAllPrefetches()
         }
     }
 
@@ -737,6 +740,10 @@ fun ReaderScreen(
                                                     pageImageErrors = pageImageErrors - i
                                                     pageRetries[i] = (pageRetries[i] ?: 0) + 1
                                                 },
+                                                // At most a couple of spinners (the user asked):
+                                                // a long webtoon otherwise shows a spinner on
+                                                // every unloaded page on screen.
+                                                showSpinner = i < 2,
                                                 // A loading page keeps a viewport-height
                                                 // placeholder (like Tadami) so the list stays
                                                 // scrollable and doesn't jump when each image
@@ -1366,6 +1373,7 @@ private fun LoadableReaderImage(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
     zoom: Float = 1f,
+    showSpinner: Boolean = true,
 ) {
     // stableKey is the source model object (stable across recompositions); `model` may be a fresh
     // ImageRequest wrapper each recomposition, so never key state on it.
@@ -1390,7 +1398,7 @@ private fun LoadableReaderImage(
                 .then(if (zoom != 1f) Modifier.scale(zoom) else Modifier),
             contentScale = contentScale
         )
-        if (loading) {
+        if (loading && showSpinner) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
