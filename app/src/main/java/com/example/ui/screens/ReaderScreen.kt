@@ -89,6 +89,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -308,6 +309,27 @@ fun ReaderScreen(
         val window = (view.context as? Activity)?.window ?: return@LaunchedEffect
         WindowCompat.getInsetsController(window, window.decorView)
             .isAppearanceLightStatusBars = readerBg == ReaderBg.CREAM || readerBg == ReaderBg.WHITE
+    }
+
+    // Tadami-style immersive reader: with the HUD hidden, hide the system status + navigation
+    // bars too (true fullscreen reading, no battery/network/time clutter); tapping to show the
+    // HUD brings them back. When the reader is left, the bars are restored for the rest of the app.
+    LaunchedEffect(showHud) {
+        val window = (view.context as? Activity)?.window ?: return@LaunchedEffect
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        if (showHud) {
+            controller.show(WindowInsetsCompat.Type.systemBars())
+        } else {
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            val window = (view.context as? Activity)?.window ?: return@DisposableEffect
+            WindowCompat.getInsetsController(window, window.decorView)
+                .show(WindowInsetsCompat.Type.systemBars())
+        }
     }
 
     // Webtoon Vertical List State — keyed on the chapter so switching chapters resets the scroll
