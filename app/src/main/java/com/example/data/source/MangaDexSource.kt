@@ -86,6 +86,42 @@ object MangaDexSource : MangaSource {
         parseMangaCollection(getJson(mangaListUrl(query, page)))
     }
 
+    // MangaDex tags are UUIDs (GET /manga/tag); map tag names -> ids once and reuse.
+    private var tagIdCache: Map<String, String>? = null
+
+    private fun tagIdByName(): Map<String, String> {
+        tagIdCache?.let { return it }
+        val data = getJson(API + "/manga/tag").optJSONArray("data") ?: JSONArray()
+        val map = mutableMapOf<String, String>()
+        for (i in 0 until data.length()) {
+            val item = data.optJSONObject(i) ?: continue
+            val attrs = item.optJSONObject("attributes") ?: continue
+            val name = attrs.optJSONObject("name")?.optString("en") ?: continue
+            if (name.isBlank()) continue
+            map[name.trim().lowercase()] = item.optString("id")
+        }
+        tagIdCache = map
+        return map
+    }
+
+    override suspend fun searchByTag(tag: String, page: Int): List<MangaEntity> = withContext(Dispatchers.IO) {
+        val tagId = tagIdByName()[tag.trim().lowercase()]
+        if (tagId == null) return@withContext search(tag, page)
+        val url = (API + "/manga").toHttpUrl().newBuilder()
+            .addQueryParameter("limit", PAGE_SIZE.toString())
+            .addQueryParameter("offset", (page * PAGE_SIZE).toString())
+            .addQueryParameter("hasAvailableChapters", "true")
+            .addQueryParameter("includes[]", "cover_art")
+            .addQueryParameter("includes[]", "author")
+            .addQueryParameter("includes[]", "artist")
+            .addQueryParameter("contentRating[]", "safe")
+            .addQueryParameter("contentRating[]", "suggestive")
+            .addQueryParameter("includedTags[]", tagId)
+            .addQueryParameter("order[relevance]", "desc")
+            .build().toString()
+        parseMangaCollection(getJson(url))
+    }
+
     override suspend fun latest(page: Int): List<MangaEntity> = withContext(Dispatchers.IO) {
         parseMangaCollection(getJson(mangaListUrl("", page)))
     }
