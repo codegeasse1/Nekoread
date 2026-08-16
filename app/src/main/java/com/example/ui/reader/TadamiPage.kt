@@ -195,3 +195,26 @@ fun decodeImageBounds(file: File): Pair<Int, Int> {
     BitmapFactory.decodeFile(file.absolutePath, opts)
     return (opts.outWidth to opts.outHeight)
 }
+
+/**
+ * Cheap low-res render of a page for the reader's preview layer: drawn UNDER the tiled
+ * SubsamplingScaleImageView while it decodes, so a page scrolling into view never shows a blank
+ * frame (the tiled view's base-tile decode can take a few hundred ms on a tall strip). Capped to
+ * [maxDim] on the long side (RGB_565) so it stays small; only alive while the item is composed.
+ */
+fun decodePreview(file: File, maxDim: Int = 2048): Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(file.absolutePath, bounds)
+    val w = bounds.outWidth
+    val h = bounds.outHeight
+    if (w <= 0 || h <= 0) return null
+    var sample = 1
+    while (maxOf(w, h) / (sample * 2) >= maxDim) sample *= 2
+    return BitmapFactory.decodeFile(
+        file.absolutePath,
+        BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = Bitmap.Config.RGB_565
+        }
+    )
+}
