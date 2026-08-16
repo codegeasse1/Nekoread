@@ -78,6 +78,7 @@ import com.example.ui.MainViewModel
 import com.example.ui.theme.GlassCardBorder
 import com.example.ui.theme.NekoGoldBadge
 import com.example.ui.theme.NekoVioletPrimary
+import com.example.util.dedupeChapters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -160,10 +161,13 @@ fun MangaDetailScreen(
     }
 
     val readOrder = remember(chapters) {
+        // Duplicate chapters from the same release (same chapter across a source's mirror
+        // sites/scanlators) collapse into one entry, so the list reads 1,2,3… not 1,1,1,1,2.
+        val deduped = dedupeChapters(chapters)
         // Extension chapters without a real chapter_number (TheBlank leaves the -1 default) can't
         // be meaningfully sorted by number — fall back to upload date.
-        if (chapters.any { it.chapterNumber > 0f }) chapters.sortedBy { it.chapterNumber }
-        else chapters.sortedBy { it.dateUpload }
+        if (deduped.any { it.chapterNumber > 0f }) deduped.sortedBy { it.chapterNumber }
+        else deduped.sortedBy { it.dateUpload }
     }
     val sortedChapters = remember(chapters, isSortAscending, readOrder) {
         if (isSortAscending) readOrder else readOrder.asReversed()
@@ -479,7 +483,7 @@ fun MangaDetailScreen(
                         text = when {
                             isLoading -> "Loading chapters..."
                             loadError != null && chapters.isEmpty() -> "Failed to load chapters"
-                            else -> "${chapters.size} Chapters"
+                            else -> "${readOrder.size} Chapters"
                         },
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
