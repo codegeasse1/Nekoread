@@ -79,6 +79,7 @@ import com.example.ui.theme.GlassCardBorder
 import com.example.ui.theme.NekoGoldBadge
 import com.example.ui.theme.NekoVioletPrimary
 import com.example.util.sortChapters
+import com.example.ui.components.coverModelFor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -132,7 +133,7 @@ fun MangaDetailScreen(
     }
 
     var isDescriptionExpanded by remember { mutableStateOf(false) }
-    // Default to ascending (chapter 1 at the top, true reading order) — users expect the first
+    // Default to ascending (chapter 1 at the top, true reading order) â users expect the first
     // chapter first, and "Read" to open it, not the newest/last chapter at the bottom.
     var isSortAscending by remember { mutableStateOf(true) }
     var showCategoryDialog by remember { mutableStateOf(false) }
@@ -141,7 +142,7 @@ fun MangaDetailScreen(
 
     // For extension sources, the manga page URL + the exact UA its requests send, so a manually
     // solved Cloudflare challenge binds a cf_clearance that the chapter/detail requests accept.
-    // The URL is built by the source itself via HttpSource.getMangaUrl — extensions store bare
+    // The URL is built by the source itself via HttpSource.getMangaUrl â extensions store bare
     // slugs/paths as the manga url (TheBlank stores "a-naughty" whose real page is
     // "https://theblank.net/serie/a-naughty"), so a naive "baseUrl + '/' + url" join opens a 404.
     // getMangaWebUrl may hit the network (TheBlank's getMangaUrl boots tokens), so resolve off
@@ -162,7 +163,7 @@ fun MangaDetailScreen(
 
     val readOrder = remember(chapters) {
         // Numbered chapters sort by their number; unnumbered ones by the number in their own name
-        // (stable across refreshes — position/date-based ordering flipped on every re-fetch).
+        // (stable across refreshes â position/date-based ordering flipped on every re-fetch).
         sortChapters(chapters)
     }
     val sortedChapters = remember(chapters, isSortAscending, readOrder) {
@@ -238,7 +239,7 @@ fun MangaDetailScreen(
                 ) {
                     // Blurred Cover Background
                     AsyncImage(
-                        model = manga.coverUrl,
+                        model = coverModelFor(manga),
                         contentDescription = null,
                         modifier = Modifier
                             .fillMaxSize()
@@ -272,7 +273,7 @@ fun MangaDetailScreen(
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             AsyncImage(
-                                model = manga.coverUrl,
+                                model = coverModelFor(manga),
                                 contentDescription = manga.title,
                                 modifier = Modifier
                                     .width(110.dp)
@@ -295,7 +296,7 @@ fun MangaDetailScreen(
                             Spacer(modifier = Modifier.height(4.dp))
 
                             Text(
-                                text = "${manga.author} • ${manga.artist}",
+                                text = "${manga.author} â¢ ${manga.artist}",
                                 style = MaterialTheme.typography.bodyMedium.copy(color = Color.LightGray),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -381,7 +382,7 @@ fun MangaDetailScreen(
                             )
                         }
 
-                        // Cloudflare / site verification — some sources challenge the chapter/detail
+                        // Cloudflare / site verification â some sources challenge the chapter/detail
                         // pages too, so open the manga's own page here and solve it.
                         if (isExtensionManga) {
                             OutlinedButton(
@@ -549,7 +550,7 @@ fun MangaDetailScreen(
                         Spacer(modifier = Modifier.height(2.dp))
 
                         Text(
-                            text = "${chapter.releaseDate} • ${chapter.scanlator}",
+                            text = "${chapter.releaseDate} â¢ ${chapter.scanlator}",
                             style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                         )
                     }
