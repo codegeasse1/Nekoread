@@ -289,7 +289,7 @@ fun BrowseScreen(
                     }
                 )
             } else {
-                Column(modifier = Modifier.background(GlassSurface)) {
+                Column(modifier = Modifier.background(GlassSurface.copy(alpha = 0.55f))) {
                     TopAppBar(
                         windowInsets = WindowInsets(0),
                         colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
@@ -297,7 +297,7 @@ fun BrowseScreen(
                             Text(
                                 text = "Browse & Extensions",
                                 fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.titleLarge
+                                style = MaterialTheme.typography.titleMedium
                             )
                         }
                     )
