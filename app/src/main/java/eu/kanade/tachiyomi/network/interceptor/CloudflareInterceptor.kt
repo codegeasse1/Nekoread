@@ -60,6 +60,13 @@ class CloudflareInterceptor(
     }
 
     override fun intercept(chain: Interceptor.Chain, request: Request, response: Response): Response {
+        // A challenge on an IMAGE request is a dead end: the WebView solve loads the document URL,
+        // not the image, and takes many seconds — exactly the 20-30s "keeps loading" hang. Surface
+        // the response immediately (page error, tap to retry) instead. Images get through the
+        // cf_clearance that catalog/chapter solves already stored in the cookie jar.
+        if (isImageRequest(request)) {
+            return response
+        }
         val host = request.url.host
         try {
             response.close()
@@ -110,3 +117,13 @@ private val COOKIE_NAMES = listOf("cf_clearance")
 // Just enough to capture the challenge headers/markers; the page body is larger but the
 // challenge identifiers always appear near the top.
 private const val CHALLENGE_PEEK_BYTES = 8L * 1024L
+
+private val IMAGE_EXTENSIONS = setOf(
+    "jpg", "jpeg", "png", "gif", "webp", "avif", "bmp", "heic", "heif", "jfif", "svg",
+)
+
+/** True when the request targets an image file (reader page or cover), not a document. */
+private fun isImageRequest(request: Request): Boolean {
+    val last = request.url.pathSegments.lastOrNull() ?: return false
+    return last.substringAfterLast('.', "").lowercase() in IMAGE_EXTENSIONS
+}
