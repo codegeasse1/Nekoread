@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CollectionsBookmark
 import androidx.compose.material.icons.filled.Explore
@@ -26,6 +28,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -48,6 +51,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import coil.Coil
 import coil.ImageLoader
+import coil.disk.DiskCache
 import com.example.data.source.ExtensionCoverImageFetcherFactory
 import com.example.data.source.ExtensionCoverImageKeyer
 import com.example.data.source.ExtensionPageImageFetcherFactory
@@ -89,6 +93,15 @@ class MainActivity : ComponentActivity() {
         Coil.setImageLoader(
             ImageLoader.Builder(this)
                 .okHttpClient(NetworkHelper.getInstance().client)
+                // Disk cache so a loaded cover/page stays on-device: scrolling back to a screen or
+                // returning after the reader shows thumbnails instantly instead of re-downloading
+                // the whole grid (which is what left covers blank/"loading" after navigation).
+                .diskCache {
+                    DiskCache.Builder()
+                        .directory(cacheDir.resolve("coil_disk"))
+                        .maxSizePercent(0.02)
+                        .build()
+                }
                 .components {
                     add(ExtensionPageImageFetcherFactory())
                     add(ExtensionCoverImageFetcherFactory())
@@ -178,29 +191,43 @@ fun MainAppScreen(viewModel: MainViewModel) {
         contentWindowInsets = if (isReader) WindowInsets(0) else ScaffoldDefaults.contentWindowInsets,
         bottomBar = {
             if (showBottomBar) {
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.45f),
-                    tonalElevation = 0.dp,
+                // Floating rounded glass nav pill (Tadami-style), not a full-width rectangle.
+                Box(
                     modifier = Modifier
-                        .height(64.dp)
-                        .border(width = 1.dp, color = GlassCardBorder)
-                        .testTag("bottom_nav")
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                        .testTag("bottom_nav_container")
                 ) {
-                    bottomNavScreens.forEach { screen ->
-                        NavigationBarItem(
-                            icon = screen.icon,
-                            label = {
-                                Text(
-                                    text = screen.title,
-                                    style = MaterialTheme.typography.labelMedium
+                    Surface(
+                        shape = RoundedCornerShape(26.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
+                        border = BorderStroke(1.dp, GlassCardBorder),
+                        shadowElevation = 10.dp
+                    ) {
+                        NavigationBar(
+                            containerColor = Color.Transparent,
+                            tonalElevation = 0.dp,
+                            modifier = Modifier
+                                .height(64.dp)
+                                .testTag("bottom_nav")
+                        ) {
+                            bottomNavScreens.forEach { screen ->
+                                NavigationBarItem(
+                                    icon = screen.icon,
+                                    label = {
+                                        Text(
+                                            text = screen.title,
+                                            style = MaterialTheme.typography.labelSmall
+                                        )
+                                    },
+                                    selected = currentRoute == screen.route,
+                                    onClick = {
+                                        navController.navigateToTab(screen.route)
+                                    },
+                                    modifier = Modifier.testTag("nav_item_${screen.route}")
                                 )
-                            },
-                            selected = currentRoute == screen.route,
-                            onClick = {
-                                navController.navigateToTab(screen.route)
-                            },
-                            modifier = Modifier.testTag("nav_item_${screen.route}")
-                        )
+                            }
+                        }
                     }
                 }
             }
@@ -277,6 +304,10 @@ fun MainAppScreen(viewModel: MainViewModel) {
                     onBackClick = { navController.popBackStack() },
                     onChapterClick = { chapterId ->
                         navController.navigate("reader/$mangaId/$chapterId")
+                    },
+                    onTagClick = { tag ->
+                        mangaState?.sourceId?.let { viewModel.openTagSearch(it, tag) }
+                        navController.navigateToTab(Screen.Browse.route)
                     }
                 )
             }
