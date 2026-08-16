@@ -118,6 +118,12 @@ fun ReaderScreen(
     var pageLoading by remember { mutableStateOf(true) }
     var retryKey by remember { mutableStateOf(0) }
 
+    // Continuous-reading stream (webtoon modes): chapters in reading order + their loaded pages.
+    var streamQueue by remember(chapter.id) { mutableStateOf(listOf(chapter)) }
+    var streamSegments by remember(chapter.id) { mutableStateOf<List<List<Any>>>(emptyList()) }
+    var webtoonLoadingNext by remember(chapter.id) { mutableStateOf(false) }
+    var webtoonError by remember(chapter.id) { mutableStateOf<String?>(null) }
+
     LaunchedEffect(chapter.id, retryKey) {
         pageLoading = true
         pageError = null
@@ -128,6 +134,13 @@ fun ReaderScreen(
             pages = null
         } finally {
             pageLoading = false
+        }
+    }
+
+    // Seed the webtoon stream with the current chapter's pages once loaded.
+    LaunchedEffect(pages, chapter.id, isWebtoon) {
+        if (isWebtoon && pages != null && (streamSegments.isEmpty() || streamSegments.firstOrNull() != pages)) {
+            streamSegments = listOf(pages!!)
         }
     }
 
@@ -152,23 +165,111 @@ fun ReaderScreen(
         pageCount = { pages?.size ?: 0 }
     )
 
-    val currentPage by remember {
+    // The chapter currently on screen (in webtoon modes this can advance past the starting chapter).
+    val streamPosition by remember {
         derivedStateOf {
-            val total = pages?.size ?: 0
-            if (total == 0) {
-                0
-            } else if (isWebtoon) {
-                (listState.firstVisibleItemIndex + 1).coerceAtMost(total)
+            if (isWebtoon && streamSegments.isNotEmpty()) {
+                val sizes = streamSegments.map { it.size }
+                val g = listState.firstVisibleItemIndex
+                var seg = 0
+                var page = 1
+                for (i in sizes.indices) {
+                    val start = sizes.take(i).sum() + i
+                    if (g >= start - 1) {
+                        seg = i
+                        page = (g - start + 1).coerceIn(1, sizes[i].coerceAtLeast(1))
+                    } else break
+                }
+                Triple(seg, page, sizes.getOrElse(seg) { pages?.size ?: 1 })
             } else {
-                (pagerState.currentPage + 1).coerceAtMost(total)
+                Triple(0, 1, pages?.size ?: 1)
             }
         }
     }
 
-    // Save reading progress on page change
-    LaunchedEffect(currentPage) {
+    val activeChapter by remember {
+        derivedStateOf {
+            if (isWebtoon) streamQueue.getOrNull(streamPosition.first) ?: chapter else chapter
+        }
+    }
+
+    val currentPage by remember {
+        derivedStateOf {
+            if (isWebtoon) {
+                streamPosition.second
+            } else {
+                val total = pages?.size ?: 0
+                if (total == 0) 0 else (pagerState.currentPage + 1).coerceAtMost(total)
+            }
+        }
+    }
+
+    val pageTotal by remember {
+        derivedStateOf {
+            if (isWebtoon) streamPosition.third else (pages?.size ?: 0)
+        }
+    }
+
+    // Save reading progress on page / active-chapter change
+    LaunchedEffect(currentPage, activeChapter.id) {
         if (currentPage > 0) {
-            viewModel.saveProgress(manga.id, chapter.id, chapter.name, currentPage)
+            viewModel.saveProgress(manga.id, activeChapter.id, activeChapter.name, currentPage)
+        }
+    }
+
+    val sortedChapters = remember(allChapters) { allChapters.sortedBy { it.chapterNumber } }
+
+    val prevChapter = remember(sortedChapters, activeChapter) {
+        sortedChapters.lastOrNull { it.chapterNumber < activeChapter.chapterNumber }
+    }
+
+    val nextChapter = remember(sortedChapters, activeChapter) {
+        sortedChapters.firstOrNull { it.chapterNumber > activeChapter.chapterNumber }
+    }
+
+    // The next chapter after the LAST one already streamed (used for auto-continue).
+    val streamNextChapter = remember(sortedChapters, streamQueue) {
+        val last = streamQueue.lastOrNull() ?: return@remember null
+        sortedChapters.firstOrNull { it.chapterNumber > last.chapterNumber }
+    }
+
+    fun loadNextIntoStream(next: ChapterEntity) {
+        coroutineScope.launch {
+            webtoonLoadingNext = true
+            webtoonError = null
+            try {
+                val p = viewModel.repository.getChapterPageImageModels(next.id)
+                streamQueue = streamQueue + next
+                streamSegments = streamSegments + p
+            } catch (e: Throwable) {
+                webtoonError = e.message ?: "Failed to load next chapter"
+            } finally {
+                webtoonLoadingNext = false
+            }
+        }
+    }
+
+    // When the user nears the bottom of the stream, fetch the next chapter and append it.
+    val nearStreamEnd by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val total = info.totalItemsCount
+            if (total == 0) false
+            else {
+                val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+                lastVisible >= total - 4
+            }
+        }
+    }
+
+    LaunchedEffect(nearStreamEnd, streamQueue.size, webtoonLoadingNext, webtoonError, isWebtoon) {
+        if (!isWebtoon) return@LaunchedEffect
+        if (!nearStreamEnd) return@LaunchedEffect
+        if (webtoonLoadingNext) return@LaunchedEffect
+        if (webtoonError != null) return@LaunchedEffect
+        val next = streamNextChapter ?: return@LaunchedEffect
+        if (!streamQueue.any { it.id == next.id }) {
+            loadNextIntoStream(next)
         }
     }
 
@@ -192,14 +293,6 @@ fun ReaderScreen(
                     .build()
             )
         }
-    }
-
-    val prevChapter = remember(allChapters, chapter) {
-        allChapters.sortedBy { it.chapterNumber }.lastOrNull { it.chapterNumber < chapter.chapterNumber }
-    }
-
-    val nextChapter = remember(allChapters, chapter) {
-        allChapters.sortedBy { it.chapterNumber }.firstOrNull { it.chapterNumber > chapter.chapterNumber }
     }
 
     // Source's base URL (for the Cloudflare / site-verification WebView button).
@@ -323,48 +416,101 @@ fun ReaderScreen(
                         },
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        itemsIndexed(pageList) { index, pageUrl ->
-                            ReaderPageImage(
-                                model = pageUrl,
-                                contentDescription = "Page ${index + 1}",
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("reader_page_$index"),
-                                contentScale = ContentScale.FillWidth,
-                                spinnerColor = contentTextColor
-                            )
+                        // Each streamed chapter: a small divider, then its pages.
+                        streamQueue.forEachIndexed { segIdx, segChapter ->
+                            val segPages = streamSegments.getOrNull(segIdx)
+                            if (segPages != null) {
+                                if (segIdx > 0) {
+                                    item(key = "divider_${segChapter.id}") {
+                                        ChapterDivider(
+                                            title = segChapter.name,
+                                            textColor = contentTextColor
+                                        )
+                                    }
+                                }
+                                itemsIndexed(
+                                    segPages,
+                                    key = { pi, _ -> "${segChapter.id}_$pi" }
+                                ) { pi, pageModel ->
+                                    ReaderPageImage(
+                                        model = pageModel,
+                                        contentDescription = "Page ${pi + 1}",
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("reader_page_${segIdx}_$pi"),
+                                        contentScale = ContentScale.FillWidth,
+                                        spinnerColor = contentTextColor
+                                    )
+                                }
+                            }
                         }
 
-                        // Next Chapter Prompt Footer
-                        item {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(32.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = "End of ${chapter.name}",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = contentTextColor
-                                    )
-                                )
-
-                                Spacer(modifier = Modifier.height(16.dp))
-
-                                if (nextChapter != null) {
-                                    Button(
-                                        onClick = { onChapterChange(nextChapter.id) },
-                                        modifier = Modifier.testTag("next_chapter_button")
+                        // Trailing item: spinner / retry / end-of-stream.
+                        item(key = "stream_trailer") {
+                            when {
+                                webtoonLoadingNext -> {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(32.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
                                     ) {
-                                        Text("Read Next: ${nextChapter.name}")
+                                        CircularProgressIndicator(color = contentTextColor.copy(alpha = 0.7f))
+                                        Text(
+                                            text = "Loading next chapter...",
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                color = contentTextColor.copy(alpha = 0.7f)
+                                            )
+                                        )
                                     }
-                                } else {
-                                    Text(
-                                        text = "You have caught up with the latest released chapter!",
-                                        style = MaterialTheme.typography.bodySmall.copy(color = contentTextColor.copy(alpha = 0.7f))
-                                    )
+                                }
+
+                                webtoonError != null && streamNextChapter != null -> {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(32.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Text(
+                                            text = "Couldn't load the next chapter",
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                color = contentTextColor.copy(alpha = 0.7f)
+                                            )
+                                        )
+                                        Button(onClick = { webtoonError = null; loadNextIntoStream(streamNextChapter) }) {
+                                            Text("Retry")
+                                        }
+                                    }
+                                }
+
+                                streamNextChapter != null -> {
+                                    // Auto-continue trigger zone; loads as the user nears the bottom.
+                                    Spacer(modifier = Modifier.height(48.dp))
+                                }
+
+                                else -> {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(32.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text(
+                                            text = "End of ${activeChapter.name}",
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = contentTextColor
+                                            )
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Text(
+                                            text = "You have caught up with the latest released chapter!",
+                                            style = MaterialTheme.typography.bodySmall.copy(color = contentTextColor.copy(alpha = 0.7f))
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -443,7 +589,7 @@ fun ReaderScreen(
                                 maxLines = 1
                             )
                             Text(
-                                text = chapter.name,
+                                text = activeChapter.name,
                                 style = MaterialTheme.typography.bodySmall.copy(color = Color.LightGray),
                                 maxLines = 1
                             )
@@ -503,7 +649,7 @@ fun ReaderScreen(
                         }
 
                         Text(
-                            text = "Page $currentPage / ${pages?.size ?: 0}",
+                            text = "Page $currentPage / $pageTotal",
                             style = MaterialTheme.typography.labelLarge.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
@@ -529,13 +675,15 @@ fun ReaderScreen(
                             val targetPage = pageVal.toInt() - 1
                             coroutineScope.launch {
                                 if (isWebtoon) {
-                                    listState.scrollToItem(targetPage)
+                                    val seg = streamPosition.first
+                                    val start = streamSegments.take(seg).sumOf { it.size } + seg
+                                    listState.scrollToItem(start + targetPage)
                                 } else {
                                     pagerState.scrollToPage(targetPage)
                                 }
                             }
                         },
-                        valueRange = 1f..(pages?.size ?: 1).coerceAtLeast(1).toFloat(),
+                        valueRange = 1f..pageTotal.coerceAtLeast(1).toFloat(),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("reader_page_slider")
@@ -675,6 +823,25 @@ fun ReaderScreen(
             url = url,
             userAgent = ua,
             onDismiss = { webviewTarget = null }
+        )
+    }
+}
+
+@Composable
+private fun ChapterDivider(title: String, textColor: Color) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 20.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "— $title —",
+            style = MaterialTheme.typography.labelLarge.copy(
+                fontWeight = FontWeight.Bold,
+                color = textColor.copy(alpha = 0.7f)
+            ),
+            maxLines = 1
         )
     }
 }
