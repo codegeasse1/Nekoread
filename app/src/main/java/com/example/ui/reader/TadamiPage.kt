@@ -120,6 +120,9 @@ fun TadamiPage(
 
 /** Shared SSIV config, mirroring Tadami's ReaderPageImageView.setup. */
 private fun SubsamplingScaleImageView.configure(scaleType: Int, isWebtoon: Boolean) {
+    // Transparent so the low-res preview layer under this view shows through while SSIV decodes
+    // its first tiles — an opaque default background would blank that preview (the scroll blink).
+    setBackgroundColor(android.graphics.Color.TRANSPARENT)
     setMinimumScaleType(scaleType)
     setMinimumDpi(1) // very small images still fit on first load
     setMinimumTileDpi(180)
