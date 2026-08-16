@@ -37,12 +37,13 @@ val GlassCardBorder = Color(0x1AFFFFFF)    // hairline white border (10% alpha)
 val GlassField = Color(0x40222938)         // translucent input fields
 val GlassScrim = Color(0x66000000)         // dim scrim behind dialogs/HUD
 
-// Ambient background gradient (drawn behind the whole app so glass is visible)
-val BgGradientTop = Color(0xFF241A46)
-val BgGradientMid = Color(0xFF151429)
-val BgGradientBottom = Color(0xFF0C0E1A)
-val GlowViolet = Color(0x4D7C4DFF)
-val GlowCyan = Color(0x3322D3EE)
+// Ambient background gradient (Tadami-style calm deep navy, so glass is visible but every
+// element stays readable — the old bright purple/teal blobs washed out text near the edges)
+val BgGradientTop = Color(0xFF0E131F)
+val BgGradientMid = Color(0xFF090C15)
+val BgGradientBottom = Color(0xFF04060C)
+val GlowViolet = Color(0x1A2E2A5C)   // faint indigo tint, just enough for depth
+val GlowCyan = Color(0x10173A5C)     // faint steel-teal tint
 
 // Typography Colors
 val TextPrimaryDark = Color(0xFFF3F5FA)
