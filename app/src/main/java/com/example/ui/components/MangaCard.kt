@@ -1,8 +1,10 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BrokenImage
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
@@ -65,23 +68,26 @@ internal fun coverModelFor(manga: MangaEntity): Any? {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MangaGridCard(
     manga: MangaEntity,
     onClick: () -> Unit,
     onReadClick: (() -> Unit)? = null,
+    selected: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .clickable { onClick() }
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .testTag("manga_card_${manga.id}"),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
-        border = BorderStroke(1.dp, GlassCardBorder),
+        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) SleekVioletPrimary else GlassCardBorder),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column {
@@ -178,6 +184,19 @@ fun MangaGridCard(
                             )
                         )
                     }
+                }
+
+                // Selection indicator (long-press multi-select mode)
+                if (selected) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Selected",
+                        tint = SleekVioletPrimary,
+                        modifier = Modifier
+                            .padding(6.dp)
+                            .align(Alignment.TopEnd)
+                            .size(26.dp)
+                    )
                 }
 
                 // Bottom Quick Resume Button
@@ -277,22 +296,25 @@ fun MangaGridCard(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MangaListCard(
     manga: MangaEntity,
     onClick: () -> Unit,
+    selected: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .clickable { onClick() }
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .testTag("manga_list_item_${manga.id}"),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        border = BorderStroke(1.dp, GlassCardBorder),
+        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) SleekVioletPrimary else GlassCardBorder),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
@@ -301,6 +323,15 @@ fun MangaListCard(
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (selected) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = "Selected",
+                    tint = SleekVioletPrimary,
+                    modifier = Modifier.padding(start = 4.dp).size(26.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            }
             SubcomposeAsyncImage(
                 model = coverModelFor(manga),
                 contentDescription = manga.title,
