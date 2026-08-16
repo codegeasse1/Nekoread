@@ -39,6 +39,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.NavigateBefore
 import androidx.compose.material.icons.filled.NavigateNext
@@ -113,7 +114,6 @@ import com.example.ui.ReaderFit
 import com.example.ui.ReaderMode
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -194,15 +194,44 @@ fun ReaderScreen(
 
     val coroutineScope = rememberCoroutineScope()
 
-    // Download-ahead scope: background job that pulls pages into the on-device reader_pages cache
-    // (Aniyomi/Tadami-style page cache), so scrolling never waits on the network. It's tied to this
-    // composition, so leaving the reader cancels it automatically. All prefetch downloads share ONE
-    // gate so their combined concurrency stays well under the CDN's per-host connection limit —
-    // exceeding it made the reader's own foreground page loads stall ("keeps loading").
-    val prefetchScope = rememberCoroutineScope()
-    val prefetchJob = remember { mutableStateOf<Job?>(null) }
-    val nextPrefetchJob = remember { mutableStateOf<Job?>(null) }
-    val prefetchGate = remember { Semaphore(2) }
+    // Chapter downloads (opt-in, Aniyomi/Tadami model). The reader STREAMS pages on demand — like
+    // Tadami online reading — and downloads happen only when the user taps the download button on
+    // a chapter, a couple at a time, into the on-device reader_pages cache. Always-on download-ahead
+    // had to go: it fired a constant stream of requests at the CDN, which throttled EVERY request
+    // to the host (including the pages actually on screen), turning fast loads into 20-30s hangs.
+    val chapterDownloads = remember { mutableStateMapOf<String, Float>() } // chapterId -> 0..1 progress
+
+    fun startChapterDownload(c: ChapterEntity) {
+        val cur = chapterDownloads[c.id]
+        if (cur != null && cur >= 1f) return
+        if (cur != null && cur < 1f) return // already downloading
+        chapterDownloads[c.id] = 0f
+        coroutineScope.launch {
+            val list = runCatching {
+                withTimeout(QUEUED_LOAD_TIMEOUT_MS) { viewModel.repository.getChapterPageImageModels(c.id) }
+            }.getOrNull() ?: run { chapterDownloads.remove(c.id); return@launch }
+            val targets = list.mapNotNull { m ->
+                when (m) {
+                    is ExtensionPageImage -> Triple(c.id, m.pageUrl, m.imageUrl)
+                    is String -> Triple(c.id, "", m)
+                    else -> null
+                }
+            }
+            if (targets.isEmpty()) { chapterDownloads.remove(c.id); return@launch }
+            withContext(Dispatchers.IO) {
+                val gate = Semaphore(2)
+                var done = 0
+                for ((cid, pUrl, iUrl) in targets) {
+                    gate.withPermit {
+                        runCatching { viewModel.repository.getPageImageFile(cid, pUrl, iUrl) }
+                        done++
+                        chapterDownloads[c.id] = done.toFloat() / targets.size
+                    }
+                }
+            }
+            chapterDownloads[c.id] = 1f
+        }
+    }
 
     // Re-load a queued chapter's pages after a failure (tapped from its error row). A failed
     // queued chapter never blocks continuous scroll — the reader just shows the retry row.
@@ -281,8 +310,6 @@ fun ReaderScreen(
                     urls.forEach { mc.remove(MemoryCache.Key(it)) }
                 }
             }
-            prefetchJob.value?.cancel()
-            nextPrefetchJob.value?.cancel()
             HttpSource.cancelAllPrefetches()
         }
     }
@@ -593,88 +620,12 @@ fun ReaderScreen(
         }
     }
 
-    // Download-ahead (Aniyomi/Tadami page cache): pull EVERY page of the loaded strip into the
-    // on-device reader_pages cache in the background, a few at a time, so a page is already on
-    // disk by the time it scrolls into view and renders instantly — no network spinner, no
-    // re-download on scroll-back, and no memory spike (raw bytes on disk vs full-size bitmaps in
-    // RAM, which is what made scrolling heavy). The reader's page fetcher serves from this cache
-    // first, so this is disk-only prefetching. Already-cached pages are skipped, so re-running
-    // when a queued chapter's pages arrive is cheap.
-    // Downloads are ordered from the CURRENT reading position outward (ahead first, then behind):
-    // opening a chapter resumes mid-way, and prefetching from page 1 meant every page the reader
-    // actually showed was still on the network — the "stuck on a spinner while scrolling" problem.
-    // Re-runs every ~24 pages of scroll so a jump (slider/next-chapter) re-centres the downloads.
-    val prefetchBucket = if (isWebtoon) listState.firstVisibleItemIndex / 24 else pagerState.currentPage / 24
-    LaunchedEffect(chapter.id, isWebtoon, entries.size, pages?.size, prefetchBucket) {
-        if (pages == null) return@LaunchedEffect
-        // (position index in the strip, chapterId, pageUrl, imageUrl)
-        val targets = buildList {
-            fun addChapter(cid: String, list: List<Any>?) {
-                list?.forEach { m ->
-                    when (m) {
-                        is ExtensionPageImage -> add(Triple(cid, m.pageUrl, m.imageUrl))
-                        is String -> add(Triple(cid, "", m))
-                    }
-                }
-            }
-            addChapter(chapter.id, pages)
-            queuedChapters.forEach { addChapter(it.chapter.id, it.pages) }
-            previousChapters.forEach { addChapter(it.chapter.id, it.pages) }
-        }
-        if (targets.isEmpty()) return@LaunchedEffect
-        val cur = if (isWebtoon) listState.firstVisibleItemIndex.coerceAtLeast(0) else pagerState.currentPage.coerceAtLeast(0)
-        val ordered = buildList {
-            targets.forEachIndexed { i, t ->
-                if (i == cur) return@forEachIndexed // the on-screen page is already being loaded
-                add(Pair(t, if (i >= cur) (i - cur) else Int.MAX_VALUE / 2 + (cur - i)))
-            }
-        }.sortedBy { it.second }.map { it.first }
-        prefetchJob.value?.cancel()
-        prefetchJob.value = prefetchScope.launch {
-            withContext(Dispatchers.IO) {
-                for ((cid, pUrl, iUrl) in ordered) {
-                    prefetchGate.withPermit {
-                        runCatching { viewModel.repository.getPageImageFile(cid, pUrl, iUrl) }
-                    }
-                }
-            }
-        }
-    }
-
-    // Aniyomi-style "load everything": also pull the NEXT chapter's pages into the page cache so
-    // crossing the chapter boundary is seamless too (the strip's own queuing fetches its page list
-    // again when it's actually reached, which the source's page-list cache makes instant). Runs once
-    // per chapter, only if the strip hasn't queued a next chapter yet. Shares the same download gate
-    // as the current chapter so combined prefetch concurrency stays safe.
-    LaunchedEffect(chapter.id, isWebtoon, queuedChapters.size) {
-        if (!isWebtoon) return@LaunchedEffect
-        if (queuedChapters.isNotEmpty()) return@LaunchedEffect
-        val lastCh = queuedChapters.lastOrNull()?.chapter ?: chapter
-        val next = nextChapterAfter(lastCh) ?: return@LaunchedEffect
-        val cid = next.id
-        val list = runCatching {
-            withTimeout(QUEUED_LOAD_TIMEOUT_MS) { viewModel.repository.getChapterPageImageModels(cid) }
-        }.getOrNull() ?: return@LaunchedEffect
-        val targets = list.mapNotNull { m ->
-            when (m) {
-                is ExtensionPageImage -> Triple(cid, m.pageUrl, m.imageUrl)
-                is String -> Triple(cid, "", m)
-                else -> null
-            }
-        }
-        if (targets.isEmpty()) return@LaunchedEffect
-        nextPrefetchJob.value?.cancel()
-        nextPrefetchJob.value = prefetchScope.launch {
-            withContext(Dispatchers.IO) {
-                for ((ch, pUrl, iUrl) in targets) {
-                    prefetchGate.withPermit {
-                        runCatching { viewModel.repository.getPageImageFile(ch, pUrl, iUrl) }
-                    }
-                }
-            }
-        }
-    }
-
+    // Pages stream ON DEMAND through Coil (like Tadami's online reader): the visible window plus a
+    // couple of pages ahead are requested as the reader scrolls, and Coil's memory + disk caches
+    // make scroll-back instant. Deliberately NO full-chapter background download here — a constant
+    // download stream at the CDN made the CDN throttle every request to the host, including the
+    // pages actually on screen, turning fast loads into 20-30s hangs. Users who want chapters
+    // offline/instant use the download button in the chapter sheet (startChapterDownload).
     val prevChapter = remember(orderedChapters, chapter) { prevChapterBefore(chapter) }
 
     val nextChapter = remember(orderedChapters, chapter) { nextChapterAfter(chapter) }
@@ -1334,6 +1285,32 @@ fun ReaderScreen(
                                     tint = MaterialTheme.colorScheme.outline,
                                     modifier = Modifier.size(18.dp)
                                 )
+                            }
+                            val dlProgress = chapterDownloads[c.id]
+                            when {
+                                dlProgress != null && dlProgress >= 1f -> Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = "Downloaded",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                dlProgress != null -> CircularProgressIndicator(
+                                    progress = { dlProgress },
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                else -> IconButton(
+                                    onClick = { startChapterDownload(c) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Download,
+                                        contentDescription = "Download chapter",
+                                        tint = MaterialTheme.colorScheme.outline,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
                             }
                         }
                     }
