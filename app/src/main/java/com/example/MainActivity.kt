@@ -59,6 +59,7 @@ import com.example.data.source.ExtensionCoverImageFetcherFactory
 import com.example.data.source.ExtensionCoverImageKeyer
 import com.example.data.source.ExtensionPageImageFetcherFactory
 import com.example.data.source.ExtensionPageImageKeyer
+import com.example.data.source.ReaderPageCacheFetcherFactory
 import com.example.ui.MainViewModel
 import com.example.ui.screens.BrowseScreen
 import com.example.ui.screens.LibraryScreen
@@ -116,6 +117,7 @@ class MainActivity : ComponentActivity() {
                 .components {
                     add(ExtensionPageImageFetcherFactory())
                     add(ExtensionCoverImageFetcherFactory())
+                    add(ReaderPageCacheFetcherFactory())
                     add(ExtensionPageImageKeyer())
                     add(ExtensionCoverImageKeyer())
                 }
