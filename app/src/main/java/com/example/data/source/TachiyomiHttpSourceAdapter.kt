@@ -119,6 +119,12 @@ class TachiyomiHttpSourceAdapter(
             .map { it.toManga() }
     }
 
+    // Tag search for extension sources: keiyoushi sources don't expose a portable per-tag API, so
+    // the safest cross-version behavior is a plain keyword search (the tag is a real word in the
+    // catalog, so it surfaces the tagged titles). MangaDex (the built-in source) has true tag
+    // filtering via its API's includedTags[].
+    override suspend fun searchByTag(tag: String, page: Int): List<MangaEntity> = search(tag, page)
+
     override suspend fun latest(page: Int): List<MangaEntity> = withContext(Dispatchers.IO) {
         loading("latest") { ext.getLatestUpdates(page) }
             .mangas
