@@ -110,8 +110,6 @@ import com.example.ui.ReaderMode
 import com.example.ui.reader.TadamiPage
 import com.example.ui.reader.decodeImageBounds
 import com.example.ui.reader.decodePreview
-import com.example.util.chapterNameNumber
-import com.example.util.dedupeChapters
 import com.example.util.describe
 import eu.kanade.tachiyomi.source.online.HttpSource
 import java.io.File
@@ -469,20 +467,13 @@ fun ReaderScreen(
         derivedStateOf { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
     }
 
-    // Stable reading order for the whole chapter list. Duplicate chapters from the same release
-    // (a source's mirror sites/scanlators) collapse into one entry, so continuous scroll /
-    // prev-next advance 1→2→3 instead of replaying chapter 1 once per source. Extension sources
-    // that leave the -1 default chapter number (TheBlank) can't be meaningfully sorted by number,
-    // so fall back to upload date. Powers the chapter sheet, prev/next navigation and continuous
-    // scroll.
+    // Reading order for the whole chapter list — the chapter sheet, prev/next navigation and
+    // continuous scroll all follow it.
     val orderedChapters = remember(allChapters) {
-        val deduped = dedupeChapters(allChapters)
-        if (deduped.any { it.chapterNumber > 0f }) {
-            deduped.sortedBy { it.chapterNumber }
+        if (allChapters.any { it.chapterNumber > 0f }) {
+            allChapters.sortedBy { it.chapterNumber }
         } else {
-            // Unnumbered sources: stable ordering by the source's own upload dates, name number as
-            // tiebreak — NOT fake positional numbers (those scrambled chapter↔content on re-fetch).
-            deduped.sortedWith(compareBy<ChapterEntity> { it.dateUpload }.thenBy { chapterNameNumber(it.name) }.thenBy { it.name })
+            allChapters.sortedWith(compareBy<ChapterEntity> { it.dateUpload }.thenBy { it.name })
         }
     }
 
@@ -581,7 +572,7 @@ fun ReaderScreen(
             val v = vis
             if (v != null && pageInChapter > 0) {
                 viewModel.saveProgress(manga.id, v.chapter.id, v.chapter.name, pageInChapter)
-                if (v.chapter.id != chapter.id && v.chapter.chapterNumber > 0f) {
+                if (v.chapter.id != chapter.id) {
                     viewModel.markPreviousChaptersRead(manga.id, v.chapter.chapterNumber)
                 }
             }
@@ -653,13 +644,9 @@ fun ReaderScreen(
     // the host, including the pages actually on screen, turning fast loads into 20-30s hangs.
     // Users who want chapters offline/instant use the download button in the chapter sheet
     // (startChapterDownload).
-    // Next/prev are relative to the chapter ACTUALLY ON SCREEN, not the chapter the reader was
-    // opened with — webtoon continuous scroll appends the following chapter below and prepends the
-    // previous one above, so the buttons must step from what the user is looking at.
-    val navBaseChapter = if (isWebtoon) (activeChapter ?: chapter) else chapter
-    val prevChapter = remember(orderedChapters, navBaseChapter) { prevChapterBefore(navBaseChapter) }
+    val prevChapter = remember(orderedChapters, chapter) { prevChapterBefore(chapter) }
 
-    val nextChapter = remember(orderedChapters, navBaseChapter) { nextChapterAfter(navBaseChapter) }
+    val nextChapter = remember(orderedChapters, chapter) { nextChapterAfter(chapter) }
 
     // Source's base URL (for the Cloudflare / site-verification WebView button).
     val sourceBaseUrl = remember(manga) {
