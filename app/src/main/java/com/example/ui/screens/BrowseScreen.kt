@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -282,69 +283,87 @@ fun BrowseScreen(
         contentWindowInsets = WindowInsets(0),
         topBar = {
             if (inExtensionMode) {
-                TopAppBar(
-                    windowInsets = WindowInsets(0),
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                    navigationIcon = {
-                        IconButton(
-                            onClick = {
-                                activeSourceId = ""
-                                activeSourceBaseUrl = ""
-                                searchQuery = ""
-                                selectedTabIndex = TAB_SOURCES
-                            }
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back to sources",
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    },
-                    title = {
-                        Text(
-                            text = catalogSourceName,
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleLarge
-                        )
-                    }
-                )
-            } else {
-                Column(modifier = Modifier.background(GlassSurface.copy(alpha = 0.55f))) {
+                // Rounded glass header for the catalog-browsing mode too.
+                Surface(
+                    color = GlassSurface.copy(alpha = 0.7f),
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
+                    border = BorderStroke(1.dp, GlassCardBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     TopAppBar(
                         windowInsets = WindowInsets(0),
                         colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                        navigationIcon = {
+                            IconButton(
+                                onClick = {
+                                    activeSourceId = ""
+                                    activeSourceBaseUrl = ""
+                                    searchQuery = ""
+                                    selectedTabIndex = TAB_SOURCES
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Back to sources",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        },
                         title = {
                             Text(
-                                text = "Browse & Extensions",
+                                text = catalogSourceName,
                                 fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.titleMedium
+                                style = MaterialTheme.typography.titleLarge
                             )
                         }
                     )
-
-                ScrollableTabRow(
-                    selectedTabIndex = selectedTabIndex,
-                    containerColor = Color.Transparent,
-                    edgePadding = 8.dp
-                ) {
-                    tabs.forEachIndexed { index, title ->
-                        Tab(
-                            selected = selectedTabIndex == index,
-                            onClick = {
-                                selectedTabIndex = index
-                                if (index == TAB_CATALOG && activeSourceId.isNotBlank() &&
-                                    catalogResults.isEmpty() && !catalogLoading
-                                ) {
-                                    viewModel.loadCatalog(activeSourceId, searchQuery)
-                                }
-                            },
-                            text = { Text(title, fontWeight = FontWeight.Bold) },
-                            modifier = Modifier.testTag("browse_tab_$index")
-                        )
-                    }
                 }
-                HorizontalDivider(color = GlassCardBorder)
+            } else {
+                // Rounded glass header (Tadami-style) for the tabbed Browse chrome.
+                Surface(
+                    color = GlassSurface.copy(alpha = 0.7f),
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
+                    border = BorderStroke(1.dp, GlassCardBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column {
+                        TopAppBar(
+                            windowInsets = WindowInsets(0),
+                            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                            title = {
+                                Text(
+                                    text = "Browse & Extensions",
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                            }
+                        )
+
+                        ScrollableTabRow(
+                            selectedTabIndex = selectedTabIndex,
+                            containerColor = Color.Transparent,
+                            edgePadding = 8.dp
+                        ) {
+                            tabs.forEachIndexed { index, title ->
+                                Tab(
+                                    selected = selectedTabIndex == index,
+                                    onClick = {
+                                        selectedTabIndex = index
+                                        if (index == TAB_CATALOG && activeSourceId.isNotBlank() &&
+                                            catalogResults.isEmpty() && !catalogLoading
+                                        ) {
+                                            viewModel.loadCatalog(activeSourceId, searchQuery)
+                                        }
+                                    },
+                                    text = { Text(title, fontWeight = FontWeight.Bold) },
+                                    modifier = Modifier.testTag("browse_tab_$index")
+                                )
+                            }
+                        }
+                        HorizontalDivider(color = GlassCardBorder)
+                    }
                 }
             }
         },
