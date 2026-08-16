@@ -735,7 +735,14 @@ fun ReaderScreen(
                 if (isWebtoon) {
                     LazyColumn(
                         state = listState,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        // Keep pages around the viewport COMPOSED (not just prefetched): each
+                        // composed item's SSIV view stays alive and decoded, and its page bytes
+                        // download while it's still off-screen. So a page scrolls into view already
+                        // rendered — no blank/decode flash or spinner pop per scroll step, which
+                        // is exactly how Tadami's reader feels. Pages leave composition (views
+                        // recycled) only after they're beyond this window.
+                        beyondBoundsItemCount = PRELOAD_PAGES
                     ) {
                         items(entries.size) { i ->
                             when (val item = entries[i]) {
@@ -929,12 +936,14 @@ fun ReaderScreen(
                     if (readerMode == ReaderMode.VERTICAL) {
                         VerticalPager(
                             state = pagerState,
+                            beyondViewportPageCount = 2,
                             modifier = Modifier.fillMaxSize()
                         ) { pageContent(it) }
                     } else {
                         HorizontalPager(
                             state = pagerState,
                             reverseLayout = readerMode == ReaderMode.RIGHT_TO_LEFT,
+                            beyondViewportPageCount = 2,
                             modifier = Modifier.fillMaxSize()
                         ) { pageContent(it) }
                     }
