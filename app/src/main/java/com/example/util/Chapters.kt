@@ -40,5 +40,11 @@ fun dedupeChapters(chapters: List<ChapterEntity>): List<ChapterEntity> {
 fun resolveDedupedChapter(chapters: List<ChapterEntity>, chapterId: String): ChapterEntity? =
     chapters.firstOrNull { it.id == chapterId }
 
+/** First number found in a chapter name ("Chapter 10 - Reunion" → 10f), used to order unnumbered
+ *  sources (all chapterNumber -1) whose names carry the chapter number. Missing/unnamed entries
+ *  sort last via MAX_VALUE. */
+fun chapterNameNumber(name: String): Float =
+    Regex("""\d+(\.\d+)?""").find(name)?.value?.toFloatOrNull() ?: Float.MAX_VALUE
+
 private fun normalizeChapterName(name: String): String =
     name.trim().lowercase().replace(Regex("\\s+"), " ")
