@@ -78,6 +78,7 @@ import com.example.ui.MainViewModel
 import com.example.ui.theme.GlassCardBorder
 import com.example.ui.theme.NekoGoldBadge
 import com.example.ui.theme.NekoVioletPrimary
+import com.example.util.sortChapters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -160,10 +161,9 @@ fun MangaDetailScreen(
     }
 
     val readOrder = remember(chapters) {
-        // Extension chapters without a real chapter_number (TheBlank leaves the -1 default) can't
-        // be meaningfully sorted by number — fall back to upload date.
-        if (chapters.any { it.chapterNumber > 0f }) chapters.sortedBy { it.chapterNumber }
-        else chapters.sortedBy { it.dateUpload }
+        // Numbered chapters sort by their number; unnumbered ones by the number in their own name
+        // (stable across refreshes — position/date-based ordering flipped on every re-fetch).
+        sortChapters(chapters)
     }
     val sortedChapters = remember(chapters, isSortAscending, readOrder) {
         if (isSortAscending) readOrder else readOrder.asReversed()
