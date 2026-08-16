@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.network.interceptor
 
 import okhttp3.Interceptor
 import okhttp3.Response
+import java.io.IOException
 
 /**
  * Transparent retry for transient server-side failures on idempotent requests. Sources like
@@ -9,35 +10,42 @@ import okhttp3.Response
  * observed) for a few seconds and then recover — without a retry the catalog/chapter request just
  * surfaces "Couldn't reach 4KHD" even though the site is fine a moment later.
  *
- * Only 429/500/502/503/504 are retried, at most twice with a short backoff, and only for GET/HEAD
- * requests (extension traffic is all GETs). The retry count is carried on the request itself so a
- * re-entrant chain (e.g. the Cloudflare interceptor re-proceeding) can never loop forever.
+ * Only 429/500/502/503/504 are retried, plus dropped connections / read timeouts (IOException),
+ * at most three times with a doubling backoff, and only for GET/HEAD requests (extension traffic
+ * is all GETs). The retry count is carried on the request itself so a re-entrant chain (e.g. the
+ * Cloudflare interceptor re-proceeding) can never loop forever.
  */
 class RetryInterceptor(
-    private val maxRetries: Int = 2,
-    private val initialBackoffMs: Long = 1000L,
+    private val maxRetries: Int = 3,
+    private val initialBackoffMs: Long = 1200L,
 ) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        if (request.method != "GET" && request.method != "HEAD") {
-            return chain.proceed(request)
+        val original = chain.request()
+        if (original.method != "GET" && original.method != "HEAD") {
+            return chain.proceed(original)
         }
 
-        val attempt = request.header(RETRY_COUNT_HEADER)?.toIntOrNull() ?: 0
-
-        var response = chain.proceed(request)
-        var retryCount = attempt
-        while (response.code in RETRYABLE_CODES && retryCount < maxRetries) {
-            retryCount++
-            val retryRequest = request.newBuilder()
-                .header(RETRY_COUNT_HEADER, retryCount.toString())
+        var attempt = original.header(RETRY_COUNT_HEADER)?.toIntOrNull() ?: 0
+        var request = original
+        while (true) {
+            try {
+                val response = chain.proceed(request)
+                if (response.code !in RETRYABLE_CODES || attempt >= maxRetries) {
+                    return response
+                }
+                response.close()
+            } catch (e: IOException) {
+                // Connection reset/timeout mid-flight — the site may just have been busy. Only
+                // surface it after the retries are exhausted.
+                if (attempt >= maxRetries) throw e
+            }
+            attempt++
+            request = original.newBuilder()
+                .header(RETRY_COUNT_HEADER, attempt.toString())
                 .build()
-            response.close()
-            Thread.sleep(initialBackoffMs * (1L shl (retryCount - 1)))
-            response = chain.proceed(retryRequest)
+            Thread.sleep(initialBackoffMs * (1L shl (attempt - 1)))
         }
-        return response
     }
 
     companion object {
