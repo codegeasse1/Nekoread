@@ -342,8 +342,8 @@ fun BrowseScreen(
                     extensions = extensions,
                     repoNameById = repoNameById,
                     busyKey = opBusy,
-                    onInstall = { viewModel.installExtension(it) },
-                    onUninstall = { viewModel.uninstallExtension(it) }
+                    onInstall = { ext -> viewModel.installExtension(ext.packageName, ext.repoId) },
+                    onUninstall = { ext -> viewModel.uninstallExtension(ext.packageName, ext.repoId) }
                 )
                 TAB_REPOS -> ReposTabContent(
                     repos = extensionRepos,
@@ -945,8 +945,8 @@ fun ExtensionsTabContent(
     extensions: List<ExtensionEntity>,
     repoNameById: Map<String, String>,
     busyKey: String?,
-    onInstall: (String) -> Unit,
-    onUninstall: (String) -> Unit
+    onInstall: (ExtensionEntity) -> Unit,
+    onUninstall: (ExtensionEntity) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
     val filtered = remember(extensions, query) {
@@ -993,9 +993,9 @@ fun ExtensionsTabContent(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            items(filtered, key = { it.packageName }) { ext ->
+            items(filtered, key = { "${it.packageName}_${it.repoId}" }) { ext ->
                 val repoName = repoNameById[ext.repoId] ?: "Custom Repo"
-                val isBusy = busyKey == "install_${ext.packageName}" || busyKey == "uninstall_${ext.packageName}"
+                val isBusy = busyKey == "install_${ext.packageName}_${ext.repoId}" || busyKey == "uninstall_${ext.packageName}_${ext.repoId}"
                 val cwLabel = contentWarningLabel(ext.contentWarning)
 
                 GlassCard(modifier = Modifier
@@ -1082,15 +1082,15 @@ fun ExtensionsTabContent(
                                 CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
                             } else if (ext.isInstalled) {
                                 OutlinedButton(
-                                    onClick = { onUninstall(ext.packageName) },
-                                    modifier = Modifier.testTag("uninstall_${ext.packageName}")
+                                    onClick = { onUninstall(ext) },
+                                    modifier = Modifier.testTag("uninstall_${ext.packageName}_${ext.repoId}")
                                 ) {
                                     Text("Uninstall")
                                 }
                             } else {
                                 Button(
-                                    onClick = { onInstall(ext.packageName) },
-                                    modifier = Modifier.testTag("install_${ext.packageName}")
+                                    onClick = { onInstall(ext) },
+                                    modifier = Modifier.testTag("install_${ext.packageName}_${ext.repoId}")
                                 ) {
                                     Text("Install")
                                 }
