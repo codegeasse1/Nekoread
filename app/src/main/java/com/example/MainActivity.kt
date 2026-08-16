@@ -35,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -75,6 +76,7 @@ import com.example.ui.theme.GlassCardBorder
 import com.example.ui.theme.GlowCyan
 import com.example.ui.theme.GlowViolet
 import com.example.ui.theme.NekoReadTheme
+import com.example.util.resolveDedupedChapter
 import eu.kanade.tachiyomi.network.NetworkHelper
 
 class MainActivity : ComponentActivity() {
@@ -347,7 +349,12 @@ fun MainAppScreen(viewModel: MainViewModel) {
 
                 val mangaState by viewModel.repository.getMangaFlow(mangaId).collectAsStateWithLifecycle(initialValue = null)
                 val chaptersState by viewModel.repository.getChaptersFlow(mangaId).collectAsStateWithLifecycle(initialValue = emptyList())
-                val currentChapter = chaptersState.firstOrNull { it.id == chapterId }
+                // Saved progress / "continue reading" may point at a duplicate chapter variant that
+                // deduplication collapsed away — resolve to the surviving release so the reader
+                // always opens a chapter that exists in the list.
+                val currentChapter = remember(chaptersState, chapterId) {
+                    resolveDedupedChapter(chaptersState, chapterId)
+                }
 
                 ReaderScreen(
                     viewModel = viewModel,
