@@ -50,7 +50,7 @@ import com.example.ui.theme.SleekVioletPrimary
 import com.example.ui.theme.GlassCardBorder
 
 @Composable
-private fun coverModelFor(manga: MangaEntity): Any? {
+internal fun coverModelFor(manga: MangaEntity): Any? {
     // Extension-sourced covers load through the extension's own client + headers (Referer/Origin),
     // so hotlink-protected CDNs accept them; plain URLs fall back to Coil's default loader.
     return remember(manga.id, manga.sourceId, manga.coverUrl) {
