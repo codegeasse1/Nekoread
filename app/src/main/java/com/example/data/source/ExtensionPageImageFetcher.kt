@@ -11,6 +11,8 @@ import coil.request.Options
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.HttpSource
 import okhttp3.OkHttpClient
+import okio.Path.Companion.toOkioPath
+import java.io.File
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -34,6 +36,28 @@ data class ExtensionPageImage(
 /** Memory-cache pages by their unique image URL so scrolling the reader doesn't re-fetch them. */
 class ExtensionPageImageKeyer : Keyer<ExtensionPageImage> {
     override fun key(data: ExtensionPageImage, options: Options): String = data.imageUrl
+}
+
+/**
+ * Disk-first hook for plain-URL pages (MangaDex pages are String URLs, not [ExtensionPageImage]):
+ * if the reader's download-ahead prefetcher already cached this URL in reader_pages, serve it from
+ * disk; otherwise return null so Coil falls through to its normal URL fetcher. Registered before
+ * the default fetchers, so every other String load (covers, thumbnails) just costs a cheap
+ * file-existence check. Same cache-key scheme as [ExtensionPageImageFetcherFactory].
+ */
+class ReaderPageCacheFetcherFactory : Fetcher.Factory<String> {
+    override fun create(data: String, options: Options, imageLoader: ImageLoader): Fetcher? {
+        val key = data.hashCode().toUInt().toString(16)
+        val cached = File(options.context.cacheDir, "reader_pages/$key.img")
+        if (!cached.exists() || cached.length() == 0L) return null
+        return object : Fetcher {
+            override suspend fun fetch(): FetchResult? = SourceResult(
+                source = ImageSource(file = cached.toOkioPath()),
+                mimeType = "image/*",
+                dataSource = DataSource.DISK,
+            )
+        }
+    }
 }
 
 /**
@@ -115,6 +139,20 @@ class ExtensionPageImageFetcherFactory : Fetcher.Factory<ExtensionPageImage> {
     ): Fetcher? {
         return object : Fetcher {
             override suspend fun fetch(): FetchResult? {
+                // Disk-first, like Aniyomi/Tadami's page cache: if the reader's download-ahead
+                // prefetcher already pulled this page into the reader_pages cache, serve it from
+                // there — no network round-trip at all. (The prefetcher and this fetcher compute
+                // the same cache key from the image URL.) This is what makes scrolling feel
+                // weightless: by the time a page scrolls into view its bytes are already local.
+                val key = data.imageUrl.hashCode().toUInt().toString(16)
+                val cached = File(options.context.cacheDir, "reader_pages/$key.img")
+                if (cached.exists() && cached.length() > 0L) {
+                    return SourceResult(
+                        source = ImageSource(file = cached.toOkioPath()),
+                        mimeType = "image/*",
+                        dataSource = DataSource.DISK,
+                    )
+                }
                 // Build a real Page carrying both the page's request URL and its image URL, so
                 // source-specific imageRequest()/imageUrlRequest() overrides (e.g. keiyoushi
                 // sources that build the Referer from page.url) behave exactly as in Tadami.
