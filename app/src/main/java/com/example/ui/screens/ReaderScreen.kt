@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -61,15 +62,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import coil.compose.LocalImageLoader
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
 import com.example.ui.MainViewModel
 import com.example.ui.ReaderBg
+import com.example.ui.ReaderFit
 import com.example.ui.ReaderMode
 import kotlinx.coroutines.launch
 
@@ -96,6 +102,10 @@ fun ReaderScreen(
 
     val readerMode: ReaderMode by viewModel.readerMode.collectAsStateWithLifecycle()
     val readerBg: ReaderBg by viewModel.readerBg.collectAsStateWithLifecycle()
+    val readerFit: ReaderFit by viewModel.readerFit.collectAsStateWithLifecycle()
+
+    // Both long-strip modes render as one continuous vertical list; only the gap differs.
+    val isWebtoon = readerMode == ReaderMode.WEBTOON || readerMode == ReaderMode.WEBTOON_GAPS
 
     var pages by remember { mutableStateOf<List<Any>?>(null) }
     var pageError by remember { mutableStateOf<String?>(null) }
@@ -130,7 +140,7 @@ fun ReaderScreen(
     // Webtoon Vertical List State
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = (chapter.lastPageRead - 1).coerceAtLeast(0))
 
-    // Paged Reader State
+    // Paged Reader State (shared by horizontal + vertical pagers)
     val pagerState = rememberPagerState(
         initialPage = (chapter.lastPageRead - 1).coerceAtLeast(0),
         pageCount = { pages?.size ?: 0 }
@@ -141,7 +151,7 @@ fun ReaderScreen(
             val total = pages?.size ?: 0
             if (total == 0) {
                 0
-            } else if (readerMode == ReaderMode.WEBTOON) {
+            } else if (isWebtoon) {
                 (listState.firstVisibleItemIndex + 1).coerceAtMost(total)
             } else {
                 (pagerState.currentPage + 1).coerceAtMost(total)
@@ -153,6 +163,28 @@ fun ReaderScreen(
     LaunchedEffect(currentPage) {
         if (currentPage > 0) {
             viewModel.saveProgress(manga.id, chapter.id, chapter.name, currentPage)
+        }
+    }
+
+    // Quick-load nearby pages: warm Coil's MEMORY cache (no disk cache!) for the pages around the
+    // current one, so scrolling or jumping to a page renders instantly. The image bytes are keyed
+    // by their URL, never by position, so there's no risk of serving another chapter's page.
+    val imageLoader = LocalImageLoader.current
+    val context = LocalContext.current
+    LaunchedEffect(pages, currentPage, imageLoader) {
+        val list = pages ?: return@LaunchedEffect
+        if (imageLoader == null || list.isEmpty()) return@LaunchedEffect
+        val start = (currentPage - 2).coerceAtLeast(0)
+        val end = (currentPage + 5).coerceAtMost(list.size)
+        for (i in start until end) {
+            val model = list[i]
+            imageLoader.enqueue(
+                ImageRequest.Builder(context)
+                    .data(model)
+                    .memoryCachePolicy(CachePolicy.ENABLED)
+                    .diskCachePolicy(CachePolicy.DISABLED)
+                    .build()
+            )
         }
     }
 
@@ -253,9 +285,14 @@ fun ReaderScreen(
 
             else -> {
                 val pageList = pages!!
-                if (readerMode == ReaderMode.WEBTOON) {
+                if (isWebtoon) {
                     LazyColumn(
                         state = listState,
+                        verticalArrangement = if (readerMode == ReaderMode.WEBTOON_GAPS) {
+                            Arrangement.spacedBy(10.dp)
+                        } else {
+                            Arrangement.Top
+                        },
                         modifier = Modifier.fillMaxSize()
                     ) {
                         itemsIndexed(pageList) { index, pageUrl ->
@@ -304,21 +341,45 @@ fun ReaderScreen(
                         }
                     }
                 } else {
-                    HorizontalPager(
-                        state = pagerState,
-                        reverseLayout = readerMode == ReaderMode.RIGHT_TO_LEFT,
-                        modifier = Modifier.fillMaxSize()
-                    ) { pageIndex ->
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            AsyncImage(
-                                model = pageList[pageIndex],
-                                contentDescription = "Page ${pageIndex + 1}",
+                    val fitScale = when (readerFit) {
+                        ReaderFit.FIT -> ContentScale.Fit
+                        ReaderFit.FIT_WIDTH -> ContentScale.FillWidth
+                        ReaderFit.FIT_HEIGHT -> ContentScale.FillHeight
+                    }
+                    if (readerMode == ReaderMode.VERTICAL) {
+                        VerticalPager(
+                            state = pagerState,
+                            modifier = Modifier.fillMaxSize()
+                        ) { pageIndex ->
+                            Box(
                                 modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Fit
-                            )
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AsyncImage(
+                                    model = pageList[pageIndex],
+                                    contentDescription = "Page ${pageIndex + 1}",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = fitScale
+                                )
+                            }
+                        }
+                    } else {
+                        HorizontalPager(
+                            state = pagerState,
+                            reverseLayout = readerMode == ReaderMode.RIGHT_TO_LEFT,
+                            modifier = Modifier.fillMaxSize()
+                        ) { pageIndex ->
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AsyncImage(
+                                    model = pageList[pageIndex],
+                                    contentDescription = "Page ${pageIndex + 1}",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = fitScale
+                                )
+                            }
                         }
                     }
                 }
@@ -434,7 +495,7 @@ fun ReaderScreen(
                         onValueChange = { pageVal ->
                             val targetPage = pageVal.toInt() - 1
                             coroutineScope.launch {
-                                if (readerMode == ReaderMode.WEBTOON) {
+                                if (isWebtoon) {
                                     listState.scrollToItem(targetPage)
                                 } else {
                                     pagerState.scrollToPage(targetPage)
@@ -472,47 +533,59 @@ fun ReaderScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.setReaderMode(ReaderMode.WEBTOON) }
-                    ) {
-                        RadioButton(
-                            selected = readerMode == ReaderMode.WEBTOON,
-                            onClick = { viewModel.setReaderMode(ReaderMode.WEBTOON) }
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Webtoon (Continuous Vertical)")
-                    }
+                    ReaderModeOption(
+                        label = "Webtoon (Long Strip)",
+                        selected = readerMode == ReaderMode.WEBTOON,
+                        onClick = { viewModel.setReaderMode(ReaderMode.WEBTOON) }
+                    )
+                    ReaderModeOption(
+                        label = "Vertical With Gaps",
+                        selected = readerMode == ReaderMode.WEBTOON_GAPS,
+                        onClick = { viewModel.setReaderMode(ReaderMode.WEBTOON_GAPS) }
+                    )
+                    ReaderModeOption(
+                        label = "Vertical Paged",
+                        selected = readerMode == ReaderMode.VERTICAL,
+                        onClick = { viewModel.setReaderMode(ReaderMode.VERTICAL) }
+                    )
+                    ReaderModeOption(
+                        label = "Manga Left-to-Right",
+                        selected = readerMode == ReaderMode.LEFT_TO_RIGHT,
+                        onClick = { viewModel.setReaderMode(ReaderMode.LEFT_TO_RIGHT) }
+                    )
+                    ReaderModeOption(
+                        label = "Manga Right-to-Left (Traditional)",
+                        selected = readerMode == ReaderMode.RIGHT_TO_LEFT,
+                        onClick = { viewModel.setReaderMode(ReaderMode.RIGHT_TO_LEFT) }
+                    )
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.setReaderMode(ReaderMode.LEFT_TO_RIGHT) }
-                    ) {
-                        RadioButton(
-                            selected = readerMode == ReaderMode.LEFT_TO_RIGHT,
-                            onClick = { viewModel.setReaderMode(ReaderMode.LEFT_TO_RIGHT) }
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Manga Left-to-Right")
-                    }
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.setReaderMode(ReaderMode.RIGHT_TO_LEFT) }
-                    ) {
-                        RadioButton(
-                            selected = readerMode == ReaderMode.RIGHT_TO_LEFT,
-                            onClick = { viewModel.setReaderMode(ReaderMode.RIGHT_TO_LEFT) }
+                    Text(
+                        text = "Page Fit (paged modes)",
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Manga Right-to-Left (Traditional)")
-                    }
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    ReaderModeOption(
+                        label = "Fit Screen",
+                        selected = readerFit == ReaderFit.FIT,
+                        onClick = { viewModel.setReaderFit(ReaderFit.FIT) }
+                    )
+                    ReaderModeOption(
+                        label = "Fit Width",
+                        selected = readerFit == ReaderFit.FIT_WIDTH,
+                        onClick = { viewModel.setReaderFit(ReaderFit.FIT_WIDTH) }
+                    )
+                    ReaderModeOption(
+                        label = "Fit Height",
+                        selected = readerFit == ReaderFit.FIT_HEIGHT,
+                        onClick = { viewModel.setReaderFit(ReaderFit.FIT_HEIGHT) }
+                    )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -547,6 +620,12 @@ fun ReaderScreen(
                             isSelected = readerBg == ReaderBg.CREAM,
                             onClick = { viewModel.setReaderBg(ReaderBg.CREAM) }
                         )
+                        ReaderBgChip(
+                            label = "White",
+                            color = Color.White,
+                            isSelected = readerBg == ReaderBg.WHITE,
+                            onClick = { viewModel.setReaderBg(ReaderBg.WHITE) }
+                        )
                     }
                 }
             },
@@ -564,6 +643,27 @@ fun ReaderScreen(
             userAgent = ua,
             onDismiss = { webviewTarget = null }
         )
+    }
+}
+
+@Composable
+private fun ReaderModeOption(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = onClick
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(label)
     }
 }
 
