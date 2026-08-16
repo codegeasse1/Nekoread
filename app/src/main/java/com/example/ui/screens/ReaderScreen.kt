@@ -108,6 +108,7 @@ import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
 import com.example.data.source.ExtensionPageImage
 import com.example.util.describe
+import com.example.util.sortChapters
 import com.example.ui.MainViewModel
 import com.example.ui.ReaderBg
 import com.example.ui.ReaderFit
@@ -482,15 +483,11 @@ fun ReaderScreen(
         derivedStateOf { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
     }
 
-    // Stable reading order for the whole chapter list. Extension sources that leave the -1 default
-    // chapter number (TheBlank) can't be meaningfully sorted by number, so fall back to upload
-    // date. Powers the chapter sheet, prev/next navigation and continuous scroll.
+    // Reading order for the whole chapter list — the chapter sheet, prev/next navigation and
+    // continuous scroll all follow it. Numbered chapters sort by number; unnumbered ones by the
+    // number in their own name (stable across refreshes — never by list position).
     val orderedChapters = remember(allChapters) {
-        if (allChapters.any { it.chapterNumber > 0f }) {
-            allChapters.sortedBy { it.chapterNumber }
-        } else {
-            allChapters.sortedWith(compareBy<ChapterEntity> { it.dateUpload }.thenBy { it.name })
-        }
+        sortChapters(allChapters)
     }
 
     fun nextChapterAfter(c: ChapterEntity): ChapterEntity? {
@@ -588,7 +585,7 @@ fun ReaderScreen(
             val v = vis
             if (v != null && pageInChapter > 0) {
                 viewModel.saveProgress(manga.id, v.chapter.id, v.chapter.name, pageInChapter)
-                if (v.chapter.id != chapter.id) {
+                if (v.chapter.id != chapter.id && v.chapter.chapterNumber > 0f) {
                     viewModel.markPreviousChaptersRead(manga.id, v.chapter.chapterNumber)
                 }
             }
