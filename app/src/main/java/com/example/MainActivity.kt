@@ -54,6 +54,7 @@ import androidx.navigation.navArgument
 import coil.Coil
 import coil.ImageLoader
 import coil.disk.DiskCache
+import coil.memory.MemoryCache
 import com.example.data.source.ExtensionCoverImageFetcherFactory
 import com.example.data.source.ExtensionCoverImageKeyer
 import com.example.data.source.ExtensionPageImageFetcherFactory
@@ -98,7 +99,11 @@ class MainActivity : ComponentActivity() {
                 // Memory cache sized so the reader's large decoded pages can never blow the heap
                 // (covers are small thumbnails; pages also live on the disk cache below, so a
                 // memory miss just re-decodes from disk instead of re-downloading).
-                .memoryCacheSize(percent = 0.12f)
+                .memoryCache {
+                    MemoryCache.Builder(this)
+                        .maxSizePercent(0.12)
+                        .build()
+                }
                 // Disk cache so a loaded cover/page stays on-device: scrolling back to a screen or
                 // returning after the reader shows thumbnails instantly instead of re-downloading
                 // the whole grid (which is what left covers blank/"loading" after navigation).
