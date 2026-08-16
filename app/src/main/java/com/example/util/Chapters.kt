@@ -2,11 +2,13 @@ package com.example.util
 
 import com.example.data.local.ChapterEntity
 
-/** Grouping key for duplicate detection — the chapter number when the manga has numbered
- *  chapters, otherwise the normalized chapter name (unnumbered extras keep distinct names). */
+/** Grouping key for duplicate detection — the chapter number AND name when the manga has
+ *  numbered chapters (so only genuine same-release duplicates collapse, never two different
+ *  chapters that merely share a number across a source's mirror sites/series), otherwise the
+ *  normalized chapter name. */
 fun chapterKey(ch: ChapterEntity, numbered: Boolean): Any =
-    if (numbered && ch.chapterNumber > 0f) ch.chapterNumber
-    else ch.name.trim().lowercase().replace(Regex("\\s+"), " ")
+    if (numbered && ch.chapterNumber > 0f) Pair(ch.chapterNumber, normalizeChapterName(ch.name))
+    else normalizeChapterName(ch.name)
 
 /**
  * Collapse duplicate chapters into one entry per release. Some sources (e.g. Comix) return the
@@ -30,12 +32,13 @@ fun dedupeChapters(chapters: List<ChapterEntity>): List<ChapterEntity> {
 }
 
 /**
- * Map a stored chapter id (e.g. from saved reading progress / "continue reading") to the chapter
- * that survived deduplication, so resuming a manga whose last-read chapter was a removed duplicate
- * still opens the right release. Falls back to null when the id doesn't exist in the list.
+ * Resolve which chapter a stored chapter id should open. The EXACT chapter always wins — clicking
+ * a row must open that exact row, never a same-numbered sibling from another mirror/series. The
+ * id is only absent if saved progress predates a source re-fetch; in that case null lets the
+ * reader fall back gracefully.
  */
-fun resolveDedupedChapter(chapters: List<ChapterEntity>, chapterId: String): ChapterEntity? {
-    val direct = chapters.firstOrNull { it.id == chapterId } ?: return null
-    val numbered = chapters.any { it.chapterNumber > 0f }
-    return dedupeChapters(chapters).firstOrNull { chapterKey(it, numbered) == chapterKey(direct, numbered) }
-}
+fun resolveDedupedChapter(chapters: List<ChapterEntity>, chapterId: String): ChapterEntity? =
+    chapters.firstOrNull { it.id == chapterId }
+
+private fun normalizeChapterName(name: String): String =
+    name.trim().lowercase().replace(Regex("\\s+"), " ")
