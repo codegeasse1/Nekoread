@@ -329,14 +329,16 @@ fun MainAppScreen(viewModel: MainViewModel) {
             }
 
             composable(
-                route = "reader/{mangaId}/{chapterId}",
+                route = "reader/{mangaId}/{chapterId}?startAtBeginning={startAtBeginning}",
                 arguments = listOf(
                     navArgument("mangaId") { type = NavType.StringType },
-                    navArgument("chapterId") { type = NavType.StringType }
+                    navArgument("chapterId") { type = NavType.StringType },
+                    navArgument("startAtBeginning") { type = NavType.BoolType; defaultValue = false }
                 )
             ) { backStackEntry ->
                 val mangaId = backStackEntry.arguments?.getString("mangaId") ?: ""
                 val chapterId = backStackEntry.arguments?.getString("chapterId") ?: ""
+                val startAtBeginning = backStackEntry.arguments?.getBoolean("startAtBeginning") ?: false
 
                 val mangaState by viewModel.repository.getMangaFlow(mangaId).collectAsStateWithLifecycle(initialValue = null)
                 val chaptersState by viewModel.repository.getChaptersFlow(mangaId).collectAsStateWithLifecycle(initialValue = emptyList())
@@ -348,8 +350,11 @@ fun MainAppScreen(viewModel: MainViewModel) {
                     chapter = currentChapter,
                     allChapters = chaptersState,
                     onBackClick = { navController.popBackStack() },
+                    startAtBeginning = startAtBeginning,
                     onChapterChange = { newChapterId ->
-                        navController.navigate("reader/$mangaId/$newChapterId") {
+                        // In-reader prev/next chapter navigation always starts the new chapter
+                        // at its first page, never at a previously-saved position.
+                        navController.navigate("reader/$mangaId/$newChapterId?startAtBeginning=true") {
                             popUpTo("reader/$mangaId/$chapterId") { inclusive = true }
                         }
                     }
