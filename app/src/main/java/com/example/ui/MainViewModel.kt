@@ -45,6 +45,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Tachiyomi extensions need the shared network stack before any source is constructed.
             eu.kanade.tachiyomi.network.NetworkHelper.init(getApplication())
             repository.initializeDefaultDataIfNeeded()
+            // Collapse duplicate repo rows (same repo added via different URL forms) before
+            // re-registering installed extensions so no stale source rows linger.
+            repository.dedupeRepos()
             // Bring installed extensions' sources back online (their APKs stay in app storage).
             repository.loadInstalledExtensions()
             // Refresh repo catalogs that have never been fetched (first launch / new repo).
