@@ -28,6 +28,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
@@ -46,12 +48,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -76,6 +80,7 @@ import com.example.ui.components.MangaGridCard
 import com.example.ui.components.MangaListCard
 import com.example.ui.components.coverModelFor
 import com.example.ui.theme.GlassCardBorder
+import com.example.ui.theme.GlassSurface
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,14 +97,30 @@ fun LibraryScreen(
     var showAddCategoryDialog by remember { mutableStateOf(false) }
     var newCategoryText by remember { mutableStateOf("") }
 
+    // Long-press multi-select removal (Tadami-style): long-press a card to enter selection mode,
+    // tap to toggle more, then remove the selected titles from the library.
+    var selectionMode by remember { mutableStateOf(false) }
+    val selectedIds = remember { mutableStateListOf<String>() }
+    var showClearLibraryConfirm by remember { mutableStateOf(false) }
+
+    fun exitSelection() {
+        selectionMode = false
+        selectedIds.clear()
+    }
+
+    fun toggleSelect(id: String) {
+        if (id in selectedIds) selectedIds.remove(id) else selectedIds.add(id)
+        if (selectedIds.isEmpty()) selectionMode = false
+    }
+
     val searchQuery by viewModel.librarySearchQuery.collectAsStateWithLifecycle()
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
     val categories: List<CategoryEntity> by viewModel.categories.collectAsStateWithLifecycle()
 
     // Tadami-style home: a "Continue Reading" hero banner on top, a horizontal "Recently Read"
     // row beneath it, then the full library grid below. Only shown on the unfiltered library
-    // view (no search, "All" category).
-    val showHomeSections = searchQuery.isBlank() && selectedCategory == "All"
+    // view (no search, "All" category, not in selection mode).
+    val showHomeSections = !selectionMode && searchQuery.isBlank() && selectedCategory == "All"
     val continueManga = if (showHomeSections) {
         mangaList.asSequence()
             .filter { it.lastReadChapterId != null }
@@ -117,124 +138,174 @@ fun LibraryScreen(
         containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0),
         topBar = {
-            Column {
-                TopAppBar(
-                    windowInsets = WindowInsets(0),
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                    title = {
-                        if (showSearchField) {
-                            OutlinedTextField(
-                                value = searchQuery,
-                                onValueChange = { viewModel.setLibrarySearchQuery(it) },
-                                placeholder = { Text("Search library...") },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("library_search_input"),
-                                singleLine = true,
-                                trailingIcon = {
-                                    if (searchQuery.isNotEmpty()) {
-                                        IconButton(onClick = { viewModel.setLibrarySearchQuery("") }) {
-                                            Icon(Icons.Default.Clear, contentDescription = "Clear")
-                                        }
-                                    }
+            // Rounded glass header (Tadami-style) so the whole chrome reads as frosted glass.
+            Surface(
+                color = GlassSurface.copy(alpha = 0.7f),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
+                border = BorderStroke(1.dp, GlassCardBorder),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column {
+                    if (selectionMode) {
+                        // Multi-select action bar
+                        TopAppBar(
+                            windowInsets = WindowInsets(0),
+                            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                            navigationIcon = {
+                                IconButton(
+                                    onClick = { exitSelection() },
+                                    modifier = Modifier.testTag("selection_close")
+                                ) {
+                                    Icon(Icons.Default.Close, contentDescription = "Cancel")
                                 }
-                            )
-                        } else {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.AutoAwesome,
-                                    contentDescription = "Logo",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
+                            },
+                            title = {
                                 Text(
-                                    text = "Library (${mangaList.size})",
+                                    text = "${selectedIds.size} selected",
                                     fontWeight = FontWeight.Bold,
                                     style = MaterialTheme.typography.titleMedium
                                 )
+                            },
+                            actions = {
+                                IconButton(
+                                    onClick = {
+                                        viewModel.removeFromLibrary(selectedIds.toList())
+                                        exitSelection()
+                                    },
+                                    modifier = Modifier.testTag("remove_selected_button")
+                                ) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Remove from library")
+                                }
                             }
-                        }
-                    },
-                    actions = {
-                        IconButton(
-                            onClick = { showSearchField = !showSearchField },
-                            modifier = Modifier.testTag("search_toggle_button")
-                        ) {
-                            Icon(
-                                imageVector = if (showSearchField) Icons.Default.Clear else Icons.Default.Search,
-                                contentDescription = "Search"
-                            )
-                        }
-                        IconButton(
-                            onClick = { isGridView = !isGridView },
-                            modifier = Modifier.testTag("view_toggle_button")
-                        ) {
-                            Icon(
-                                imageVector = if (isGridView) Icons.Default.ViewList else Icons.Default.GridView,
-                                contentDescription = "Toggle Layout"
-                            )
-                        }
-                    }
-                )
-
-                // Category Tabs Row
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    item {
-                        FilterChip(
-                            selected = selectedCategory == "All",
-                            onClick = { viewModel.setSelectedCategory("All") },
-                            label = { Text("All") },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = Color.White
-                            ),
-                            modifier = Modifier.testTag("category_all")
                         )
-                    }
-
-                    items(categories) { category: CategoryEntity ->
-                        FilterChip(
-                            selected = selectedCategory == category.name,
-                            onClick = { viewModel.setSelectedCategory(category.name) },
-                            label = { Text(category.name) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = Color.White
-                            ),
-                            modifier = Modifier.testTag("category_${category.name}")
-                        )
-                    }
-
-                    item {
-                        FilterChip(
-                            selected = false,
-                            onClick = { showAddCategoryDialog = true },
-                            label = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.Add,
-                                        contentDescription = "Add Category",
-                                        modifier = Modifier.size(16.dp)
+                    } else {
+                        TopAppBar(
+                            windowInsets = WindowInsets(0),
+                            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                            title = {
+                                if (showSearchField) {
+                                    OutlinedTextField(
+                                        value = searchQuery,
+                                        onValueChange = { viewModel.setLibrarySearchQuery(it) },
+                                        placeholder = { Text("Search library...") },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("library_search_input"),
+                                        singleLine = true,
+                                        trailingIcon = {
+                                            if (searchQuery.isNotEmpty()) {
+                                                IconButton(onClick = { viewModel.setLibrarySearchQuery("") }) {
+                                                    Icon(Icons.Default.Clear, contentDescription = "Clear")
+                                                }
+                                            }
+                                        }
                                     )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("New")
+                                } else {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.AutoAwesome,
+                                            contentDescription = "Logo",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Library (${mangaList.size})",
+                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.titleMedium
+                                        )
+                                    }
                                 }
                             },
-                            modifier = Modifier.testTag("add_category_chip")
+                            actions = {
+                                IconButton(
+                                    onClick = { showSearchField = !showSearchField },
+                                    modifier = Modifier.testTag("search_toggle_button")
+                                ) {
+                                    Icon(
+                                        imageVector = if (showSearchField) Icons.Default.Clear else Icons.Default.Search,
+                                        contentDescription = "Search"
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { isGridView = !isGridView },
+                                    modifier = Modifier.testTag("view_toggle_button")
+                                ) {
+                                    Icon(
+                                        imageVector = if (isGridView) Icons.Default.ViewList else Icons.Default.GridView,
+                                        contentDescription = "Toggle Layout"
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { showClearLibraryConfirm = true },
+                                    modifier = Modifier.testTag("clear_library_button")
+                                ) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Clear library")
+                                }
+                            }
                         )
+
+                        // Category Tabs Row
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            item {
+                                FilterChip(
+                                    selected = selectedCategory == "All",
+                                    onClick = { viewModel.setSelectedCategory("All") },
+                                    label = { Text("All") },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                        selectedLabelColor = Color.White
+                                    ),
+                                    modifier = Modifier.testTag("category_all")
+                                )
+                            }
+
+                            items(categories) { category: CategoryEntity ->
+                                FilterChip(
+                                    selected = selectedCategory == category.name,
+                                    onClick = { viewModel.setSelectedCategory(category.name) },
+                                    label = { Text(category.name) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                        selectedLabelColor = Color.White
+                                    ),
+                                    modifier = Modifier.testTag("category_${category.name}")
+                                )
+                            }
+
+                            item {
+                                FilterChip(
+                                    selected = false,
+                                    onClick = { showAddCategoryDialog = true },
+                                    label = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.Add,
+                                                contentDescription = "Add Category",
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("New")
+                                        }
+                                    },
+                                    modifier = Modifier.testTag("add_category_chip")
+                                )
+                            }
+                        }
                     }
                 }
             }
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNavigateToBrowse,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = Color.White,
+            if (!selectionMode) {
+                FloatingActionButton(
+                    onClick = onNavigateToBrowse,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = Color.White,
                 modifier = Modifier.testTag("browse_fab")
             ) {
                 Row(
@@ -245,6 +316,7 @@ fun LibraryScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Explore", fontWeight = FontWeight.Bold)
                 }
+            }
             }
         },
         modifier = modifier.fillMaxSize()
@@ -321,10 +393,19 @@ fun LibraryScreen(
                         items(mangaList, key = { it.id }) { manga ->
                             MangaGridCard(
                                 manga = manga,
-                                onClick = { onMangaClick(manga.id) },
-                                onReadClick = if (manga.lastReadChapterId != null) {
+                                onClick = {
+                                    if (selectionMode) toggleSelect(manga.id) else onMangaClick(manga.id)
+                                },
+                                onReadClick = if (!selectionMode && manga.lastReadChapterId != null) {
                                     { onReadClick(manga.id, manga.lastReadChapterId!!) }
-                                } else null
+                                } else null,
+                                selected = manga.id in selectedIds,
+                                onLongClick = {
+                                    if (!selectionMode) {
+                                        selectionMode = true
+                                        selectedIds.add(manga.id)
+                                    }
+                                }
                             )
                         }
                     }
@@ -357,7 +438,16 @@ fun LibraryScreen(
                         items(mangaList, key = { it.id }) { manga ->
                             MangaListCard(
                                 manga = manga,
-                                onClick = { onMangaClick(manga.id) }
+                                onClick = {
+                                    if (selectionMode) toggleSelect(manga.id) else onMangaClick(manga.id)
+                                },
+                                selected = manga.id in selectedIds,
+                                onLongClick = {
+                                    if (!selectionMode) {
+                                        selectionMode = true
+                                        selectedIds.add(manga.id)
+                                    }
+                                }
                             )
                         }
                     }
@@ -394,6 +484,29 @@ fun LibraryScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showAddCategoryDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showClearLibraryConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearLibraryConfirm = false },
+            title = { Text("Clear library?") },
+            text = { Text("Remove every title from your library? Your reading history is kept.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.clearLibrary()
+                        showClearLibraryConfirm = false
+                    }
+                ) {
+                    Text("Clear", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearLibraryConfirm = false }) {
                     Text("Cancel")
                 }
             }
