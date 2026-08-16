@@ -17,6 +17,7 @@ import com.example.data.local.MangaEntity
 import com.example.data.source.MangaSource
 import com.example.data.source.SourceRegistry
 import com.example.data.source.TachiyomiHttpSourceAdapter
+import com.example.data.source.pageCacheKey
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.Dispatchers
@@ -227,7 +228,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
             val source = SourceRegistry.source(ch.mangaId.substringBefore(":"))
             val dir = File(app.cacheDir, "reader_pages")
             dir.mkdirs()
-            val key = imageUrl.hashCode().toUInt().toString(16)
+            val key = pageCacheKey(imageUrl)
             val target = File(dir, "$key.img")
             if (target.exists() && target.length() > 0) return@withContext target
 
@@ -348,8 +349,11 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
      * Merge duplicate repos into a single row. Two kinds of duplicates are handled:
      *  - the same canonical repo added via different URL forms (github.com vs raw.githubusercontent.com,
      *    index.json vs index.min.json, .pb vs .json), and
-     *  - different URLs that host the exact same extension set (e.g. keiyoushi and a mirror/fork that
-     *    ship the same packages) — otherwise every extension would appear twice in the list.
+     *  - different URLs that host the exact same extension FILES (e.g. keiyoushi and a pure mirror
+     *    that serves identical apkUrls) — otherwise every extension would appear twice in the list.
+     * Two repos that ship the same packages but DIFFERENT builds (different apkUrls — e.g.
+     * keiyoushi's comix + a custom repo's comix) are NOT merged: both rows stay, exactly like
+     * Mihon/Tadami list both versions of a package.
      * The earliest-added row wins; installed-extension markers are carried over to it and the extras'
      * repo/extension/source rows are deleted. Runs on startup so duplicates get cleaned up once.
      */
@@ -359,14 +363,14 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         dao.getAllReposOnce().groupBy { canonicalRepoUrl(it.url) }.values.forEach { group ->
             if (group.size > 1) mergeRepoGroup(group)
         }
-        // Pass 2: identical extension package sets under different URLs (mirrors/forks).
+        // Pass 2: identical extension files (same apkUrls) under different URLs (mirrors/forks).
         val after = dao.getAllReposOnce()
-        val pkgsByRepo = after.associate {
-            it.id to dao.getExtensionsByRepo(it.id).map { e -> e.packageName }.toSet()
+        val apksByRepo = after.associate {
+            it.id to dao.getExtensionsByRepo(it.id).map { e -> e.apkUrl }.toSet()
         }
-        val byPkgSet = after.groupBy { pkgsByRepo[it.id] ?: emptySet() }
-        for ((pkgs, group) in byPkgSet) {
-            if (pkgs.isEmpty() || group.size <= 1) continue
+        val byApkSet = after.groupBy { apksByRepo[it.id] ?: emptySet() }
+        for ((apks, group) in byApkSet) {
+            if (apks.isEmpty() || group.size <= 1) continue
             mergeRepoGroup(group)
         }
     }
@@ -450,17 +454,19 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
                 val parsed = ExtensionNetwork.fetchRepoIndex(indexUrl)
                 val id = repoIdFor(indexUrl)
 
-                // A different URL that hosts the exact same extension set (a mirror/fork of an
-                // already-added repo) counts as already-added too — otherwise every extension
-                // would show up twice in the list.
-                val newPkgs = parsed.extensions.map { it.packageName }.toSet()
-                if (newPkgs.isNotEmpty()) {
+                // A different URL that hosts the exact same extension FILES (same apkUrls, a pure
+                // mirror of an already-added repo) counts as already-added too — otherwise every
+                // extension would show up twice in the list. Same packages from DIFFERENT builds
+                // (different apkUrls, e.g. keiyoushi's comix vs a custom repo's comix) are NOT
+                // duplicates — both stay, so the user can pick which build to install.
+                val newApks = parsed.extensions.map { it.apkUrl }.toSet()
+                if (newApks.isNotEmpty()) {
                     val existing = db.extensionDao().getAllReposOnce().firstOrNull { repo ->
                         repo.id != id &&
-                            db.extensionDao().getExtensionsByRepo(repo.id).map { it.packageName }.toSet() == newPkgs
+                            db.extensionDao().getExtensionsByRepo(repo.id).map { it.apkUrl }.toSet() == newApks
                     }
                     if (existing != null) {
-                        return@withContext "Repository already added (same extensions as \"${existing.name}\")"
+                        return@withContext "Repository already added (same builds as \"${existing.name}\")"
                     }
                 }
 
@@ -532,6 +538,20 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
     suspend fun installExtension(packageName: String, repoId: String): String? = withContext(Dispatchers.IO) {
         val ext = db.extensionDao().getExtension(packageName, repoId) ?: return@withContext "Extension not found"
         if (ext.apkUrl.isBlank()) return@withContext "This extension has no APK URL"
+
+        // Only one build of a package can be active at a time (like Mihon/Tadami: installing
+        // another repo's build replaces the previous one). If the same package is currently
+        // installed from a DIFFERENT repo (e.g. the user installed keiyoushi's comix and is now
+        // installing their own repo's comix), remove that install first so its APK file and
+        // loaded dex sources don't collide with the new build.
+        db.extensionDao().getInstalledExtensionsOnce()
+            .firstOrNull { it.packageName == packageName && it.repoId != repoId }
+            ?.let { other ->
+                apkFile(packageName).delete()
+                ExtensionDexLoader.unregisterExtension(packageName)
+                db.extensionDao().deleteSourcesByExtension(packageName)
+                db.extensionDao().clearInstalledState(packageName)
+            }
 
         val dest = apkFile(packageName)
         // A previously-installed APK is stored read-only (so Android 14+ will load it); make it
