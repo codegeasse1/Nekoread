@@ -35,6 +35,14 @@ interface MangaSource {
     suspend fun getPageUrls(rawChapterId: String): List<String>
 
     /**
+     * Search every manga in this source carrying the given tag/genre (e.g. "Action", "Adventure").
+     * Default: fall back to a plain keyword search so sources without tag support still return
+     * something. Extension sources map the tag onto their genre filter list; MangaDex uses the
+     * API's includedTags[].
+     */
+    suspend fun searchByTag(tag: String, page: Int): List<MangaEntity> = search(tag, page)
+
+    /**
      * Coil image models for a chapter's pages. Default: the plain URLs. Extension sources override
      * this to return source-aware models loaded through the extension's own client + headers.
      */
