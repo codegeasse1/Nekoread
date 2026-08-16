@@ -149,21 +149,12 @@ class TachiyomiHttpSourceAdapter(
             }
         }
             .mapIndexed { i, ch -> ch.toChapter(fullMangaId) }
-        // Sources that don't set chapter_number leave the SChapter default (-1) on every chapter,
-        // which shows "-1" all over the UI and breaks chapter ordering, prev/next navigation and
-        // continuous scroll. Extensions return chapters NEWEST FIRST (Mihon convention) — position
-        // 0 is the LAST chapter — so number them in REVERSE to get 1,2,3… in true reading order.
-        // (Numbering in the returned order inverted every number: the oldest chapter became N and
-        // the newest became 1, so the list, "Read", prev/next and continuous scroll all pointed the
-        // wrong way — e.g. TheBlank's "Chapter 1" opened showing "Ch. 109".)
-        if (chapters.isNotEmpty() && chapters.all { it.chapterNumber <= 0f }) {
-            val readingOrder = chapters.asReversed()
-            readingOrder.mapIndexed { i, ch ->
-                if (ch.chapterNumber > 0f) ch else ch.copy(chapterNumber = (i + 1).toFloat())
-            }
-        } else {
-            chapters
-        }
+        // Chapters without a real chapter_number keep the extension's -1 default. They are NOT
+        // renumbered by list position: the order a source returns its chapters changes between
+        // fetches and doesn't match chapter content, so position-based numbers made the list,
+        // prev/next and continuous scroll point at the WRONG chapters. Ordering for these sources
+        // falls back to the number in the chapter NAME (see sortChapters) — stable across refreshes.
+        chapters
     }
 
     override suspend fun getPageUrls(rawChapterId: String): List<String> = withContext(Dispatchers.IO) {
