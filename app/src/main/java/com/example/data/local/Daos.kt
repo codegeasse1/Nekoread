@@ -42,6 +42,15 @@ interface MangaDao {
     @Query("UPDATE manga SET lastReadChapterId = :chapterId, lastReadChapterName = :chapterName, lastReadPage = :page, lastReadTimestamp = :timestamp WHERE id = :mangaId")
     suspend fun updateReadProgress(mangaId: String, chapterId: String, chapterName: String, page: Int, timestamp: Long)
 
+    @Query("UPDATE manga SET lastReadTimestamp = 0, lastReadChapterId = NULL, lastReadChapterName = NULL, lastReadPage = 1")
+    suspend fun clearReadingHistory()
+
+    @Query("UPDATE manga SET lastReadTimestamp = 0, lastReadChapterId = NULL, lastReadChapterName = NULL, lastReadPage = 1 WHERE id = :id")
+    suspend fun clearReadingHistoryFor(id: String)
+
+    @Query("UPDATE manga SET inLibrary = 0, category = 'Reading' WHERE inLibrary = 1")
+    suspend fun clearLibrary()
+
     @Query("DELETE FROM manga WHERE id = :id")
     suspend fun deleteManga(id: String)
 }
