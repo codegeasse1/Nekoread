@@ -481,7 +481,10 @@ fun MangaDetailScreen(
                             loadError != null && chapters.isEmpty() -> "Failed to load chapters"
                             else -> "${chapters.size} Chapters"
                         },
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
                     )
 
                     if (loadError != null && chapters.isEmpty()) {
@@ -491,7 +494,8 @@ fun MangaDetailScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Refresh,
-                                contentDescription = "Retry"
+                                contentDescription = "Retry",
+                                tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
                     } else {
@@ -501,7 +505,8 @@ fun MangaDetailScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Sort,
-                                contentDescription = "Sort Chapters"
+                                contentDescription = "Sort Chapters",
+                                tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
