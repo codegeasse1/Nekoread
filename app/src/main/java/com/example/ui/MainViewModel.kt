@@ -288,6 +288,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun clearHistory() {
+        viewModelScope.launch { repository.clearHistory() }
+    }
+
+    fun removeHistory(mangaId: String) {
+        viewModelScope.launch { repository.removeHistory(mangaId) }
+    }
+
+    fun clearLibrary() {
+        viewModelScope.launch { repository.clearLibrary() }
+    }
+
+    fun removeFromLibrary(mangaIds: List<String>) {
+        if (mangaIds.isEmpty()) return
+        viewModelScope.launch { repository.removeFromLibrary(mangaIds) }
+    }
+
     fun addExtensionRepo(url: String, name: String) {
         viewModelScope.launch {
             _opBusy.value = "repo_add"
