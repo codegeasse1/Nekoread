@@ -112,7 +112,12 @@ import com.example.ui.ReaderBg
 import com.example.ui.ReaderFit
 import com.example.ui.ReaderMode
 import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -188,6 +193,12 @@ fun ReaderScreen(
     }
 
     val coroutineScope = rememberCoroutineScope()
+
+    // Download-ahead scope: background job that pulls every page of the strip into the on-device
+    // reader_pages cache (Aniyomi/Tadami-style page cache), so scrolling never waits on the network.
+    // It's tied to this composition, so leaving the reader cancels it automatically.
+    val prefetchScope = rememberCoroutineScope()
+    val prefetchJob = remember { mutableStateOf<Job?>(null) }
 
     // Re-load a queued chapter's pages after a failure (tapped from its error row). A failed
     // queued chapter never blocks continuous scroll — the reader just shows the retry row.
@@ -266,6 +277,7 @@ fun ReaderScreen(
                     urls.forEach { mc.remove(MemoryCache.Key(it)) }
                 }
             }
+            prefetchJob.value?.cancel()
             HttpSource.cancelAllPrefetches()
         }
     }
@@ -573,6 +585,42 @@ fun ReaderScreen(
                     .crossfade(false)
                     .build()
             )
+        }
+    }
+
+    // Download-ahead (Aniyomi/Tadami page cache): pull EVERY page of the loaded strip into the
+    // on-device reader_pages cache in the background, a few at a time, so a page is already on
+    // disk by the time it scrolls into view and renders instantly — no network spinner, no
+    // re-download on scroll-back, and no memory spike (raw bytes on disk vs full-size bitmaps in
+    // RAM, which is what made scrolling heavy). The reader's page fetcher serves from this cache
+    // first, so this is disk-only prefetching. Already-cached pages are skipped, so re-running
+    // when a queued chapter's pages arrive is cheap.
+    LaunchedEffect(chapter.id, isWebtoon, entries.size, pages?.size) {
+        if (pages == null) return@LaunchedEffect
+        val targets = buildList {
+            fun addChapter(cid: String, list: List<Any>?) {
+                list?.forEach { m ->
+                    when (m) {
+                        is ExtensionPageImage -> add(Triple(cid, m.pageUrl, m.imageUrl))
+                        is String -> add(Triple(cid, "", m))
+                    }
+                }
+            }
+            addChapter(chapter.id, pages)
+            queuedChapters.forEach { addChapter(it.chapter.id, it.pages) }
+            previousChapters.forEach { addChapter(it.chapter.id, it.pages) }
+        }
+        if (targets.isEmpty()) return@LaunchedEffect
+        prefetchJob.value?.cancel()
+        prefetchJob.value = prefetchScope.launch {
+            withContext(Dispatchers.IO) {
+                val gate = Semaphore(3)
+                for ((cid, pUrl, iUrl) in targets) {
+                    gate.withPermit {
+                        runCatching { viewModel.repository.getPageImageFile(cid, pUrl, iUrl) }
+                    }
+                }
+            }
         }
     }
 
