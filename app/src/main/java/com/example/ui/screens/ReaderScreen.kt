@@ -100,6 +100,7 @@ import android.content.pm.ActivityInfo
 import coil.compose.AsyncImagePainter
 import coil.compose.LocalImageLoader
 import coil.compose.rememberAsyncImagePainter
+import coil.memory.MemoryCache
 import coil.request.ImageRequest
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
@@ -245,7 +246,9 @@ fun ReaderScreen(
     // Reading a long chapter floods Coil's shared in-memory cache with page bitmaps. Evict ONLY
     // those page entries when the reader leaves (freeing the memory) — NOT the whole cache, which
     // would force every library/catalog cover thumbnail to re-download and show as blank tiles
-    // right after closing the reader. Covers already cached stay cached, so they load instantly.
+    // right after closing the reader. Reader pages are memory-cached under their image URL
+    // (ExtensionPageImageKeyer), so we can evict exactly those keys; covers (keyed
+    // "cover:<source>|<url>") are untouched and load instantly from memory.
     // Also stop the source's background page-list prefetches so nothing keeps hammering the CDN.
     DisposableEffect(Unit) {
         onDispose {
@@ -259,7 +262,7 @@ fun ReaderScreen(
                     collect(pages)
                     queuedChapters.forEach { collect(it.pages) }
                     previousChapters.forEach { collect(it.pages) }
-                    urls.forEach { mc.remove(it) }
+                    urls.forEach { mc.remove(MemoryCache.Key(it)) }
                 }
             }
             HttpSource.cancelAllPrefetches()
