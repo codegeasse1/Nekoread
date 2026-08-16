@@ -52,22 +52,50 @@ object ExtensionNetwork {
 
     val INDEX_FILE_NAMES = listOf("index.json", "repo.json", "index.min.json", "plugins.json", "plugins.min.json")
 
+    // Some repos also publish a protobuf index (index.pb / index.min.pb). We can't parse the
+    // binary format, but the same repo almost always also serves the JSON index — so a .pb URL is
+    // accepted as an index URL and transparently rewritten to its .json sibling (see
+    // [indexCandidatesFor]).
+    private val PB_INDEX_FILE_NAMES = listOf("index.pb", "index.min.pb", "repo.pb")
+
+    val ALL_INDEX_FILE_NAMES = INDEX_FILE_NAMES + PB_INDEX_FILE_NAMES
+
     /** True if [url] already points at a repo index/metadata file. */
     fun isIndexUrl(url: String): Boolean {
         val trimmed = url.trim().trimEnd('/')
-        return INDEX_FILE_NAMES.any { trimmed.endsWith("/$it", ignoreCase = true) }
+        return ALL_INDEX_FILE_NAMES.any { trimmed.endsWith("/$it", ignoreCase = true) }
     }
 
     /** Base dir of a repo, stripping any known index file suffix. */
     fun indexDirFor(indexUrl: String): String {
         var url = indexUrl.trim().trimEnd('/')
-        for (name in INDEX_FILE_NAMES) {
+        for (name in ALL_INDEX_FILE_NAMES) {
             if (url.endsWith("/$name", ignoreCase = true)) {
                 url = url.dropLast(name.length + 1).trimEnd('/')
                 break
             }
         }
         return url
+    }
+
+    /**
+     * The index URLs worth trying for a user-supplied repo URL. A direct .pb index URL is swapped
+     * for its .json equivalent (and the minified variant) since this app parses JSON; a base URL
+     * gets the common index file names appended in order.
+     */
+    fun indexCandidatesFor(url: String): List<String> {
+        val clean = url.trim().trimEnd('/')
+        if (clean.endsWith(".pb", ignoreCase = true)) {
+            val stem = clean.dropLast(3)
+            val jsonDirect = "$stem.json"
+            val minVariant = if (stem.endsWith(".min", ignoreCase = true)) null else "$stem.min.json"
+            return listOfNotNull(jsonDirect, minVariant)
+        }
+        return if (isIndexUrl(clean)) {
+            listOf(clean)
+        } else {
+            INDEX_FILE_NAMES.map { "$clean/$it" }
+        }
     }
 
     /** Derive a readable repo name from its base dir when the index carries no name field. */
