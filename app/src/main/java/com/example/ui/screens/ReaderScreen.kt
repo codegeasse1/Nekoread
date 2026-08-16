@@ -5,6 +5,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -69,6 +70,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -78,9 +80,12 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -106,6 +111,7 @@ import com.example.ui.ReaderFit
 import com.example.ui.ReaderMode
 import com.example.ui.reader.TadamiPage
 import com.example.ui.reader.decodeImageBounds
+import com.example.ui.reader.decodePreview
 import com.example.util.dedupeChapters
 import com.example.util.describe
 import eu.kanade.tachiyomi.source.online.HttpSource
@@ -735,14 +741,7 @@ fun ReaderScreen(
                 if (isWebtoon) {
                     LazyColumn(
                         state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        // Keep pages around the viewport COMPOSED (not just prefetched): each
-                        // composed item's SSIV view stays alive and decoded, and its page bytes
-                        // download while it's still off-screen. So a page scrolls into view already
-                        // rendered — no blank/decode flash or spinner pop per scroll step, which
-                        // is exactly how Tadami's reader feels. Pages leave composition (views
-                        // recycled) only after they're beyond this window.
-                        beyondBoundsItemCount = PRELOAD_PAGES
+                        modifier = Modifier.fillMaxSize()
                     ) {
                         items(entries.size) { i ->
                             when (val item = entries[i]) {
@@ -845,17 +844,7 @@ fun ReaderScreen(
                                         webtoonPlaceholderH
                                     }
                                     key(page, retries) {
-                                        TadamiPage(
-                                            descriptor = page.desc,
-                                            file = ready?.file,
-                                            error = (state as? PageFileState.Failed)?.message,
-                                            isWebtoon = true,
-                                            scaleType = SubsamplingScaleImageView.SCALE_TYPE_FIT_WIDTH,
-                                            spinnerColor = contentTextColor,
-                                            onRetry = {
-                                                pageImageErrors = pageImageErrors - i
-                                                pageRetries[i] = (pageRetries[i] ?: 0) + 1
-                                            },
+                                        Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .height((itemH / density.density).dp)
@@ -868,7 +857,45 @@ fun ReaderScreen(
                                                 )
                                                 .clipToBounds()
                                                 .testTag("reader_page_$i")
-                                        )
+                                        ) {
+                                            // Low-res preview UNDER the tiled view: while SSIV
+                                            // decodes its base tile (a few hundred ms on a tall
+                                            // strip), the page is already visible instead of a blank
+                                            // frame — kills the pop-in blink as each page scrolls
+                                            // into view. SSIV paints over it as soon as it's ready.
+                                            val previewFile = ready?.file
+                                            if (previewFile != null) {
+                                                val preview by produceState<ImageBitmap?>(
+                                                    initialValue = null,
+                                                    key1 = previewFile
+                                                ) {
+                                                    value = withContext(Dispatchers.Default) {
+                                                        decodePreview(previewFile)?.asImageBitmap()
+                                                    }
+                                                }
+                                                if (preview != null) {
+                                                    Image(
+                                                        bitmap = preview,
+                                                        contentDescription = null,
+                                                        contentScale = ContentScale.FillWidth,
+                                                        modifier = Modifier.fillMaxSize()
+                                                    )
+                                                }
+                                            }
+                                            TadamiPage(
+                                                descriptor = page.desc,
+                                                file = ready?.file,
+                                                error = (state as? PageFileState.Failed)?.message,
+                                                isWebtoon = true,
+                                                scaleType = SubsamplingScaleImageView.SCALE_TYPE_FIT_WIDTH,
+                                                spinnerColor = contentTextColor,
+                                                onRetry = {
+                                                    pageImageErrors = pageImageErrors - i
+                                                    pageRetries[i] = (pageRetries[i] ?: 0) + 1
+                                                },
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        }
                                     }
                                 }
                             }
