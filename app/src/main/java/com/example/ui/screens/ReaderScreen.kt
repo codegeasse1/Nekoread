@@ -93,7 +93,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.toDp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.app.Activity
 import android.content.pm.ActivityInfo
@@ -110,6 +109,7 @@ import com.example.ui.reader.decodeImageBounds
 import com.example.util.dedupeChapters
 import com.example.util.describe
 import eu.kanade.tachiyomi.source.online.HttpSource
+import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -851,7 +851,7 @@ fun ReaderScreen(
                                             },
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .height(with(density) { itemH.toDp() })
+                                                .height((itemH / density.density).dp)
                                                 .then(
                                                     if (readerMode == ReaderMode.WEBTOON_GAPS) {
                                                         Modifier.padding(bottom = 16.dp)
