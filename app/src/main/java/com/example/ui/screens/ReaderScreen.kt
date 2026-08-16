@@ -103,6 +103,7 @@ import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
+import com.example.data.source.ExtensionPageImage
 import com.example.util.describe
 import com.example.ui.MainViewModel
 import com.example.ui.ReaderBg
@@ -241,14 +242,26 @@ fun ReaderScreen(
     val context = LocalContext.current
     val imageLoader = LocalImageLoader.current
 
-    // Reading floods Coil's shared in-memory cache with page bitmaps, which can evict (or leave
-    // stale) extension covers — library thumbnails then render as blank tiles until the app is
-    // restarted. Clear the image memory cache and stop the source's background page-list prefetches
-    // when the reader leaves composition so covers are re-fetched cleanly (and aren't starved by
-    // leftover background downloads) the next time the library/detail screen shows them.
+    // Reading a long chapter floods Coil's shared in-memory cache with page bitmaps. Evict ONLY
+    // those page entries when the reader leaves (freeing the memory) — NOT the whole cache, which
+    // would force every library/catalog cover thumbnail to re-download and show as blank tiles
+    // right after closing the reader. Covers already cached stay cached, so they load instantly.
+    // Also stop the source's background page-list prefetches so nothing keeps hammering the CDN.
     DisposableEffect(Unit) {
         onDispose {
-            runCatching { imageLoader?.memoryCache?.clear() }
+            runCatching {
+                val mc = imageLoader?.memoryCache
+                if (mc != null) {
+                    val urls = LinkedHashSet<String>()
+                    fun collect(list: List<Any>?) {
+                        list?.forEach { p -> if (p is ExtensionPageImage) urls.add(p.imageUrl) }
+                    }
+                    collect(pages)
+                    queuedChapters.forEach { collect(it.pages) }
+                    previousChapters.forEach { collect(it.pages) }
+                    urls.forEach { mc.remove(it) }
+                }
+            }
             HttpSource.cancelAllPrefetches()
         }
     }
@@ -630,6 +643,11 @@ fun ReaderScreen(
             else -> {
                 val pageList = pages!!
                 if (isWebtoon) {
+                    // Per-page loading state for the COMPOSED (visible) items only. The spinner is
+                    // shown on at most the first two pages that are still loading, so wherever you
+                    // scroll in a long chapter there's always 1-2 loading indicators but never one
+                    // on every unloaded page (the rest keep a dark placeholder).
+                    val pageLoadState = remember { mutableStateMapOf<Int, Boolean>() }
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize()
@@ -700,6 +718,13 @@ fun ReaderScreen(
                                 }
                                 else -> {
                                     val retries = pageRetries[i] ?: 0
+                                    // Track this page as loading while it's composed; cleanup on
+                                    // scroll-away keeps the frontier limited to visible pages.
+                                    DisposableEffect(i) {
+                                        pageLoadState[i] = true
+                                        onDispose { pageLoadState.remove(i) }
+                                    }
+                                    val frontier = pageLoadState.filterValues { it }.keys.sorted().take(2)
                                     key(item, retries) {
                                         // Memoize the request per page (keyed on the page object +
                                         // retry count) so it's the SAME object across scroll
@@ -740,10 +765,12 @@ fun ReaderScreen(
                                                     pageImageErrors = pageImageErrors - i
                                                     pageRetries[i] = (pageRetries[i] ?: 0) + 1
                                                 },
-                                                // At most a couple of spinners (the user asked):
-                                                // a long webtoon otherwise shows a spinner on
-                                                // every unloaded page on screen.
-                                                showSpinner = i < 2,
+                                                // At most a couple of loading circles (the user
+                                                // asked): the first two pages that are STILL
+                                                // loading get a spinner; the rest of the loading
+                                                // pages keep a dark placeholder.
+                                                showSpinner = i in frontier,
+                                                onLoadingChanged = { loading -> pageLoadState[i] = loading },
                                                 // A loading page keeps a viewport-height
                                                 // placeholder (like Tadami) so the list stays
                                                 // scrollable and doesn't jump when each image
@@ -1374,6 +1401,7 @@ private fun LoadableReaderImage(
     modifier: Modifier = Modifier,
     zoom: Float = 1f,
     showSpinner: Boolean = true,
+    onLoadingChanged: ((Boolean) -> Unit)? = null,
 ) {
     // stableKey is the source model object (stable across recompositions); `model` may be a fresh
     // ImageRequest wrapper each recomposition, so never key state on it.
@@ -1382,8 +1410,10 @@ private fun LoadableReaderImage(
     val painter = rememberAsyncImagePainter(
         model = model,
         onState = { state ->
-            loading = state is AsyncImagePainter.State.Empty || state is AsyncImagePainter.State.Loading
+            val isNowLoading = state is AsyncImagePainter.State.Empty || state is AsyncImagePainter.State.Loading
+            loading = isNowLoading
             failed = state is AsyncImagePainter.State.Error
+            onLoadingChanged?.invoke(isNowLoading)
             if (state is AsyncImagePainter.State.Error) {
                 onError(state.result.throwable.message ?: "image load failed")
             }
