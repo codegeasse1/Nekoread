@@ -62,6 +62,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -238,6 +239,17 @@ fun ReaderScreen(
     val configuration = LocalConfiguration.current
     val context = LocalContext.current
     val imageLoader = LocalImageLoader.current
+
+    // Reading floods Coil's shared in-memory cache with page bitmaps, which can evict (or leave
+    // stale) extension covers — library thumbnails then render as blank tiles until the app is
+    // restarted. Clear the image memory cache when the reader leaves composition so covers are
+    // re-fetched cleanly the next time the library/detail screen shows them.
+    DisposableEffect(Unit) {
+        onDispose {
+            runCatching { imageLoader?.memoryCache?.clear() }
+        }
+    }
+
     val screenW = with(density) { configuration.screenWidthDp.dp.roundToPx() }
     // Decode webtoon pages at most this tall (in pixels). Full-height decoding is what keeps
     // pages sharp ("full HD"): a cap of ~8000px covers essentially every webtoon page natively
