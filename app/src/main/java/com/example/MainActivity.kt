@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -196,18 +197,20 @@ fun MainAppScreen(viewModel: MainViewModel) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
                         .testTag("bottom_nav_container")
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(26.dp),
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
+                        shape = RoundedCornerShape(30.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.60f),
                         border = BorderStroke(1.dp, GlassCardBorder),
                         shadowElevation = 10.dp
                     ) {
                         NavigationBar(
                             containerColor = Color.Transparent,
                             tonalElevation = 0.dp,
+                            windowInsets = WindowInsets(0, 0, 0, 0),
                             modifier = Modifier
                                 .height(64.dp)
                                 .testTag("bottom_nav")
