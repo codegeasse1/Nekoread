@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -88,6 +89,15 @@ fun MangaGridCard(
                     .fillMaxWidth()
                     .aspectRatio(0.72f)
             ) {
+                // Tiny centered spinner while the cover loads, so a not-yet-cached thumbnail never
+                // looks like a broken black tile (Tadami/Aniyomi-style placeholder).
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                )
                 AsyncImage(
                     model = coverModelFor(manga),
                     contentDescription = manga.title,
