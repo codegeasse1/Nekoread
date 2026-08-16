@@ -10,6 +10,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -38,6 +39,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -177,9 +179,10 @@ fun MainAppScreen(viewModel: MainViewModel) {
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.45f),
                     tonalElevation = 0.dp,
                     modifier = Modifier
+                        .height(64.dp)
                         .border(width = 1.dp, color = GlassCardBorder)
                         .testTag("bottom_nav")
                 ) {
@@ -194,13 +197,7 @@ fun MainAppScreen(viewModel: MainViewModel) {
                             },
                             selected = currentRoute == screen.route,
                             onClick = {
-                                navController.navigate(screen.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
+                                navController.navigateToTab(screen.route)
                             },
                             modifier = Modifier.testTag("nav_item_${screen.route}")
                         )
@@ -226,7 +223,7 @@ fun MainAppScreen(viewModel: MainViewModel) {
                         navController.navigate("reader/$mangaId/$chapterId")
                     },
                     onNavigateToBrowse = {
-                        navController.navigate(Screen.Browse.route)
+                        navController.navigateToTab(Screen.Browse.route)
                     }
                 )
             }
@@ -312,5 +309,21 @@ fun MainAppScreen(viewModel: MainViewModel) {
                 )
             }
         }
+    }
+}
+
+/** Switch to a bottom-nav tab, always landing on its top-level screen. */
+private fun NavHostController.navigateToTab(route: String) {
+    if (currentDestination?.route == route) {
+        // Already on this tab — pop back to its top-level screen if we went deeper.
+        popBackStack(route, inclusive = false)
+        return
+    }
+    navigate(route) {
+        popUpTo(graph.findStartDestination().id) {
+            saveState = true
+        }
+        launchSingleTop = true
+        restoreState = true
     }
 }
