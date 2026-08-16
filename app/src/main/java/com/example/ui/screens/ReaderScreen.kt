@@ -873,9 +873,10 @@ fun ReaderScreen(
                                                         decodePreview(previewFile)?.asImageBitmap()
                                                     }
                                                 }
-                                                if (preview != null) {
+                                                val previewImage = preview
+                                                if (previewImage != null) {
                                                     Image(
-                                                        bitmap = preview,
+                                                        bitmap = previewImage,
                                                         contentDescription = null,
                                                         contentScale = ContentScale.FillWidth,
                                                         modifier = Modifier.fillMaxSize()
