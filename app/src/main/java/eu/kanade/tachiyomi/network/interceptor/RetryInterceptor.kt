@@ -10,14 +10,16 @@ import java.io.IOException
  * observed) for a few seconds and then recover — without a retry the catalog/chapter request just
  * surfaces "Couldn't reach 4KHD" even though the site is fine a moment later.
  *
- * Only 429/500/502/503/504 are retried, plus dropped connections / read timeouts (IOException),
- * at most three times with a doubling backoff, and only for GET/HEAD requests (extension traffic
- * is all GETs). The retry count is carried on the request itself so a re-entrant chain (e.g. the
- * Cloudflare interceptor re-proceeding) can never loop forever.
+ * Only 500/502/503/504 are retried, plus dropped connections / read timeouts (IOException), at most
+ * once with a short backoff, and only for GET/HEAD requests (extension traffic is all GETs). 429 is
+ * deliberately NOT retried — it means the CDN is rate-limiting us, and re-spamming it just extends
+ * the wait (which is what made reader pages hang for 20-30s while the CDN throttled). The retry
+ * count is carried on the request itself so a re-entrant chain (e.g. the Cloudflare interceptor
+ * re-proceeding) can never loop forever.
  */
 class RetryInterceptor(
-    private val maxRetries: Int = 3,
-    private val initialBackoffMs: Long = 1200L,
+    private val maxRetries: Int = 1,
+    private val initialBackoffMs: Long = 600L,
 ) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -50,6 +52,6 @@ class RetryInterceptor(
 
     companion object {
         private const val RETRY_COUNT_HEADER = "X-Nekoread-Retry"
-        private val RETRYABLE_CODES = setOf(429, 500, 502, 503, 504)
+        private val RETRYABLE_CODES = setOf(500, 502, 503, 504)
     }
 }
