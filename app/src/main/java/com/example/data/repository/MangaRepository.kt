@@ -17,7 +17,6 @@ import com.example.data.local.MangaEntity
 import com.example.data.source.MangaSource
 import com.example.data.source.SourceRegistry
 import com.example.data.source.TachiyomiHttpSourceAdapter
-import com.example.data.source.pageCacheKey
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.Dispatchers
@@ -53,7 +52,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
             db.categoryDao().insertCategories(ExtensionEngine.defaultCategories)
         }
 
-        // Sources come from installed extensions only (like Tadami) — nothing is seeded here.
+        // Sources come from installed extensions only (like Tadami) â nothing is seeded here.
 
         // Seed the well-known repos only on first launch. Counts are fetched live afterwards.
         val repoList = db.extensionDao().getAllRepos().first()
@@ -70,7 +69,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
                 try {
                     refreshRepoInternal(repo)
                 } catch (e: Exception) {
-                    // offline / unreachable — the Repos tab shows the failure via its refresh button
+                    // offline / unreachable â the Repos tab shows the failure via its refresh button
                 }
             }
         }
@@ -190,7 +189,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
                 return@withContext true
             }
         } catch (e: Throwable) {
-            // network failure or extension incompatibility — leave existing data (if any) and let the UI offer a retry
+            // network failure or extension incompatibility â leave existing data (if any) and let the UI offer a retry
         }
         false
     }
@@ -207,46 +206,6 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         val ch = db.chapterDao().getChapterById(chapterId) ?: return@withContext emptyList()
         SourceRegistry.source(ch.mangaId.substringBefore(":")).getPageImageModels(ch.fetchUrl)
     }
-
-    /** Live page descriptors (request URL + image URL) for a chapter — the Tadami-style reader
-     *  input. Each page is downloaded individually via [getPageImageFile] and rendered with a
-     *  tiled view, so no giant full-page bitmap is ever decoded. */
-    suspend fun getChapterPageDescriptors(chapterId: String): List<MangaSource.PageDescriptor> =
-        withContext(Dispatchers.IO) {
-            val ch = db.chapterDao().getChapterById(chapterId) ?: return@withContext emptyList()
-            SourceRegistry.source(ch.mangaId.substringBefore(":")).getPageDescriptors(ch.fetchUrl)
-        }
-
-    /**
-     * Download one reader page's image bytes into a stable disk cache (Tadami HttpPageLoader
-     * model): returns the cached file on subsequent calls. Pages are fetched through the source's
-     * own client so hotlink protection (Referer/Origin) is honoured, exactly like extensions do.
-     */
-    suspend fun getPageImageFile(chapterId: String, pageUrl: String, imageUrl: String): File =
-        withContext(Dispatchers.IO) {
-            val ch = db.chapterDao().getChapterById(chapterId) ?: throw IllegalStateException("Chapter not found")
-            val source = SourceRegistry.source(ch.mangaId.substringBefore(":"))
-            val dir = File(app.cacheDir, "reader_pages")
-            dir.mkdirs()
-            val key = pageCacheKey(imageUrl)
-            val target = File(dir, "$key.img")
-            if (target.exists() && target.length() > 0) return@withContext target
-
-            val tmp = File(dir, "$key.img.tmp")
-            tmp.delete()
-            try {
-                source.downloadPageImage(MangaSource.PageDescriptor(pageUrl, imageUrl), tmp)
-                if (!tmp.exists() || tmp.length() == 0L) throw java.io.IOException("Empty download for $imageUrl")
-                if (!tmp.renameTo(target)) {
-                    tmp.copyTo(target, overwrite = true)
-                    tmp.delete()
-                }
-                target
-            } catch (e: Throwable) {
-                tmp.delete()
-                throw e
-            }
-        }
 
     suspend fun toggleLibraryStatus(mangaId: String, category: String = "Reading") = withContext(Dispatchers.IO) {
         val manga = db.mangaDao().getMangaById(mangaId) ?: return@withContext
@@ -350,8 +309,8 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
      *  - the same canonical repo added via different URL forms (github.com vs raw.githubusercontent.com,
      *    index.json vs index.min.json, .pb vs .json), and
      *  - different URLs that host the exact same extension FILES (e.g. keiyoushi and a pure mirror
-     *    that serves identical apkUrls) — otherwise every extension would appear twice in the list.
-     * Two repos that ship the same packages but DIFFERENT builds (different apkUrls — e.g.
+     *    that serves identical apkUrls) â otherwise every extension would appear twice in the list.
+     * Two repos that ship the same packages but DIFFERENT builds (different apkUrls â e.g.
      * keiyoushi's comix + a custom repo's comix) are NOT merged: both rows stay, exactly like
      * Mihon/Tadami list both versions of a package.
      * The earliest-added row wins; installed-extension markers are carried over to it and the extras'
@@ -437,7 +396,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
             return@withContext "URL must start with http:// or https://"
         }
 
-        // The same repo added twice (in different URL forms — github.com vs raw.githubusercontent.com,
+        // The same repo added twice (in different URL forms â github.com vs raw.githubusercontent.com,
         // index.json vs index.min.json, .pb vs .json) must not create a duplicate row.
         val canonical = canonicalRepoUrl(cleanUrl)
         if (db.extensionDao().getAllReposOnce().any { canonicalRepoUrl(it.url) == canonical }) {
@@ -455,10 +414,10 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
                 val id = repoIdFor(indexUrl)
 
                 // A different URL that hosts the exact same extension FILES (same apkUrls, a pure
-                // mirror of an already-added repo) counts as already-added too — otherwise every
+                // mirror of an already-added repo) counts as already-added too â otherwise every
                 // extension would show up twice in the list. Same packages from DIFFERENT builds
                 // (different apkUrls, e.g. keiyoushi's comix vs a custom repo's comix) are NOT
-                // duplicates — both stay, so the user can pick which build to install.
+                // duplicates â both stay, so the user can pick which build to install.
                 val newApks = parsed.extensions.map { it.apkUrl }.toSet()
                 if (newApks.isNotEmpty()) {
                     val existing = db.extensionDao().getAllReposOnce().firstOrNull { repo ->
@@ -568,7 +527,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         }
 
         // Sanity check against the real manifest when it's parseable. A package-name mismatch is
-        // fatal; an unparseable manifest is not — the definitive test below is whether the dex
+        // fatal; an unparseable manifest is not â the definitive test below is whether the dex
         // actually loads against the in-app runtime.
         val pm = app.packageManager
         val info = try {
@@ -611,7 +570,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
     /**
      * Load every installed extension's dex back into memory on app start (their sources are
      * stateless HTTP clients, so re-instantiating is all that's needed). Called once at startup.
-     * Source rows are rebuilt from what actually loads — anything stale (from an old install or a
+     * Source rows are rebuilt from what actually loads â anything stale (from an old install or a
      * failed load) is dropped, so no fake source can ever appear in the Sources tab.
      */
     suspend fun loadInstalledExtensions() = withContext(Dispatchers.IO) {
@@ -696,7 +655,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
     }
 
     // ------------------------------------------------------------------------------------------
-    // Backup & restore (real JSON export/import of all user data — like Tadami's Data section)
+    // Backup & restore (real JSON export/import of all user data â like Tadami's Data section)
     // ------------------------------------------------------------------------------------------
 
     suspend fun exportBackupJson(): String = withContext(Dispatchers.IO) {
