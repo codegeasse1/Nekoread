@@ -15,6 +15,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -56,6 +60,10 @@ fun TadamiPage(
     onRetry: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
+    // The last page file this AndroidView was asked to show. SSIV's fork exposes no reliable
+    // "currently displayed path" on the base class, so the composable tracks it itself to avoid
+    // re-setting the same image on every recomposition.
+    var shownPath by remember { mutableStateOf<String?>(null) }
     Box(modifier = modifier) {
         AndroidView(
             factory = { ctx ->
@@ -74,8 +82,8 @@ fun TadamiPage(
                 }
                 val f = file
                 val path = f?.absolutePath
-                if (path != null && view.currentImagePath != path) {
-                    view.currentImagePath = path
+                if (path != null && shownPath != path) {
+                    shownPath = path
                     view.setImage(ImageSource.uri(context, Uri.fromFile(f)))
                 }
             },
@@ -136,7 +144,6 @@ class PagedReaderImageView @JvmOverloads constructor(
     attrs: AttributeSet? = null,
 ) : SubsamplingScaleImageView(context, attrs) {
 
-    var currentImagePath: String? = null
     var onTap: () -> Unit = {}
     var onSwipePage: ((forward: Boolean) -> Unit)? = null
 
@@ -174,8 +181,6 @@ class WebtoonReaderImageView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
 ) : SubsamplingScaleImageView(context, attrs) {
-
-    var currentImagePath: String? = null
 
     override fun onTouchEvent(event: MotionEvent): Boolean = false
 }
