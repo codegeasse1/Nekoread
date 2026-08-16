@@ -40,6 +40,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -85,6 +86,7 @@ fun LibraryScreen(
             Column {
                 TopAppBar(
                     windowInsets = WindowInsets(0),
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                     title = {
                         if (showSearchField) {
                             OutlinedTextField(
@@ -115,7 +117,7 @@ fun LibraryScreen(
                                 Text(
                                     text = "Library (${mangaList.size})",
                                     fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.titleLarge
+                                    style = MaterialTheme.typography.titleMedium
                                 )
                             }
                         }
