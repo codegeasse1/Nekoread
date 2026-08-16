@@ -110,6 +110,7 @@ import com.example.ui.ReaderMode
 import com.example.ui.reader.TadamiPage
 import com.example.ui.reader.decodeImageBounds
 import com.example.ui.reader.decodePreview
+import com.example.util.chapterNameNumber
 import com.example.util.dedupeChapters
 import com.example.util.describe
 import eu.kanade.tachiyomi.source.online.HttpSource
@@ -479,7 +480,9 @@ fun ReaderScreen(
         if (deduped.any { it.chapterNumber > 0f }) {
             deduped.sortedBy { it.chapterNumber }
         } else {
-            deduped.sortedWith(compareBy<ChapterEntity> { it.dateUpload }.thenBy { it.name })
+            // Unnumbered sources: stable ordering by the source's own upload dates, name number as
+            // tiebreak — NOT fake positional numbers (those scrambled chapter↔content on re-fetch).
+            deduped.sortedWith(compareBy<ChapterEntity> { it.dateUpload }.thenBy { chapterNameNumber(it.name) }.thenBy { it.name })
         }
     }
 
@@ -578,7 +581,7 @@ fun ReaderScreen(
             val v = vis
             if (v != null && pageInChapter > 0) {
                 viewModel.saveProgress(manga.id, v.chapter.id, v.chapter.name, pageInChapter)
-                if (v.chapter.id != chapter.id) {
+                if (v.chapter.id != chapter.id && v.chapter.chapterNumber > 0f) {
                     viewModel.markPreviousChaptersRead(manga.id, v.chapter.chapterNumber)
                 }
             }
@@ -650,9 +653,13 @@ fun ReaderScreen(
     // the host, including the pages actually on screen, turning fast loads into 20-30s hangs.
     // Users who want chapters offline/instant use the download button in the chapter sheet
     // (startChapterDownload).
-    val prevChapter = remember(orderedChapters, chapter) { prevChapterBefore(chapter) }
+    // Next/prev are relative to the chapter ACTUALLY ON SCREEN, not the chapter the reader was
+    // opened with — webtoon continuous scroll appends the following chapter below and prepends the
+    // previous one above, so the buttons must step from what the user is looking at.
+    val navBaseChapter = if (isWebtoon) (activeChapter ?: chapter) else chapter
+    val prevChapter = remember(orderedChapters, navBaseChapter) { prevChapterBefore(navBaseChapter) }
 
-    val nextChapter = remember(orderedChapters, chapter) { nextChapterAfter(chapter) }
+    val nextChapter = remember(orderedChapters, navBaseChapter) { nextChapterAfter(navBaseChapter) }
 
     // Source's base URL (for the Cloudflare / site-verification WebView button).
     val sourceBaseUrl = remember(manga) {
