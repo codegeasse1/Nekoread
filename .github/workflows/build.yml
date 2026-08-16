@@ -40,15 +40,36 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Generate debug keystore
+      - name: Prepare signing keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 || vars.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || vars.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || vars.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS || vars.KEY_ALIAS }}
         run: |
-          if [ ! -f debug.keystore ]; then
-            keytool -genkeypair -v \
-              -keystore debug.keystore \
-              -alias androiddebugkey \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass android -keypass android \
-              -dname "CN=Android Debug,O=Nekoread,C=US" > /dev/null 2>&1
+          set -e
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > my-upload-key.jks
+            echo "KEYSTORE_PATH=$PWD/my-upload-key.jks" >> "$GITHUB_ENV"
+            if [ -z "$STORE_PASSWORD" ]; then
+              echo "::error::KEYSTORE_BASE64 is set but STORE_PASSWORD is missing. Add the STORE_PASSWORD secret (and KEY_PASSWORD if it differs)."
+              exit 1
+            fi
+            echo "STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=${KEY_PASSWORD:-$STORE_PASSWORD}" >> "$GITHUB_ENV"
+            echo "KEY_ALIAS=${KEY_ALIAS:-upload}" >> "$GITHUB_ENV"
+            echo "::notice::Debug APK will be signed with the real keystore from secrets (stable signature, installs in-place)."
+          else
+            # No real key configured yet — fall back to a throwaway debug key.
+            if [ ! -f debug.keystore ]; then
+              keytool -genkeypair -v \
+                -keystore debug.keystore \
+                -alias androiddebugkey \
+                -keyalg RSA -keysize 2048 -validity 10000 \
+                -storepass android -keypass android \
+                -dname "CN=Android Debug,O=Nekoread,C=US" > /dev/null 2>&1
+            fi
+            echo "::warning::No KEYSTORE_BASE64 secret configured — using a throwaway debug key."
           fi
 
       - name: Build debug APK
@@ -112,9 +133,9 @@ jobs:
           Latest release APKs (if any) appear here too, but the official release downloads
           are on the Releases page: https://github.com/codegeasse1/Nekoread/releases
 
-          The debug APK is signed with a throwaway debug key. If you want a release you can
-          actually update in-place, use a proper release from the Releases page (built with
-          the real signing key).
+          If the repo has the real signing key configured (KEYSTORE_BASE64 + STORE_PASSWORD +
+          KEY_PASSWORD secrets), the debug APK is signed with that stable key and updates install
+          in-place. Without them it's signed with a throwaway debug key (reinstall to update).
           EOF
 
           # Only the three files below belong on this branch; never commit build junk.
