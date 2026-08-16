@@ -268,7 +268,9 @@ fun MainAppScreen(viewModel: MainViewModel) {
                     },
                     onReadChapterClick = { mangaId, chapterId ->
                         navController.navigate("reader/$mangaId/$chapterId")
-                    }
+                    },
+                    onClearHistory = { viewModel.clearHistory() },
+                    onRemoveHistory = { mangaId -> viewModel.removeHistory(mangaId) }
                 )
             }
 
