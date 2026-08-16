@@ -75,7 +75,7 @@ fun MangaGridCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(16.dp))
             .clickable { onClick() }
             .testTag("manga_card_${manga.id}"),
         colors = CardDefaults.cardColors(
@@ -286,7 +286,7 @@ fun MangaListCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(16.dp))
             .clickable { onClick() }
             .testTag("manga_list_item_${manga.id}"),
         colors = CardDefaults.cardColors(
