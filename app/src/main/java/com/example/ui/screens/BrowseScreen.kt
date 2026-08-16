@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
@@ -277,6 +278,15 @@ fun BrowseScreen(
     // Browsing a source's catalog hides the outer "Browse & Extensions" chrome (title + tab row)
     // and shows a minimal Tadami-style bar: back arrow + the source's name.
     val inExtensionMode = selectedTabIndex == TAB_CATALOG && activeSourceId.isNotBlank()
+
+    // While inside a source's catalog, the system back button must exit back to the Sources list
+    // (exactly like the on-screen back arrow) — not pop the whole Browse tab and land on Library.
+    BackHandler(enabled = inExtensionMode) {
+        activeSourceId = ""
+        activeSourceBaseUrl = ""
+        searchQuery = ""
+        selectedTabIndex = TAB_SOURCES
+    }
 
     Scaffold(
         containerColor = Color.Transparent,
