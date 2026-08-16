@@ -326,28 +326,45 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
     }
 
     /**
-     * Merge duplicate repos (the same canonical repo added via different URL forms) into a single
-     * row. The earliest-added row wins; installed-extension markers are carried over to it and the
-     * extras' repo/extension/source rows are deleted. Runs on startup so duplicates created before
-     * URL canonicalization get cleaned up once.
+     * Merge duplicate repos into a single row. Two kinds of duplicates are handled:
+     *  - the same canonical repo added via different URL forms (github.com vs raw.githubusercontent.com,
+     *    index.json vs index.min.json, .pb vs .json), and
+     *  - different URLs that host the exact same extension set (e.g. keiyoushi and a mirror/fork that
+     *    ship the same packages) — otherwise every extension would appear twice in the list.
+     * The earliest-added row wins; installed-extension markers are carried over to it and the extras'
+     * repo/extension/source rows are deleted. Runs on startup so duplicates get cleaned up once.
      */
     suspend fun dedupeRepos() = withContext(Dispatchers.IO) {
-        val repos = db.extensionDao().getAllReposOnce()
-        val byCanonical = repos.groupBy { canonicalRepoUrl(it.url) }
-        for ((_, group) in byCanonical) {
-            if (group.size <= 1) continue
-            val keep = group.minByOrNull { it.addedDate } ?: continue
-            for (dup in group) {
-                if (dup.id == keep.id) continue
-                // Keep any installed-extension markers on the surviving row.
-                for (ext in db.extensionDao().getExtensionsByRepo(dup.id).filter { it.isInstalled }) {
-                    db.extensionDao().clearInstalledState(ext.packageName)
-                    db.extensionDao().updateExtensionInstallState(ext.packageName, keep.id, true, ext.installedVersionName, null)
-                }
-                db.extensionDao().deleteExtensionsByRepo(dup.id)
-                db.extensionDao().deleteSourcesByRepo(dup.id)
-                db.extensionDao().deleteRepo(dup.id)
+        val dao = db.extensionDao()
+        // Pass 1: the same canonical URL.
+        dao.getAllReposOnce().groupBy { canonicalRepoUrl(it.url) }.values.forEach { group ->
+            if (group.size > 1) mergeRepoGroup(group)
+        }
+        // Pass 2: identical extension package sets under different URLs (mirrors/forks).
+        val after = dao.getAllReposOnce()
+        val pkgsByRepo = after.associate {
+            it.id to dao.getExtensionsByRepo(it.id).map { e -> e.packageName }.toSet()
+        }
+        val byPkgSet = after.groupBy { pkgsByRepo[it.id] ?: emptySet() }
+        for ((pkgs, group) in byPkgSet) {
+            if (pkgs.isEmpty() || group.size <= 1) continue
+            mergeRepoGroup(group)
+        }
+    }
+
+    /** Collapse a duplicate repo group into its earliest-added member, preserving installs. */
+    private suspend fun mergeRepoGroup(group: List<ExtensionRepoEntity>) {
+        val keep = group.minByOrNull { it.addedDate } ?: return
+        for (dup in group) {
+            if (dup.id == keep.id) continue
+            // Keep any installed-extension markers on the surviving row.
+            for (ext in db.extensionDao().getExtensionsByRepo(dup.id).filter { it.isInstalled }) {
+                db.extensionDao().clearInstalledState(ext.packageName)
+                db.extensionDao().updateExtensionInstallState(ext.packageName, keep.id, true, ext.installedVersionName, null)
             }
+            db.extensionDao().deleteExtensionsByRepo(dup.id)
+            db.extensionDao().deleteSourcesByRepo(dup.id)
+            db.extensionDao().deleteRepo(dup.id)
         }
     }
 
@@ -413,6 +430,21 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
             try {
                 val parsed = ExtensionNetwork.fetchRepoIndex(indexUrl)
                 val id = repoIdFor(indexUrl)
+
+                // A different URL that hosts the exact same extension set (a mirror/fork of an
+                // already-added repo) counts as already-added too — otherwise every extension
+                // would show up twice in the list.
+                val newPkgs = parsed.extensions.map { it.packageName }.toSet()
+                if (newPkgs.isNotEmpty()) {
+                    val existing = db.extensionDao().getAllReposOnce().firstOrNull { repo ->
+                        repo.id != id &&
+                            db.extensionDao().getExtensionsByRepo(repo.id).map { it.packageName }.toSet() == newPkgs
+                    }
+                    if (existing != null) {
+                        return@withContext "Repository already added (same extensions as \"${existing.name}\")"
+                    }
+                }
+
                 val existing = db.extensionDao().getRepoById(id)
                 val repo = ExtensionRepoEntity(
                     id = id,
