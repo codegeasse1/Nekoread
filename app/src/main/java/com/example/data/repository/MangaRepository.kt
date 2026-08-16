@@ -253,6 +253,25 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         db.mangaDao().updateLibraryStatus(mangaId, newInLibrary, category)
     }
 
+    suspend fun clearHistory() = withContext(Dispatchers.IO) {
+        db.mangaDao().clearReadingHistory()
+    }
+
+    suspend fun removeHistory(mangaId: String) = withContext(Dispatchers.IO) {
+        db.mangaDao().clearReadingHistoryFor(mangaId)
+    }
+
+    suspend fun clearLibrary() = withContext(Dispatchers.IO) {
+        db.mangaDao().clearLibrary()
+    }
+
+    suspend fun removeFromLibrary(mangaIds: List<String>) = withContext(Dispatchers.IO) {
+        for (id in mangaIds) {
+            val manga = db.mangaDao().getMangaById(id) ?: continue
+            db.mangaDao().updateLibraryStatus(id, false, manga.category)
+        }
+    }
+
     suspend fun updateMangaCategory(mangaId: String, category: String) = withContext(Dispatchers.IO) {
         db.mangaDao().updateLibraryStatus(mangaId, true, category)
     }
