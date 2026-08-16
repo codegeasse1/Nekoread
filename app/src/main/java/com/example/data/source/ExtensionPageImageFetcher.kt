@@ -8,6 +8,7 @@ import coil.fetch.FetchResult
 import coil.fetch.SourceResult
 import coil.request.Options
 import coil.key.Keyer
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.HttpSource
 import okhttp3.OkHttpClient
 import java.io.IOException
@@ -31,8 +32,46 @@ data class ExtensionPageImage(
 )
 
 
+/** Memory-cache pages by their unique image URL so scrolling the reader doesn't re-fetch them. */
+class ExtensionPageImageKeyer : Keyer<ExtensionPageImage> {
+    override fun key(data: ExtensionPageImage, options: Options): String = data.imageUrl
+}
+
 /**
- * Coil model for a catalog/library cover served by a Tachiyomi extension.
+ * Network fetcher for reader page models: loads the image through the extension's OWN client and
+ * its [HttpSource.getImage] path (carrying the source's Referer/Origin/custom headers), so
+ * hotlink-protected CDNs accept it. This is the same client/headers the extension itself uses.
+ * No on-device page cache: pages always fetch live from the source.
+ */
+class ExtensionPageImageFetcherFactory : Fetcher.Factory<ExtensionPageImage> {
+    override fun create(
+        data: ExtensionPageImage,
+        options: Options,
+        imageLoader: ImageLoader,
+    ): Fetcher? {
+        return object : Fetcher {
+            override suspend fun fetch(): FetchResult? {
+                val page = Page(0, url = data.pageUrl, imageUrl = data.imageUrl)
+                val response = try {
+                    data.source.getImage(page)
+                } catch (e: Exception) {
+                    throw IOException("${data.source.name} page load failed (${data.imageUrl.take(80)}): ${e.message}", e)
+                }
+                val body = response.body ?: throw IOException("Null response body")
+                return SourceResult(
+                    source = ImageSource(
+                        source = body.source(),
+                        context = options.context,
+                    ),
+                    mimeType = body.contentType()?.toString() ?: "image/*",
+                    dataSource = DataSource.NETWORK,
+                )
+            }
+        }
+    }
+}
+
+/** Coil model for a catalog/library cover served by a Tachiyomi extension.
  *
  * The dedicated [Fetcher] loads the cover through the extension's OWN client and headers
  * ([HttpSource.headers] = the source's User-Agent + Referer/Origin etc.) so hotlink-protected
