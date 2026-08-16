@@ -97,7 +97,7 @@ fun ReaderScreen(
     val readerMode: ReaderMode by viewModel.readerMode.collectAsStateWithLifecycle()
     val readerBg: ReaderBg by viewModel.readerBg.collectAsStateWithLifecycle()
 
-    var pages by remember { mutableStateOf<List<String>?>(null) }
+    var pages by remember { mutableStateOf<List<Any>?>(null) }
     var pageError by remember { mutableStateOf<String?>(null) }
     var pageLoading by remember { mutableStateOf(true) }
     var retryKey by remember { mutableStateOf(0) }
@@ -106,7 +106,7 @@ fun ReaderScreen(
         pageLoading = true
         pageError = null
         try {
-            pages = viewModel.repository.getChapterPageUrls(chapter.id)
+            pages = viewModel.repository.getChapterPageImageModels(chapter.id)
         } catch (e: Throwable) {
             pageError = e.message ?: "Failed to load chapter pages"
             pages = null
