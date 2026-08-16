@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.app.Activity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -50,6 +52,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -66,9 +69,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
 import coil.compose.LocalImageLoader
+import coil.compose.SubcomposeAsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.example.data.local.ChapterEntity
@@ -211,6 +217,28 @@ fun ReaderScreen(
     // Cloudflare / site verification overlay (a Dialog, so closing it keeps the user in the reader).
     var webviewTarget by remember { mutableStateOf<Pair<String, String?>?>(null) }
 
+    // Immersive reading: hide the system bars (status bar + nav bar) while reading, and only
+    // bring them back when the user taps the screen to show the HUD.
+    val activity = LocalContext.current as? Activity
+    DisposableEffect(showHud, activity) {
+        val controller = activity?.window?.let {
+            WindowCompat.getInsetsController(it, it.decorView)
+        }
+        if (controller != null) {
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            if (showHud) {
+                controller.show(WindowInsetsCompat.Type.systemBars())
+            } else {
+                controller.hide(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+        onDispose {
+            // Restore system bars when leaving the reader.
+            controller?.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -296,13 +324,14 @@ fun ReaderScreen(
                         modifier = Modifier.fillMaxSize()
                     ) {
                         itemsIndexed(pageList) { index, pageUrl ->
-                            AsyncImage(
+                            ReaderPageImage(
                                 model = pageUrl,
                                 contentDescription = "Page ${index + 1}",
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("reader_page_$index"),
-                                contentScale = ContentScale.FillWidth
+                                contentScale = ContentScale.FillWidth,
+                                spinnerColor = contentTextColor
                             )
                         }
 
@@ -355,11 +384,13 @@ fun ReaderScreen(
                                 modifier = Modifier.fillMaxSize(),
                                 contentAlignment = Alignment.Center
                             ) {
-                                AsyncImage(
+                                ReaderPageImage(
                                     model = pageList[pageIndex],
                                     contentDescription = "Page ${pageIndex + 1}",
                                     modifier = Modifier.fillMaxSize(),
-                                    contentScale = fitScale
+                                    contentScale = fitScale,
+                                    spinnerColor = contentTextColor,
+                                    placeholderModifier = Modifier.fillMaxSize()
                                 )
                             }
                         }
@@ -373,11 +404,13 @@ fun ReaderScreen(
                                 modifier = Modifier.fillMaxSize(),
                                 contentAlignment = Alignment.Center
                             ) {
-                                AsyncImage(
+                                ReaderPageImage(
                                     model = pageList[pageIndex],
                                     contentDescription = "Page ${pageIndex + 1}",
                                     modifier = Modifier.fillMaxSize(),
-                                    contentScale = fitScale
+                                    contentScale = fitScale,
+                                    spinnerColor = contentTextColor,
+                                    placeholderModifier = Modifier.fillMaxSize()
                                 )
                             }
                         }
@@ -644,6 +677,50 @@ fun ReaderScreen(
             onDismiss = { webviewTarget = null }
         )
     }
+}
+
+@Composable
+private fun ReaderPageImage(
+    model: Any?,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale,
+    spinnerColor: Color,
+    placeholderModifier: Modifier = Modifier
+        .fillMaxWidth()
+        .heightIn(min = 240.dp)
+) {
+    SubcomposeAsyncImage(
+        model = model,
+        contentDescription = contentDescription,
+        modifier = modifier,
+        contentScale = contentScale,
+        loading = {
+            Box(
+                modifier = placeholderModifier,
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    color = spinnerColor.copy(alpha = 0.6f),
+                    strokeWidth = 3.dp,
+                    modifier = Modifier.size(36.dp)
+                )
+            }
+        },
+        error = {
+            Box(
+                modifier = placeholderModifier,
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Couldn't load page",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = spinnerColor.copy(alpha = 0.7f)
+                    )
+                )
+            }
+        }
+    )
 }
 
 @Composable
