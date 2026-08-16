@@ -52,16 +52,32 @@ object MangaDexSource : MangaSource {
     private fun fullMangaId(rawId: String): String = ID_PREFIX + rawId
     private fun fullChapterId(rawId: String): String = CH_PREFIX + rawId
 
+    private val RETRYABLE_CODES = setOf(429, 500, 502, 503, 504)
+    private const val MAX_RETRIES = 2
+
     private fun getJson(url: String): JSONObject {
-        val request = Request.Builder().url(url).build()
-        client.newCall(request).execute().use { response ->
-            val body = response.body?.string() ?: ""
-            if (!response.isSuccessful) {
-                throw IOException("HTTP ${response.code}: ${body.take(200)}")
+        var attempt = 0
+        while (true) {
+            try {
+                val request = Request.Builder().url(url).build()
+                client.newCall(request).execute().use { response ->
+                    val body = response.body?.string() ?: ""
+                    if (response.isSuccessful) {
+                        return JSONObject(body)
+                    }
+                    throw HttpFailure(response.code, body.take(200))
+                }
+            } catch (e: HttpFailure) {
+                if (e.code !in RETRYABLE_CODES || attempt >= MAX_RETRIES) throw e
+            } catch (e: IOException) {
+                if (attempt >= MAX_RETRIES) throw e
             }
-            return JSONObject(body)
+            attempt++
+            Thread.sleep(1000L * attempt)
         }
     }
+
+    private class HttpFailure(val code: Int, detail: String) : IOException("HTTP $code: $detail")
 
     private fun mangaListUrl(query: String, page: Int): String {
         val builder = (API + "/manga").toHttpUrl().newBuilder()
