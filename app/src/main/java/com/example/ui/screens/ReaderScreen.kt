@@ -595,8 +595,14 @@ fun ReaderScreen(
     // RAM, which is what made scrolling heavy). The reader's page fetcher serves from this cache
     // first, so this is disk-only prefetching. Already-cached pages are skipped, so re-running
     // when a queued chapter's pages arrive is cheap.
-    LaunchedEffect(chapter.id, isWebtoon, entries.size, pages?.size) {
+    // Downloads are ordered from the CURRENT reading position outward (ahead first, then behind):
+    // opening a chapter resumes mid-way, and prefetching from page 1 meant every page the reader
+    // actually showed was still on the network — the "stuck on a spinner while scrolling" problem.
+    // Re-runs every ~24 pages of scroll so a jump (slider/next-chapter) re-centres the downloads.
+    val prefetchBucket = if (isWebtoon) listState.firstVisibleItemIndex / 24 else pagerState.currentPage / 24
+    LaunchedEffect(chapter.id, isWebtoon, entries.size, pages?.size, prefetchBucket) {
         if (pages == null) return@LaunchedEffect
+        // (position index in the strip, chapterId, pageUrl, imageUrl)
         val targets = buildList {
             fun addChapter(cid: String, list: List<Any>?) {
                 list?.forEach { m ->
@@ -611,11 +617,18 @@ fun ReaderScreen(
             previousChapters.forEach { addChapter(it.chapter.id, it.pages) }
         }
         if (targets.isEmpty()) return@LaunchedEffect
+        val cur = if (isWebtoon) listState.firstVisibleItemIndex.coerceAtLeast(0) else pagerState.currentPage.coerceAtLeast(0)
+        val ordered = buildList {
+            targets.forEachIndexed { i, t ->
+                if (i == cur) return@forEachIndexed // the on-screen page is already being loaded
+                add(Pair(t, if (i >= cur) (i - cur) else Int.MAX_VALUE / 2 + (cur - i)))
+            }
+        }.sortedBy { it.second }.map { it.first }
         prefetchJob.value?.cancel()
         prefetchJob.value = prefetchScope.launch {
             withContext(Dispatchers.IO) {
                 val gate = Semaphore(3)
-                for ((cid, pUrl, iUrl) in targets) {
+                for ((cid, pUrl, iUrl) in ordered) {
                     gate.withPermit {
                         runCatching { viewModel.repository.getPageImageFile(cid, pUrl, iUrl) }
                     }
