@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
@@ -251,22 +252,55 @@ fun BrowseScreen(
 
     val repoNameById: Map<String, String> = extensionRepos.associate { it.id to it.name }
 
+    // Browsing a source's catalog hides the outer "Browse & Extensions" chrome (title + tab row)
+    // and shows a minimal Tadami-style bar: back arrow + the source's name.
+    val inExtensionMode = selectedTabIndex == TAB_CATALOG && activeSourceId.isNotBlank()
+
     Scaffold(
         containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0),
         topBar = {
-            Column(modifier = Modifier.background(GlassSurface)) {
+            if (inExtensionMode) {
                 TopAppBar(
                     windowInsets = WindowInsets(0),
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                    navigationIcon = {
+                        IconButton(
+                            onClick = {
+                                activeSourceId = ""
+                                activeSourceBaseUrl = ""
+                                searchQuery = ""
+                                selectedTabIndex = TAB_SOURCES
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back to sources",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    },
                     title = {
                         Text(
-                            text = "Browse & Extensions",
+                            text = catalogSourceName,
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.titleLarge
                         )
                     }
                 )
+            } else {
+                Column(modifier = Modifier.background(GlassSurface)) {
+                    TopAppBar(
+                        windowInsets = WindowInsets(0),
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                        title = {
+                            Text(
+                                text = "Browse & Extensions",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                        }
+                    )
 
                 ScrollableTabRow(
                     selectedTabIndex = selectedTabIndex,
@@ -290,6 +324,7 @@ fun BrowseScreen(
                     }
                 }
                 HorizontalDivider(color = GlassCardBorder)
+                }
             }
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -332,6 +367,7 @@ fun BrowseScreen(
                     sourceName = catalogSourceName,
                     sourceBaseUrl = activeSourceBaseUrl,
                     hasSource = activeSourceId.isNotBlank(),
+                    minimal = inExtensionMode,
                     onRetry = { viewModel.loadCatalog(activeSourceId, searchQuery) },
                     onMangaClick = onMangaClick,
                     onOpenWebView = { url ->
@@ -784,6 +820,7 @@ fun CatalogTabContent(
     sourceName: String,
     sourceBaseUrl: String,
     hasSource: Boolean,
+    minimal: Boolean = false,
     onRetry: () -> Unit,
     onMangaClick: (String) -> Unit,
     onOpenWebView: (String) -> Unit
@@ -815,35 +852,50 @@ fun CatalogTabContent(
         }
 
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            GlassSearchBar(
-                value = searchQuery,
-                onValueChange = onSearchQueryChange,
-                placeholder = "Search $sourceName..."
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    shape = CircleShape
-                ) {
-                    Text(
-                        text = if (searchQuery.isBlank()) "Latest from $sourceName" else "Results from $sourceName",
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.onPrimaryContainer)
-                    )
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                if (sourceBaseUrl.isNotBlank()) {
-                    TextButton(onClick = { onOpenWebView(sourceBaseUrl) }) {
+                GlassSearchBar(
+                    value = searchQuery,
+                    onValueChange = onSearchQueryChange,
+                    placeholder = "Search $sourceName...",
+                    modifier = if (minimal && sourceBaseUrl.isNotBlank()) Modifier.weight(1f) else Modifier
+                )
+                if (minimal && sourceBaseUrl.isNotBlank()) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    IconButton(onClick = { onOpenWebView(sourceBaseUrl) }) {
                         Icon(
                             imageVector = Icons.Default.Language,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
+                            contentDescription = "Cloudflare check",
+                            tint = NekoVioletPrimary
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Cloudflare check")
+                    }
+                }
+            }
+
+            if (!minimal) {
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = CircleShape
+                    ) {
+                        Text(
+                            text = if (searchQuery.isBlank()) "Latest from $sourceName" else "Results from $sourceName",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        )
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    if (sourceBaseUrl.isNotBlank()) {
+                        TextButton(onClick = { onOpenWebView(sourceBaseUrl) }) {
+                            Icon(
+                                imageVector = Icons.Default.Language,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Cloudflare check")
+                        }
                     }
                 }
             }
