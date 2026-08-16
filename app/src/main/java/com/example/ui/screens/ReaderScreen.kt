@@ -70,7 +70,6 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -80,7 +79,6 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -166,6 +164,12 @@ fun ReaderScreen(
     // then renders it with the tiled SubsamplingScaleImageView — so first view downloads once,
     // every re-read after that is instant, and no full-page bitmap is ever decoded.
     val pageStates = remember(chapter.id) { mutableStateMapOf<String, PageFileState>() }
+    // Chapter-wide page aspect ratio (height/width), learned from the first decoded page. While
+    // pages are still downloading, placeholders at this aspect (fit-width) already match the
+    // page's real size — so when a page lands and its true bounds are known there is no height
+    // change and no reflow/jump blink. Falls back to a fraction of the viewport until the first
+    // page decodes.
+    var chapterAspect by remember(chapter.id) { mutableStateOf<Float?>(null) }
     // Reads hit the CDN a couple at a time so we never saturate a host (a constant download storm
     // made the CDN throttle every request to the host, including pages actually on screen).
     val downloadGate = remember { Semaphore(3) }
@@ -594,6 +598,7 @@ fun ReaderScreen(
                 try {
                     val f = viewModel.repository.getPageImageFile(cid, pUrl, iUrl)
                     val (w, h) = withContext(Dispatchers.IO) { decodeImageBounds(f) }
+                    if (chapterAspect == null && w > 0 && h > 0) chapterAspect = h.toFloat() / w
                     pageStates[key] = PageFileState.Ready(f, w, h)
                 } catch (e: CancellationException) {
                     throw e
@@ -823,6 +828,7 @@ fun ReaderScreen(
                                                 try {
                                                     val f = viewModel.repository.getPageImageFile(page.chapter.id, page.desc.pageUrl, page.desc.imageUrl)
                                                     val (w, h) = withContext(Dispatchers.IO) { decodeImageBounds(f) }
+                                                    if (chapterAspect == null && w > 0 && h > 0) chapterAspect = h.toFloat() / w
                                                     pageStates[page.desc.imageUrl] = PageFileState.Ready(f, w, h)
                                                     pageImageErrors = pageImageErrors - i
                                                 } catch (e: Throwable) {
@@ -838,11 +844,12 @@ fun ReaderScreen(
                                     // the strip flows seamlessly; a fraction-of-viewport
                                     // placeholder keeps it scrollable while the bytes download.
                                     val ready = state as? PageFileState.Ready
-                                    val itemH = if (ready != null && ready.width > 0) {
-                                        (screenW * ready.height.toFloat() / ready.width).toInt().coerceAtLeast(2)
-                                    } else {
-                                        webtoonPlaceholderH
+                                    val realAspectH = ready?.let {
+                                        if (it.width > 0) (screenW * it.height.toFloat() / it.width).toInt().coerceAtLeast(2) else null
                                     }
+                                    val itemH = realAspectH
+                                        ?: chapterAspect?.let { (screenW * it).toInt().coerceAtLeast(2) }
+                                        ?: webtoonPlaceholderH
                                     key(page, retries) {
                                         Box(
                                             modifier = Modifier
@@ -865,15 +872,13 @@ fun ReaderScreen(
                                             // into view. SSIV paints over it as soon as it's ready.
                                             val previewFile = ready?.file
                                             if (previewFile != null) {
-                                                val preview by produceState<ImageBitmap?>(
-                                                    initialValue = null,
-                                                    key1 = previewFile
-                                                ) {
-                                                    value = withContext(Dispatchers.Default) {
-                                                        decodePreview(previewFile)?.asImageBitmap()
-                                                    }
+                                                // Decoded synchronously so the preview is present in
+                                                // the SAME frame the item first composes — the old
+                                                // async decode left the box blank for one frame on
+                                                // every scroll (the visible "blink").
+                                                val previewImage = remember(previewFile) {
+                                                    decodePreview(previewFile)?.asImageBitmap()
                                                 }
-                                                val previewImage = preview
                                                 if (previewImage != null) {
                                                     Image(
                                                         bitmap = previewImage,
