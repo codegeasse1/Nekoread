@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import okhttp3.Headers
@@ -533,10 +534,11 @@ abstract class HttpSource : CatalogueSource {
                     val nextUrl = fetchImageUrl(nextPage).awaitSingle()
                     nextPage.imageUrl = nextUrl
                 }
-                val imageUrl = nextPage.imageUrl
-                if (imageUrl != null && nextPage.status != Page.State.READY) {
-                    client.newCall(GET(imageUrl, headers)).awaitSuccess().close()
-                }
+                // NOTE: deliberately NO full-image download here. Pages are fetched cacheless via
+                // the reader, so pre-downloading the image neither fills Coil's cache nor the
+                // OkHttp cache — it only burns the per-host connection slot. On image-heavy
+                // chapters this spawned a firehose of parallel downloads that starved the actual
+                // foreground page loads ("keeps loading") and blocked cover requests for minutes.
             } catch (e: Exception) {
                 // Ignore prefetch failures
             }
@@ -551,9 +553,23 @@ abstract class HttpSource : CatalogueSource {
         private val pageToNextPage = ConcurrentHashMap<String, Page>()
         private val inFlightPrefetches = ConcurrentHashMap<String, Boolean>()
 
-        private val prefetchScope = CoroutineScope(
-            Dispatchers.IO + SupervisorJob(),
+        // Prefetch work (adjacent-chapter page lists) is bounded to a couple of concurrent tasks
+        // so it can never starve foreground requests for the same host's per-host connection slot
+        // (an unbounded prefetch made image-heavy chapters "keep loading" forever and blocked
+        // cover thumbnails afterwards). The scope is replaced when the reader is closed so no
+        // prefetch work keeps running in the background after the user leaves.
+        @Volatile
+        private var prefetchScope = CoroutineScope(
+            Dispatchers.IO.limitedParallelism(2) + SupervisorJob(),
         )
+
+        /** Stop every background page-list prefetch (called when the reader leaves the screen). */
+        fun cancelAllPrefetches() {
+            prefetchScope.coroutineContext[Job]?.cancel()
+            prefetchScope = CoroutineScope(
+                Dispatchers.IO.limitedParallelism(2) + SupervisorJob(),
+            )
+        }
     }
 
     /**
