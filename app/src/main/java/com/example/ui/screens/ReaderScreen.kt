@@ -94,6 +94,7 @@ fun ReaderScreen(
     allChapters: List<ChapterEntity>,
     onBackClick: () -> Unit,
     onChapterChange: (String) -> Unit,
+    startAtBeginning: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     if (manga == null || chapter == null) {
@@ -156,12 +157,21 @@ fun ReaderScreen(
 
     val contentTextColor = if (readerBg == ReaderBg.CREAM || readerBg == ReaderBg.WHITE) Color.Black else Color.White
 
+    // Initial position: in-reader next/prev chapter navigation starts at the first page
+    // (startAtBeginning), while opening a chapter from the library/detail resumes where the
+    // user left off (lastPageRead).
+    val initialPageIndex = if (startAtBeginning) {
+        0
+    } else {
+        (chapter.lastPageRead - 1).coerceAtLeast(0)
+    }
+
     // Webtoon Vertical List State
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = (chapter.lastPageRead - 1).coerceAtLeast(0))
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialPageIndex)
 
     // Paged Reader State (shared by horizontal + vertical pagers)
     val pagerState = rememberPagerState(
-        initialPage = (chapter.lastPageRead - 1).coerceAtLeast(0),
+        initialPage = initialPageIndex,
         pageCount = { pages?.size ?: 0 }
     )
 
