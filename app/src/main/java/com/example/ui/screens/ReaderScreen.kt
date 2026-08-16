@@ -271,12 +271,12 @@ fun ReaderScreen(
     }
 
     val screenW = with(density) { configuration.screenWidthDp.dp.roundToPx() }
-    // Decode webtoon pages at most this tall (in pixels). Full-height decoding is what keeps
-    // pages sharp ("full HD"): a cap of ~8000px covers essentially every webtoon page natively
-    // while still bounding memory (a 1080x8000 bitmap is ~34MB) so Coil's LRU cache handles it.
-    // (The earlier 3400px cap downscaled tall pages → the blur you saw.)
+    // Decode webtoon pages at most this tall (in pixels). Bounded so the biggest possible bitmap
+    // (screenW x this) stays small enough that several can coexist in memory — the old ~8000px cap
+    // made 34MB bitmaps, which is exactly what froze/ANR'd and crashed the app on slow networks.
+    // Strips taller than 2 screens are downscaled; typical per-panel webtoon pages keep full detail.
     val screenH = with(density) { configuration.screenHeightDp.dp.roundToPx() }
-    val webtoonDecodeH = minOf(screenH * 3, 8000).coerceAtLeast(2400)
+    val webtoonDecodeH = minOf(screenH * 2, 4800).coerceAtLeast(1600)
     // Loading placeholder: a SMALL minimum height. A viewport-tall placeholder centered short
     // pages inside a full-screen box, leaving big black bands that cut the artwork — this was the
     // "image cut in half" bug. With a small placeholder the item collapses to the image size.
@@ -571,6 +571,7 @@ fun ReaderScreen(
                     .data(m)
                     .size(screenW, webtoonDecodeH)
                     .crossfade(false)
+                    .respectCacheHeaders(false)
                     .build()
             )
         }
@@ -765,6 +766,7 @@ fun ReaderScreen(
                                                 .data(item)
                                                 .size(screenW, webtoonDecodeH)
                                                 .crossfade(false)
+                                                .respectCacheHeaders(false)
                                                 .build()
                                         }
                                         Column(
@@ -832,6 +834,7 @@ fun ReaderScreen(
                                         .data(pageUrl)
                                         .size(screenW, webtoonDecodeH)
                                         .crossfade(false)
+                                        .respectCacheHeaders(false)
                                         .build()
                                 }
                                 Box(modifier = Modifier.fillMaxSize()) {
@@ -1424,7 +1427,7 @@ private const val MAX_QUEUED_CHAPTERS = 8
 
 // Webtoon: how many items past the current viewport to preload (like Tadami's preload window).
 // Kept modest so the higher-resolution decodes don't run too many at once.
-private const val PRELOAD_PAGES = 6
+private const val PRELOAD_PAGES = 3
 
 /**
  * A reader page image with its own loading spinner and tap-to-retry error state (like Tadami).
