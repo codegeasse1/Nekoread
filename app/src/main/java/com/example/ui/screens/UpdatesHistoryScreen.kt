@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,20 +20,24 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -52,6 +57,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.local.MangaEntity
+import com.example.ui.theme.GlassCardBorder
+import com.example.ui.theme.GlassSurface
 import com.example.ui.MainViewModel
 import com.example.ui.theme.NekoVioletPrimary
 
@@ -62,39 +69,65 @@ fun UpdatesHistoryScreen(
     historyManga: List<MangaEntity>,
     onMangaClick: (String) -> Unit,
     onReadChapterClick: (String, String) -> Unit,
+    onClearHistory: () -> Unit,
+    onRemoveHistory: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedTabIndex by remember { mutableStateOf(0) }
+    var showClearConfirm by remember { mutableStateOf(false) }
     val tabs = listOf("History", "Updates")
 
     Scaffold(
         containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0),
         topBar = {
-            Column {
-                TopAppBar(
-                    windowInsets = WindowInsets(0),
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                    title = {
-                        Text(
-                            text = "History & Updates",
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
-                )
+            // Rounded glass header (Tadami-style) so the whole chrome reads as frosted glass.
+            Surface(
+                color = GlassSurface.copy(alpha = 0.7f),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
+                border = BorderStroke(1.dp, GlassCardBorder),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column {
+                    TopAppBar(
+                        windowInsets = WindowInsets(0),
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                        title = {
+                            Text(
+                                text = "History & Updates",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        },
+                        actions = {
+                            if (selectedTabIndex == 0 && historyManga.isNotEmpty()) {
+                                IconButton(
+                                    onClick = { showClearConfirm = true },
+                                    modifier = Modifier.testTag("clear_history_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Clear all history"
+                                    )
+                                }
+                            }
+                        }
+                    )
 
-                TabRow(
-                    selectedTabIndex = selectedTabIndex,
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)
-                ) {
-                    tabs.forEachIndexed { index, title ->
-                        Tab(
-                            selected = selectedTabIndex == index,
-                            onClick = { selectedTabIndex = index },
-                            text = { Text(title, fontWeight = FontWeight.Bold) },
-                            modifier = Modifier.testTag("history_tab_$index")
-                        )
+                    TabRow(
+                        selectedTabIndex = selectedTabIndex,
+                        containerColor = Color.Transparent,
+                        contentColor = MaterialTheme.colorScheme.primary
+                    ) {
+                        tabs.forEachIndexed { index, title ->
+                            Tab(
+                                selected = selectedTabIndex == index,
+                                onClick = { selectedTabIndex = index },
+                                text = { Text(title, fontWeight = FontWeight.Bold) },
+                                modifier = Modifier.testTag("history_tab_$index")
+                            )
+                        }
                     }
                 }
             }
@@ -110,7 +143,8 @@ fun UpdatesHistoryScreen(
                 0 -> HistoryList(
                     historyManga = historyManga,
                     onMangaClick = onMangaClick,
-                    onReadChapterClick = onReadChapterClick
+                    onReadChapterClick = onReadChapterClick,
+                    onRemoveHistory = onRemoveHistory
                 )
                 1 -> UpdatesList(
                     historyManga = historyManga,
@@ -119,13 +153,37 @@ fun UpdatesHistoryScreen(
             }
         }
     }
+
+    if (showClearConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirm = false },
+            title = { Text("Clear all history?") },
+            text = { Text("This removes every title from your reading history. Library entries are kept.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onClearHistory()
+                        showClearConfirm = false
+                    }
+                ) {
+                    Text("Clear", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 @Composable
 fun HistoryList(
     historyManga: List<MangaEntity>,
     onMangaClick: (String) -> Unit,
-    onReadChapterClick: (String, String) -> Unit
+    onReadChapterClick: (String, String) -> Unit,
+    onRemoveHistory: (String) -> Unit
 ) {
     if (historyManga.isEmpty()) {
         Box(
@@ -220,6 +278,17 @@ fun HistoryList(
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text("Resume")
                             }
+                        }
+
+                        IconButton(
+                            onClick = { onRemoveHistory(manga.id) },
+                            modifier = Modifier.testTag("remove_history_${manga.id}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Remove from history",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
