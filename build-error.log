@@ -3,8 +3,8 @@ Initialized jansi services in: /home/runner/.gradle/native
 To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
 Starting process 'Gradle build daemon'. Working directory: /home/runner/.gradle/daemon/9.3.1 Command: /usr/lib/jvm/temurin-17-jdk-amd64/bin/java --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-opens=java.base/java.nio.charset=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.xml/javax.xml.namespace=ALL-UNNAMED --add-opens=java.base/java.time=ALL-UNNAMED -Xmx4g -Dfile.encoding=UTF-8 -Duser.country -Duser.language=en -Duser.variant -cp /home/runner/.gradle/wrapper/dists/gradle-9.3.1-bin/23ovyewtku6u96viwx3xl3oks/gradle-9.3.1/lib/gradle-daemon-main-9.3.1.jar -javaagent:/home/runner/.gradle/wrapper/dists/gradle-9.3.1-bin/23ovyewtku6u96viwx3xl3oks/gradle-9.3.1/lib/agents/gradle-instrumentation-agent-9.3.1.jar org.gradle.launcher.daemon.bootstrap.GradleDaemon 9.3.1
 Successfully started process 'Gradle build daemon'
-An attempt to start the daemon took 0.807 secs.
-The client will now receive all logging from the daemon (pid: 2611). The daemon log file: /home/runner/.gradle/daemon/9.3.1/daemon-2611.out.log
+An attempt to start the daemon took 1.125 secs.
+The client will now receive all logging from the daemon (pid: 2746). The daemon log file: /home/runner/.gradle/daemon/9.3.1/daemon-2746.out.log
 Daemon will be stopped at the end of the build 
 Using 4 worker leases.
 Operational build model parameters: {requiresToolingModels=false, parallelProjectExecution=true, configureOnDemand=false, configurationCache=false, configurationCacheParallelStore=false, configurationCacheParallelLoad=true, isolatedProjects=false, parallelProjectConfiguration=false, intermediateModelCache=false, parallelToolingApiActions=true, invalidateCoupledProjects=false, modelAsProjectDependency=false, resilientModelBuilding=false}
@@ -39,7 +39,7 @@ Resolved plugin [id: 'com.google.gms.google-services', version: '4.5.0']
 Resolved plugin [id: 'org.jetbrains.kotlin.plugin.serialization', version: '2.2.10']
 WARNING: The option setting 'android.disallowKotlinSourceSets=false' is experimental.
 The current default is 'true'.
-Build bb46ec21-dfc0-49f2-9adc-4523a00316c5 is started
+Build 63ef6eca-1fb8-4aee-93c1-bd578711a9b7 is started
 Using default execution profile
 Detected Android Gradle Plugin compose compiler configuration
 Detected Android Gradle Plugin compose compiler configuration
@@ -53,22 +53,22 @@ Adding -Xuse-inline-scopes-numbers Kotlin compiler flag for task :app:compileDeb
 Tasks to be executed: [task ':app:preBuild', task ':app:preDebugBuild', task ':app:mergeDebugNativeDebugMetadata', task ':app:generateDebugBuildConfig', task ':app:generateDebugResources', task ':app:processDebugGoogleServices', task ':app:packageDebugResources', task ':app:processDebugNavigationResources', task ':app:parseDebugLocalResources', task ':app:generateDebugRFile', task ':app:kspDebugKotlin', task ':app:compileDebugKotlin', task ':app:javaPreCompileDebug', task ':app:compileDebugJavaWithJavac', task ':app:generateDebugAssets', task ':app:mergeDebugAssets', task ':app:compressDebugAssets', task ':app:processDebugJavaRes', task ':app:mergeDebugJavaResource', task ':app:checkDebugDuplicateClasses', task ':app:desugarDebugFileDependencies', task ':app:mergeExtDexDebug', task ':app:mergeLibDexDebug', task ':app:checkDebugAarMetadata', task ':app:mapDebugSourceSetPaths', task ':app:compileDebugNavigationResources', task ':app:mergeDebugResources', task ':app:createDebugCompatibleScreenManifests', task ':app:extractDeepLinksDebug', task ':app:processDebugMainManifest', task ':app:processDebugManifest', task ':app:processDebugManifestForPackage', task ':app:processDebugResources', task ':app:dexBuilderDebug', task ':app:mergeProjectDexDebug', task ':app:mergeDebugJniLibFolders', task ':app:mergeDebugNativeLibs', task ':app:stripDebugDebugSymbols', task ':app:validateSigningDebug', task ':app:writeDebugAppMetadata', task ':app:writeDebugSigningConfigVersions', task ':app:packageDebug', task ':app:createDebugApkListingFileRedirect', task ':app:assembleDebug']
 Tasks that were excluded: []
 Resolve mutations for :app:preBuild (Thread[Execution worker,5,main]) started.
-:app:preBuild (Thread[included builds,5,main]) started.
+:app:preBuild (Thread[Execution worker,5,main]) started.
 
 > Task :app:preBuild UP-TO-DATE
 Skipping task ':app:preBuild' as it has no actions.
-Resolve mutations for :app:preDebugBuild (Thread[Execution worker,5,main]) started.
-:app:preDebugBuild (Thread[Execution worker,5,main]) started.
+Resolve mutations for :app:preDebugBuild (Thread[included builds,5,main]) started.
+:app:preDebugBuild (Thread[included builds,5,main]) started.
 
 > Task :app:preDebugBuild UP-TO-DATE
 Skipping task ':app:preDebugBuild' as it has no actions.
-Resolve mutations for :app:mergeDebugNativeDebugMetadata (Thread[Execution worker,5,main]) started.
+Resolve mutations for :app:mergeDebugNativeDebugMetadata (Thread[included builds,5,main]) started.
 :app:mergeDebugNativeDebugMetadata (Thread[Execution worker,5,main]) started.
 
 > Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
 Skipping task ':app:mergeDebugNativeDebugMetadata' as it has no source files and no previous output files.
-Resolve mutations for :app:generateDebugBuildConfig (Thread[Execution worker,5,main]) started.
-:app:generateDebugBuildConfig (Thread[Execution worker,5,main]) started.
+Resolve mutations for :app:generateDebugBuildConfig (Thread[included builds,5,main]) started.
+:app:generateDebugBuildConfig (Thread[included builds,5,main]) started.
 
 > Task :app:generateDebugBuildConfig FROM-CACHE
 Build cache key for task ':app:generateDebugBuildConfig' is 34bc154d5a820ca048c8531f307e0002
@@ -84,137 +84,49 @@ Task ':app:generateDebugResources' is not up-to-date because:
   No history is available.
 Loaded cache entry for task ':app:generateDebugResources' with cache key 39406a2b54a08f845864bc919f4be254
 Resolve mutations for :app:processDebugGoogleServices (Thread[included builds,5,main]) started.
-:app:processDebugGoogleServices (Thread[included builds,5,main]) started.
+:app:processDebugGoogleServices (Thread[Execution worker Thread 3,5,main]) started.
 
 > Task :app:processDebugGoogleServices FROM-CACHE
 Build cache key for task ':app:processDebugGoogleServices' is 43c0302c7987ba6e121a78a44ebf8155
 Task ':app:processDebugGoogleServices' is not up-to-date because:
   No history is available.
 Loaded cache entry for task ':app:processDebugGoogleServices' with cache key 43c0302c7987ba6e121a78a44ebf8155
-Resolve mutations for :app:packageDebugResources (Thread[included builds,5,main]) started.
-:app:packageDebugResources (Thread[included builds,5,main]) started.
+Resolve mutations for :app:packageDebugResources (Thread[Execution worker Thread 3,5,main]) started.
+:app:packageDebugResources (Thread[Execution worker Thread 3,5,main]) started.
 
 > Task :app:packageDebugResources FROM-CACHE
 Build cache key for task ':app:packageDebugResources' is eb84aa5374cf66bd081a1d0b08c7d59f
 Task ':app:packageDebugResources' is not up-to-date because:
   No history is available.
 Loaded cache entry for task ':app:packageDebugResources' with cache key eb84aa5374cf66bd081a1d0b08c7d59f
-Resolve mutations for :app:processDebugNavigationResources (Thread[included builds,5,main]) started.
-:app:processDebugNavigationResources (Thread[included builds,5,main]) started.
+Resolve mutations for :app:processDebugNavigationResources (Thread[Execution worker Thread 3,5,main]) started.
+:app:processDebugNavigationResources (Thread[Execution worker Thread 3,5,main]) started.
 
 > Task :app:processDebugNavigationResources FROM-CACHE
 Build cache key for task ':app:processDebugNavigationResources' is 9afb900ef722d6e9b1611e20c55dee1c
 Task ':app:processDebugNavigationResources' is not up-to-date because:
   No history is available.
 Loaded cache entry for task ':app:processDebugNavigationResources' with cache key 9afb900ef722d6e9b1611e20c55dee1c
-Resolve mutations for :app:parseDebugLocalResources (Thread[included builds,5,main]) started.
-:app:parseDebugLocalResources (Thread[included builds,5,main]) started.
+Resolve mutations for :app:parseDebugLocalResources (Thread[Execution worker Thread 3,5,main]) started.
+:app:parseDebugLocalResources (Thread[Execution worker Thread 3,5,main]) started.
 
 > Task :app:parseDebugLocalResources FROM-CACHE
 Build cache key for task ':app:parseDebugLocalResources' is eaa5b42826936d3374c22b1926ce27f6
 Task ':app:parseDebugLocalResources' is not up-to-date because:
   No history is available.
 Loaded cache entry for task ':app:parseDebugLocalResources' with cache key eaa5b42826936d3374c22b1926ce27f6
-Resolve mutations for :app:generateDebugRFile (Thread[included builds,5,main]) started.
-:app:generateDebugRFile (Thread[included builds,5,main]) started.
+Resolve mutations for :app:generateDebugRFile (Thread[Execution worker Thread 3,5,main]) started.
+:app:generateDebugRFile (Thread[Execution worker Thread 3,5,main]) started.
 
 > Task :app:generateDebugRFile FROM-CACHE
 Build cache key for task ':app:generateDebugRFile' is 3642d0b5e6d3ff4eac10db3e91bae63c
 Task ':app:generateDebugRFile' is not up-to-date because:
   No history is available.
 Loaded cache entry for task ':app:generateDebugRFile' with cache key 3642d0b5e6d3ff4eac10db3e91bae63c
-Resolve mutations for :app:kspDebugKotlin (Thread[included builds,5,main]) started.
-:app:kspDebugKotlin (Thread[included builds,5,main]) started.
-Resolve mutations for :app:javaPreCompileDebug (Thread[Execution worker Thread 2,5,main]) started.
-:app:javaPreCompileDebug (Thread[Execution worker Thread 2,5,main]) started.
+Resolve mutations for :app:kspDebugKotlin (Thread[Execution worker Thread 3,5,main]) started.
+:app:kspDebugKotlin (Thread[Execution worker Thread 3,5,main]) started.
 
-> Task :app:javaPreCompileDebug FROM-CACHE
-Build cache key for task ':app:javaPreCompileDebug' is 6e613de6c162bd95aa9c24bc80e196dc
-Task ':app:javaPreCompileDebug' is not up-to-date because:
-  No history is available.
-Loaded cache entry for task ':app:javaPreCompileDebug' with cache key 6e613de6c162bd95aa9c24bc80e196dc
-Resolve mutations for :app:generateDebugAssets (Thread[Execution worker Thread 2,5,main]) started.
-:app:generateDebugAssets (Thread[Execution worker Thread 2,5,main]) started.
-
-> Task :app:generateDebugAssets UP-TO-DATE
-Skipping task ':app:generateDebugAssets' as it has no actions.
-Resolve mutations for :app:mergeDebugAssets (Thread[Execution worker Thread 2,5,main]) started.
-:app:mergeDebugAssets (Thread[Execution worker Thread 2,5,main]) started.
-
-> Task :app:mergeDebugAssets
-Caching disabled for task ':app:mergeDebugAssets' because:
-  Simple merging task
-Task ':app:mergeDebugAssets' is not up-to-date because:
-  No history is available.
-The input changes require a full rebuild for incremental task ':app:mergeDebugAssets'.
-Resolve mutations for :app:compressDebugAssets (Thread[Execution worker Thread 3,5,main]) started.
-:app:compressDebugAssets (Thread[Execution worker Thread 3,5,main]) started.
-
-> Task :app:compressDebugAssets FROM-CACHE
-Build cache key for task ':app:compressDebugAssets' is 1d6ca06deea21b1eb0b7678e9cc8dfc6
-Task ':app:compressDebugAssets' is not up-to-date because:
-  No history is available.
-Loaded cache entry for task ':app:compressDebugAssets' with cache key 1d6ca06deea21b1eb0b7678e9cc8dfc6
-Resolve mutations for :app:checkDebugDuplicateClasses (Thread[Execution worker Thread 2,5,main]) started.
-:app:checkDebugDuplicateClasses (Thread[Execution worker Thread 3,5,main]) started.
-Resolve mutations for :app:desugarDebugFileDependencies (Thread[Execution worker,5,main]) started.
-:app:desugarDebugFileDependencies (Thread[Execution worker,5,main]) started.
-
-> Task :app:desugarDebugFileDependencies FROM-CACHE
-Build cache key for task ':app:desugarDebugFileDependencies' is 51c9202a0ef9d034213915eaaa4579dd
-Task ':app:desugarDebugFileDependencies' is not up-to-date because:
-  No history is available.
-Loaded cache entry for task ':app:desugarDebugFileDependencies' with cache key 51c9202a0ef9d034213915eaaa4579dd
-Resolve mutations for :app:checkDebugAarMetadata (Thread[Execution worker,5,main]) started.
-:app:checkDebugAarMetadata (Thread[Execution worker,5,main]) started.
-
-> Task :app:checkDebugDuplicateClasses
-Caching disabled for task ':app:checkDebugDuplicateClasses' because:
-  Caching has been disabled for the task
-Task ':app:checkDebugDuplicateClasses' is not up-to-date because:
-  No history is available.
-Resolve mutations for :app:mergeExtDexDebug (Thread[Execution worker Thread 2,5,main]) started.
-:app:mergeExtDexDebug (Thread[Execution worker Thread 2,5,main]) started.
-
-> Task :app:checkDebugAarMetadata
-Caching disabled for task ':app:checkDebugAarMetadata' because:
-  Caching has been disabled for the task
-Task ':app:checkDebugAarMetadata' is not up-to-date because:
-  No history is available.
-
-> Task :app:mergeExtDexDebug FROM-CACHE
-Build cache key for task ':app:mergeExtDexDebug' is dac820371ac64b0d1ed13bf9d89b4ba7
-Task ':app:mergeExtDexDebug' is not up-to-date because:
-  No history is available.
-Loaded cache entry for task ':app:mergeExtDexDebug' with cache key dac820371ac64b0d1ed13bf9d89b4ba7
-Resolve mutations for :app:mergeLibDexDebug (Thread[Execution worker Thread 2,5,main]) started.
-:app:mergeLibDexDebug (Thread[Execution worker Thread 2,5,main]) started.
-
-> Task :app:mergeLibDexDebug FROM-CACHE
-Build cache key for task ':app:mergeLibDexDebug' is 3b21679385a2814c4eb340e491159e6b
-Task ':app:mergeLibDexDebug' is not up-to-date because:
-  No history is available.
-Loaded cache entry for task ':app:mergeLibDexDebug' with cache key 3b21679385a2814c4eb340e491159e6b
-Resolve mutations for :app:mapDebugSourceSetPaths (Thread[Execution worker Thread 2,5,main]) started.
-:app:mapDebugSourceSetPaths (Thread[Execution worker Thread 2,5,main]) started.
-
-> Task :app:mapDebugSourceSetPaths
-Caching disabled for task ':app:mapDebugSourceSetPaths' because:
-  Caching has been disabled for the task
-Task ':app:mapDebugSourceSetPaths' is not up-to-date because:
-  No history is available.
-Resolve mutations for :app:compileDebugNavigationResources (Thread[Execution worker Thread 2,5,main]) started.
-:app:compileDebugNavigationResources (Thread[Execution worker Thread 2,5,main]) started.
-
-> Task :app:compileDebugNavigationResources FROM-CACHE
-Build cache key for task ':app:compileDebugNavigationResources' is 444a76cc7d4e5da1818121022c34bf5f
-Task ':app:compileDebugNavigationResources' is not up-to-date because:
-  No history is available.
-Loaded cache entry for task ':app:compileDebugNavigationResources' with cache key 444a76cc7d4e5da1818121022c34bf5f
-Resolve mutations for :app:mergeDebugResources (Thread[Execution worker Thread 2,5,main]) started.
-:app:mergeDebugResources (Thread[Execution worker Thread 3,5,main]) started.
-
-> Task :app:kspDebugKotlin
+> Task :app:kspDebugKotlin FROM-CACHE
 Registered task dependencies: app:debugCompileClasspath
 Skipping misunderstood TO dep string: androidx.compose.ui:ui-test-manifest
 Skipping misunderstood TO dep string: org.jetbrains.kotlin:kotlin-stdlib
@@ -235,236 +147,65 @@ Starting dependency analysis
 Build cache key for task ':app:kspDebugKotlin' is ffb31910905a1d34a4bc8ef4a84e5576
 Task ':app:kspDebugKotlin' is not up-to-date because:
   No history is available.
-The input changes require a full rebuild for incremental task ':app:kspDebugKotlin'.
-file or directory '/home/runner/work/Nekoread/Nekoread/app/src/main/kotlin', not found
-file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
-file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/kotlin', not found
-file or directory '/home/runner/work/Nekoread/Nekoread/app/src/main/kotlin', not found
-file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/java', not found
-file or directory '/home/runner/work/Nekoread/Nekoread/app/src/debug/kotlin', not found
-i: [ksp] loaded provider(s): [androidx.room.RoomKspProcessor$Provider, com.squareup.moshi.kotlin.codegen.ksp.JsonClassSymbolProcessorProvider]
+Loaded cache entry for task ':app:kspDebugKotlin' with cache key ffb31910905a1d34a4bc8ef4a84e5576
+Resolve mutations for :app:compileDebugKotlin (Thread[Execution worker Thread 3,5,main]) started.
+:app:compileDebugKotlin (Thread[Execution worker Thread 3,5,main]) started.
+Resolve mutations for :app:javaPreCompileDebug (Thread[Execution worker,5,main]) started.
+:app:javaPreCompileDebug (Thread[Execution worker,5,main]) started.
 
-> Task :app:mergeDebugResources FROM-CACHE
-Build cache key for task ':app:mergeDebugResources' is c4e9654cd244ae74eff103a9135975dc
-Task ':app:mergeDebugResources' is not up-to-date because:
+> Task :app:javaPreCompileDebug FROM-CACHE
+Build cache key for task ':app:javaPreCompileDebug' is 6e613de6c162bd95aa9c24bc80e196dc
+Task ':app:javaPreCompileDebug' is not up-to-date because:
   No history is available.
-Loaded cache entry for task ':app:mergeDebugResources' with cache key c4e9654cd244ae74eff103a9135975dc
-Resolve mutations for :app:createDebugCompatibleScreenManifests (Thread[Execution worker Thread 3,5,main]) started.
-:app:createDebugCompatibleScreenManifests (Thread[Execution worker Thread 3,5,main]) started.
+Loaded cache entry for task ':app:javaPreCompileDebug' with cache key 6e613de6c162bd95aa9c24bc80e196dc
+Resolve mutations for :app:generateDebugAssets (Thread[included builds,5,main]) started.
+:app:generateDebugAssets (Thread[Execution worker Thread 2,5,main]) started.
 
-> Task :app:createDebugCompatibleScreenManifests
-Caching disabled for task ':app:createDebugCompatibleScreenManifests' because:
-  Caching has been disabled for the task
-Task ':app:createDebugCompatibleScreenManifests' is not up-to-date because:
-  No history is available.
-Resolve mutations for :app:extractDeepLinksDebug (Thread[Execution worker Thread 3,5,main]) started.
-:app:extractDeepLinksDebug (Thread[Execution worker Thread 3,5,main]) started.
+> Task :app:generateDebugAssets UP-TO-DATE
+Skipping task ':app:generateDebugAssets' as it has no actions.
+Resolve mutations for :app:mergeDebugAssets (Thread[Execution worker Thread 2,5,main]) started.
+:app:mergeDebugAssets (Thread[Execution worker Thread 2,5,main]) started.
 
-> Task :app:extractDeepLinksDebug FROM-CACHE
-Build cache key for task ':app:extractDeepLinksDebug' is cf11e03dcb54e46d8c9533593921f43b
-Task ':app:extractDeepLinksDebug' is not up-to-date because:
-  No history is available.
-Loaded cache entry for task ':app:extractDeepLinksDebug' with cache key cf11e03dcb54e46d8c9533593921f43b
-Resolve mutations for :app:processDebugMainManifest (Thread[Execution worker Thread 3,5,main]) started.
-:app:processDebugMainManifest (Thread[Execution worker Thread 3,5,main]) started.
-
-> Task :app:processDebugMainManifest FROM-CACHE
-Build cache key for task ':app:processDebugMainManifest' is e30de9be483768f1b2797c3b7cab4efc
-Task ':app:processDebugMainManifest' is not up-to-date because:
-  No history is available.
-Loaded cache entry for task ':app:processDebugMainManifest' with cache key e30de9be483768f1b2797c3b7cab4efc
-Resolve mutations for :app:processDebugManifest (Thread[Execution worker,5,main]) started.
-:app:processDebugManifest (Thread[Execution worker,5,main]) started.
-
-> Task :app:processDebugManifest FROM-CACHE
-Build cache key for task ':app:processDebugManifest' is aee7e9532f597680902f3a01438140f8
-Task ':app:processDebugManifest' is not up-to-date because:
-  No history is available.
-Loaded cache entry for task ':app:processDebugManifest' with cache key aee7e9532f597680902f3a01438140f8
-Resolve mutations for :app:processDebugManifestForPackage (Thread[Execution worker,5,main]) started.
-:app:processDebugManifestForPackage (Thread[Execution worker,5,main]) started.
-
-> Task :app:processDebugManifestForPackage FROM-CACHE
-Custom actions are attached to task ':app:processDebugManifestForPackage'.
-Build cache key for task ':app:processDebugManifestForPackage' is 5b9588feb8ae1cc339a4947aa2f444b3
-Task ':app:processDebugManifestForPackage' is not up-to-date because:
-  No history is available.
-Loaded cache entry for task ':app:processDebugManifestForPackage' with cache key 5b9588feb8ae1cc339a4947aa2f444b3
-Resolve mutations for :app:processDebugResources (Thread[Execution worker,5,main]) started.
-:app:processDebugResources (Thread[Execution worker,5,main]) started.
-
-> Task :app:processDebugResources FROM-CACHE
-Build cache key for task ':app:processDebugResources' is 277c4b1650aa7b2119a9a706bf98e889
-Task ':app:processDebugResources' is not up-to-date because:
-  No history is available.
-Loaded cache entry for task ':app:processDebugResources' with cache key 277c4b1650aa7b2119a9a706bf98e889
-Resolve mutations for :app:mergeDebugJniLibFolders (Thread[Execution worker,5,main]) started.
-:app:mergeDebugJniLibFolders (Thread[Execution worker,5,main]) started.
-
-> Task :app:mergeDebugJniLibFolders
-Caching disabled for task ':app:mergeDebugJniLibFolders' because:
+> Task :app:mergeDebugAssets
+Caching disabled for task ':app:mergeDebugAssets' because:
   Simple merging task
-Task ':app:mergeDebugJniLibFolders' is not up-to-date because:
+Task ':app:mergeDebugAssets' is not up-to-date because:
   No history is available.
-The input changes require a full rebuild for incremental task ':app:mergeDebugJniLibFolders'.
-Resolve mutations for :app:mergeDebugNativeLibs (Thread[Execution worker,5,main]) started.
-:app:mergeDebugNativeLibs (Thread[Execution worker,5,main]) started.
-Resolve mutations for :app:validateSigningDebug (Thread[Execution worker Thread 3,5,main]) started.
-:app:validateSigningDebug (Thread[Execution worker Thread 3,5,main]) started.
+The input changes require a full rebuild for incremental task ':app:mergeDebugAssets'.
+Resolve mutations for :app:compressDebugAssets (Thread[Execution worker Thread 2,5,main]) started.
+:app:compressDebugAssets (Thread[Execution worker Thread 2,5,main]) started.
 
-> Task :app:validateSigningDebug
-Caching disabled for task ':app:validateSigningDebug' because:
+> Task :app:compressDebugAssets FROM-CACHE
+Build cache key for task ':app:compressDebugAssets' is 1d6ca06deea21b1eb0b7678e9cc8dfc6
+Task ':app:compressDebugAssets' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:compressDebugAssets' with cache key 1d6ca06deea21b1eb0b7678e9cc8dfc6
+Resolve mutations for :app:checkDebugDuplicateClasses (Thread[Execution worker Thread 2,5,main]) started.
+:app:checkDebugDuplicateClasses (Thread[Execution worker Thread 2,5,main]) started.
+Resolve mutations for :app:desugarDebugFileDependencies (Thread[included builds,5,main]) started.
+:app:desugarDebugFileDependencies (Thread[included builds,5,main]) started.
+
+> Task :app:desugarDebugFileDependencies FROM-CACHE
+Build cache key for task ':app:desugarDebugFileDependencies' is 51c9202a0ef9d034213915eaaa4579dd
+Task ':app:desugarDebugFileDependencies' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:desugarDebugFileDependencies' with cache key 51c9202a0ef9d034213915eaaa4579dd
+Resolve mutations for :app:checkDebugAarMetadata (Thread[Execution worker,5,main]) started.
+:app:checkDebugAarMetadata (Thread[Execution worker,5,main]) started.
+
+> Task :app:checkDebugDuplicateClasses
+Caching disabled for task ':app:checkDebugDuplicateClasses' because:
   Caching has been disabled for the task
-Task ':app:validateSigningDebug' is not up-to-date because:
+Task ':app:checkDebugDuplicateClasses' is not up-to-date because:
   No history is available.
-Resolve mutations for :app:writeDebugAppMetadata (Thread[Execution worker Thread 2,5,main]) started.
-:app:writeDebugAppMetadata (Thread[Execution worker Thread 2,5,main]) started.
+Resolve mutations for :app:mergeExtDexDebug (Thread[included builds,5,main]) started.
+:app:mergeExtDexDebug (Thread[included builds,5,main]) started.
 
-> Task :app:writeDebugAppMetadata
-Caching disabled for task ':app:writeDebugAppMetadata' because:
+> Task :app:checkDebugAarMetadata
+Caching disabled for task ':app:checkDebugAarMetadata' because:
   Caching has been disabled for the task
-Task ':app:writeDebugAppMetadata' is not up-to-date because:
+Task ':app:checkDebugAarMetadata' is not up-to-date because:
   No history is available.
-Resolve mutations for :app:writeDebugSigningConfigVersions (Thread[Execution worker Thread 2,5,main]) started.
-:app:writeDebugSigningConfigVersions (Thread[Execution worker Thread 2,5,main]) started.
-
-> Task :app:mergeDebugNativeLibs
-Caching disabled for task ':app:mergeDebugNativeLibs' because:
-  Caching has been disabled for the task
-Task ':app:mergeDebugNativeLibs' is not up-to-date because:
-  No history is available.
-
-> Task :app:writeDebugSigningConfigVersions
-Caching disabled for task ':app:writeDebugSigningConfigVersions' because:
-  Caching has been disabled for the task
-Task ':app:writeDebugSigningConfigVersions' is not up-to-date because:
-  No history is available.
-Resolve mutations for :app:stripDebugDebugSymbols (Thread[Execution worker Thread 2,5,main]) started.
-:app:stripDebugDebugSymbols (Thread[Execution worker Thread 2,5,main]) started.
-
-> Task :app:stripDebugDebugSymbols
-Caching disabled for task ':app:stripDebugDebugSymbols' because:
-  Caching has been disabled for the task
-Task ':app:stripDebugDebugSymbols' is not up-to-date because:
-  No history is available.
-The input changes require a full rebuild for incremental task ':app:stripDebugDebugSymbols'.
-C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
-C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /usr/local/lib/android/sdk
-C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /usr/local/lib/android/sdk
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /usr/local/lib/android/sdk
-Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/arm64-v8a/libandroidx.graphics.path.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/arm64-v8a/libandroidx.graphics.path.so
-Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/arm64-v8a/libdatastore_shared_counter.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/arm64-v8a/libdatastore_shared_counter.so
-Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/arm64-v8a/libimagedecoder.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/arm64-v8a/libimagedecoder.so
-Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
-Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
-Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
-C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /usr/local/lib/android/sdk
-Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/armeabi-v7a/libandroidx.graphics.path.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/armeabi-v7a/libandroidx.graphics.path.so
-C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /usr/local/lib/android/sdk
-C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /usr/local/lib/android/sdk
-Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/armeabi-v7a/libdatastore_shared_counter.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/armeabi-v7a/libdatastore_shared_counter.so
-Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/arm64-v8a/libzstd-kmp.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/arm64-v8a/libzstd-kmp.so
-Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
-Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
-C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /usr/local/lib/android/sdk
-C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /usr/local/lib/android/sdk
-Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/armeabi-v7a/libimagedecoder.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/armeabi-v7a/libimagedecoder.so
-Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/armeabi-v7a/libzstd-kmp.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/armeabi-v7a/libzstd-kmp.so
-Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
-Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
-C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /usr/local/lib/android/sdk
-Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86/libandroidx.graphics.path.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86/libandroidx.graphics.path.so
-C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /usr/local/lib/android/sdk
-Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86/libdatastore_shared_counter.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86/libdatastore_shared_counter.so
-Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
-Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
-C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /usr/local/lib/android/sdk
-Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86/libimagedecoder.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86/libimagedecoder.so
-C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /usr/local/lib/android/sdk
-Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86/libzstd-kmp.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86/libzstd-kmp.so
-Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
-Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
-C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /usr/local/lib/android/sdk
-Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86_64/libandroidx.graphics.path.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86_64/libandroidx.graphics.path.so
-Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
-Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
-C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /usr/local/lib/android/sdk
-Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86_64/libdatastore_shared_counter.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86_64/libdatastore_shared_counter.so
-C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /usr/local/lib/android/sdk
-Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86_64/libimagedecoder.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86_64/libimagedecoder.so
-C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /usr/local/lib/android/sdk
-Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
-Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86_64/libzstd-kmp.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86_64/libzstd-kmp.so
-Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
-Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
-
-> Task :app:kspDebugKotlin
-Stored cache entry for task ':app:kspDebugKotlin' with cache key ffb31910905a1d34a4bc8ef4a84e5576
-Resolve mutations for :app:compileDebugKotlin (Thread[Execution worker Thread 2,5,main]) started.
-:app:compileDebugKotlin (Thread[included builds,5,main]) started.
 
 > Task :app:compileDebugKotlin
 file or directory '/home/runner/work/Nekoread/Nekoread/app/src/main/kotlin', not found
@@ -548,12 +289,261 @@ Script source files:
 Script file extensions: 
 Using Kotlin/JVM incremental compilation
 [KOTLIN] Kotlin compilation 'jdkHome' argument: /usr/lib/jvm/temurin-17-jdk-amd64
-Finished executing kotlin compiler using IN_PROCESS strategy
-e: file:///home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/ui/screens/ReaderScreen.kt:243:34 Assignment type mismatch: actual type is 'List<Any>', but 'List<List<Any>>' was expected.
+
+> Task :app:mergeExtDexDebug FROM-CACHE
+Build cache key for task ':app:mergeExtDexDebug' is dac820371ac64b0d1ed13bf9d89b4ba7
+Task ':app:mergeExtDexDebug' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:mergeExtDexDebug' with cache key dac820371ac64b0d1ed13bf9d89b4ba7
+Resolve mutations for :app:mergeLibDexDebug (Thread[included builds,5,main]) started.
+:app:mergeLibDexDebug (Thread[included builds,5,main]) started.
+
+> Task :app:mergeLibDexDebug FROM-CACHE
+Build cache key for task ':app:mergeLibDexDebug' is 3b21679385a2814c4eb340e491159e6b
+Task ':app:mergeLibDexDebug' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:mergeLibDexDebug' with cache key 3b21679385a2814c4eb340e491159e6b
+Resolve mutations for :app:mapDebugSourceSetPaths (Thread[included builds,5,main]) started.
+:app:mapDebugSourceSetPaths (Thread[included builds,5,main]) started.
+
+> Task :app:mapDebugSourceSetPaths
+Caching disabled for task ':app:mapDebugSourceSetPaths' because:
+  Caching has been disabled for the task
+Task ':app:mapDebugSourceSetPaths' is not up-to-date because:
+  No history is available.
+Resolve mutations for :app:compileDebugNavigationResources (Thread[Execution worker,5,main]) started.
+:app:compileDebugNavigationResources (Thread[Execution worker Thread 2,5,main]) started.
+
+> Task :app:compileDebugNavigationResources FROM-CACHE
+Build cache key for task ':app:compileDebugNavigationResources' is 444a76cc7d4e5da1818121022c34bf5f
+Task ':app:compileDebugNavigationResources' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:compileDebugNavigationResources' with cache key 444a76cc7d4e5da1818121022c34bf5f
+Resolve mutations for :app:mergeDebugResources (Thread[Execution worker,5,main]) started.
+:app:mergeDebugResources (Thread[Execution worker,5,main]) started.
+
+> Task :app:mergeDebugResources FROM-CACHE
+Build cache key for task ':app:mergeDebugResources' is c4e9654cd244ae74eff103a9135975dc
+Task ':app:mergeDebugResources' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:mergeDebugResources' with cache key c4e9654cd244ae74eff103a9135975dc
+Resolve mutations for :app:createDebugCompatibleScreenManifests (Thread[Execution worker,5,main]) started.
+:app:createDebugCompatibleScreenManifests (Thread[Execution worker,5,main]) started.
+
+> Task :app:createDebugCompatibleScreenManifests
+Caching disabled for task ':app:createDebugCompatibleScreenManifests' because:
+  Caching has been disabled for the task
+Task ':app:createDebugCompatibleScreenManifests' is not up-to-date because:
+  No history is available.
+Resolve mutations for :app:extractDeepLinksDebug (Thread[Execution worker,5,main]) started.
+:app:extractDeepLinksDebug (Thread[Execution worker,5,main]) started.
+
+> Task :app:extractDeepLinksDebug FROM-CACHE
+Build cache key for task ':app:extractDeepLinksDebug' is cf11e03dcb54e46d8c9533593921f43b
+Task ':app:extractDeepLinksDebug' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:extractDeepLinksDebug' with cache key cf11e03dcb54e46d8c9533593921f43b
+Resolve mutations for :app:processDebugMainManifest (Thread[Execution worker,5,main]) started.
+:app:processDebugMainManifest (Thread[Execution worker,5,main]) started.
+
+> Task :app:processDebugMainManifest FROM-CACHE
+Build cache key for task ':app:processDebugMainManifest' is e30de9be483768f1b2797c3b7cab4efc
+Task ':app:processDebugMainManifest' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:processDebugMainManifest' with cache key e30de9be483768f1b2797c3b7cab4efc
+Resolve mutations for :app:processDebugManifest (Thread[included builds,5,main]) started.
+:app:processDebugManifest (Thread[included builds,5,main]) started.
+
+> Task :app:processDebugManifest FROM-CACHE
+Build cache key for task ':app:processDebugManifest' is aee7e9532f597680902f3a01438140f8
+Task ':app:processDebugManifest' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:processDebugManifest' with cache key aee7e9532f597680902f3a01438140f8
+Resolve mutations for :app:processDebugManifestForPackage (Thread[included builds,5,main]) started.
+:app:processDebugManifestForPackage (Thread[included builds,5,main]) started.
+
+> Task :app:processDebugManifestForPackage FROM-CACHE
+Custom actions are attached to task ':app:processDebugManifestForPackage'.
+Build cache key for task ':app:processDebugManifestForPackage' is 5b9588feb8ae1cc339a4947aa2f444b3
+Task ':app:processDebugManifestForPackage' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:processDebugManifestForPackage' with cache key 5b9588feb8ae1cc339a4947aa2f444b3
+Resolve mutations for :app:processDebugResources (Thread[Execution worker,5,main]) started.
+:app:processDebugResources (Thread[Execution worker,5,main]) started.
+
+> Task :app:processDebugResources FROM-CACHE
+Build cache key for task ':app:processDebugResources' is 277c4b1650aa7b2119a9a706bf98e889
+Task ':app:processDebugResources' is not up-to-date because:
+  No history is available.
+Loaded cache entry for task ':app:processDebugResources' with cache key 277c4b1650aa7b2119a9a706bf98e889
+Resolve mutations for :app:mergeDebugJniLibFolders (Thread[Execution worker,5,main]) started.
+:app:mergeDebugJniLibFolders (Thread[Execution worker,5,main]) started.
+
+> Task :app:mergeDebugJniLibFolders
+Caching disabled for task ':app:mergeDebugJniLibFolders' because:
+  Simple merging task
+Task ':app:mergeDebugJniLibFolders' is not up-to-date because:
+  No history is available.
+The input changes require a full rebuild for incremental task ':app:mergeDebugJniLibFolders'.
+Resolve mutations for :app:mergeDebugNativeLibs (Thread[Execution worker,5,main]) started.
+:app:mergeDebugNativeLibs (Thread[Execution worker,5,main]) started.
+Resolve mutations for :app:validateSigningDebug (Thread[included builds,5,main]) started.
+:app:validateSigningDebug (Thread[included builds,5,main]) started.
+
+> Task :app:validateSigningDebug
+Caching disabled for task ':app:validateSigningDebug' because:
+  Caching has been disabled for the task
+Task ':app:validateSigningDebug' is not up-to-date because:
+  No history is available.
+Resolve mutations for :app:writeDebugAppMetadata (Thread[Execution worker Thread 2,5,main]) started.
+:app:writeDebugAppMetadata (Thread[Execution worker Thread 2,5,main]) started.
+
+> Task :app:writeDebugAppMetadata
+Caching disabled for task ':app:writeDebugAppMetadata' because:
+  Caching has been disabled for the task
+Task ':app:writeDebugAppMetadata' is not up-to-date because:
+  No history is available.
+Resolve mutations for :app:writeDebugSigningConfigVersions (Thread[Execution worker Thread 2,5,main]) started.
+:app:writeDebugSigningConfigVersions (Thread[Execution worker Thread 2,5,main]) started.
+
+> Task :app:writeDebugSigningConfigVersions
+Caching disabled for task ':app:writeDebugSigningConfigVersions' because:
+  Caching has been disabled for the task
+Task ':app:writeDebugSigningConfigVersions' is not up-to-date because:
+  No history is available.
+
+> Task :app:mergeDebugNativeLibs
+Caching disabled for task ':app:mergeDebugNativeLibs' because:
+  Caching has been disabled for the task
+Task ':app:mergeDebugNativeLibs' is not up-to-date because:
+  No history is available.
+Resolve mutations for :app:stripDebugDebugSymbols (Thread[Execution worker Thread 2,5,main]) started.
+:app:stripDebugDebugSymbols (Thread[included builds,5,main]) started.
+
+> Task :app:stripDebugDebugSymbols
+Caching disabled for task ':app:stripDebugDebugSymbols' because:
+  Caching has been disabled for the task
+Task ':app:stripDebugDebugSymbols' is not up-to-date because:
+  No history is available.
+The input changes require a full rebuild for incremental task ':app:stripDebugDebugSymbols'.
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/arm64-v8a/libimagedecoder.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/arm64-v8a/libimagedecoder.so
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/arm64-v8a/libandroidx.graphics.path.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/arm64-v8a/libandroidx.graphics.path.so
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/arm64-v8a/libdatastore_shared_counter.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/arm64-v8a/libdatastore_shared_counter.so
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/arm64-v8a/libzstd-kmp.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/arm64-v8a/libzstd-kmp.so
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/armeabi-v7a/libandroidx.graphics.path.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/armeabi-v7a/libandroidx.graphics.path.so
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/armeabi-v7a/libdatastore_shared_counter.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/armeabi-v7a/libdatastore_shared_counter.so
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/armeabi-v7a/libimagedecoder.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/armeabi-v7a/libimagedecoder.so
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/armeabi-v7a/libzstd-kmp.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/armeabi-v7a/libzstd-kmp.so
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86/libandroidx.graphics.path.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86/libandroidx.graphics.path.so
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86/libdatastore_shared_counter.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86/libdatastore_shared_counter.so
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86/libimagedecoder.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86/libimagedecoder.so
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86/libzstd-kmp.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86/libzstd-kmp.so
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86_64/libandroidx.graphics.path.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86_64/libandroidx.graphics.path.so
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86_64/libdatastore_shared_counter.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86_64/libdatastore_shared_counter.so
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: android.ndkVersion from module build.gradle is [28.2.13676358]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+C/C++: sdkFolder is /usr/local/lib/android/sdk
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86_64/libimagedecoder.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86_64/libimagedecoder.so
+Starting process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''. Working directory: /home/runner/work/Nekoread/Nekoread/app Command: /usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded -o /home/runner/work/Nekoread/Nekoread/app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/x86_64/libzstd-kmp.so /home/runner/work/Nekoread/Nekoread/app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86_64/libzstd-kmp.so
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
+Successfully started process 'command '/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip''
 
 > Task :app:compileDebugKotlin FAILED
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_3-1786918092003.json
-Build bb46ec21-dfc0-49f2-9adc-4523a00316c5 is closed
+Finished executing kotlin compiler using IN_PROCESS strategy
+e: file:///home/runner/work/Nekoread/Nekoread/app/src/main/java/com/example/ui/screens/ReaderScreen.kt:243:34 Assignment type mismatch: actual type is 'List<Any>', but 'List<List<Any>>' was expected.
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_3-1786918247776.json
+Build 63ef6eca-1fb8-4aee-93c1-bd578711a9b7 is closed
 
 FAILURE: Build failed with an exception.
 
@@ -600,37 +590,6 @@ org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:com
 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(DefaultTaskExecutionGraph.java:328)
 	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.execute(DefaultPlanExecutor.java:459)
 	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.run(DefaultPlanExecutor.java:376)
-	at org.gradle.execution.plan.DefaultPlanExecutor.process(DefaultPlanExecutor.java:111)
-	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph.executeWithServices(DefaultTaskExecutionGraph.java:146)
-	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph.execute(DefaultTaskExecutionGraph.java:131)
-	at org.gradle.execution.SelectedTaskExecutionAction.execute(SelectedTaskExecutionAction.java:35)
-	at org.gradle.execution.BuildOperationFiringBuildWorkerExecutor$ExecuteTasks.call(BuildOperationFiringBuildWorkerExecutor.java:54)
-	at org.gradle.execution.BuildOperationFiringBuildWorkerExecutor$ExecuteTasks.call(BuildOperationFiringBuildWorkerExecutor.java:43)
-	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:209)
-	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:204)
-	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
-	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
-	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:166)
-	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
-	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
-	at org.gradle.execution.BuildOperationFiringBuildWorkerExecutor.execute(BuildOperationFiringBuildWorkerExecutor.java:40)
-	at org.gradle.internal.build.DefaultBuildLifecycleController.lambda$executeTasks$10(DefaultBuildLifecycleController.java:313)
-	at org.gradle.internal.model.StateTransitionController.doTransition(StateTransitionController.java:276)
-	at org.gradle.internal.model.StateTransitionController.lambda$tryTransition$8(StateTransitionController.java:187)
-	at org.gradle.internal.work.DefaultSynchronizer.withLock(DefaultSynchronizer.java:45)
-	at org.gradle.internal.model.StateTransitionController.tryTransition(StateTransitionController.java:187)
-	at org.gradle.internal.build.DefaultBuildLifecycleController.executeTasks(DefaultBuildLifecycleController.java:304)
-	at org.gradle.internal.build.DefaultBuildWorkGraphController$DefaultBuildWorkGraph.runWork(DefaultBuildWorkGraphController.java:220)
-	at org.gradle.internal.work.DefaultWorkerLeaseService.lambda$withLocksAcquired$0(DefaultWorkerLeaseService.java:269)
-	at org.gradle.internal.work.ResourceLockStatistics$1.measure(ResourceLockStatistics.java:42)
-	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocksAcquired(DefaultWorkerLeaseService.java:267)
-	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocks(DefaultWorkerLeaseService.java:259)
-	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:127)
-	at org.gradle.composite.internal.DefaultBuildController.doRun(DefaultBuildController.java:181)
-	at org.gradle.composite.internal.DefaultBuildController.access$000(DefaultBuildController.java:50)
-	at org.gradle.composite.internal.DefaultBuildController$BuildOpRunnable.lambda$run$0(DefaultBuildController.java:198)
-	at org.gradle.internal.operations.CurrentBuildOperationRef.with(CurrentBuildOperationRef.java:84)
-	at org.gradle.composite.internal.DefaultBuildController$BuildOpRunnable.run(DefaultBuildController.java:198)
 	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)
 	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:47)
 Caused by: org.gradle.workers.internal.DefaultWorkerExecutor$WorkExecutionException: A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
@@ -740,7 +699,7 @@ Caused by: org.gradle.workers.internal.DefaultWorkerExecutor$WorkExecutionExcept
 	at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:31)
 	at org.gradle.internal.execution.impl.DefaultExecutionEngine$1.execute(DefaultExecutionEngine.java:68)
 	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:132)
-	... 61 more
+	... 30 more
 Caused by: org.jetbrains.kotlin.gradle.tasks.CompilationErrorException: Compilation error. See log for more details
 	at org.jetbrains.kotlin.gradle.tasks.TasksUtilsKt.throwExceptionIfCompilationFailed(tasksUtils.kt:21)
 	at org.jetbrains.kotlin.compilerRunner.GradleKotlinCompilerWork.run(GradleKotlinCompilerWork.kt:119)
@@ -777,5 +736,5 @@ Caused by: org.jetbrains.kotlin.gradle.tasks.CompilationErrorException: Compilat
 	... 2 more
 
 
-BUILD FAILED in 31s
-32 actionable tasks: 13 executed, 19 from cache
+BUILD FAILED in 30s
+32 actionable tasks: 12 executed, 20 from cache
