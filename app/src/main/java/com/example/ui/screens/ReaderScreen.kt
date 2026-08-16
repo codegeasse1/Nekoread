@@ -34,6 +34,7 @@ import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AspectRatio
@@ -79,7 +80,6 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -99,21 +99,20 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.app.Activity
 import android.content.pm.ActivityInfo
-import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
+import coil.compose.AsyncImagePainter
+import coil.compose.LocalImageLoader
+import coil.compose.rememberAsyncImagePainter
+import coil.memory.MemoryCache
+import coil.request.ImageRequest
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
-import com.example.data.source.MangaSource
+import com.example.data.source.ExtensionPageImage
+import com.example.util.describe
 import com.example.ui.MainViewModel
 import com.example.ui.ReaderBg
 import com.example.ui.ReaderFit
 import com.example.ui.ReaderMode
-import com.example.ui.reader.TadamiPage
-import com.example.ui.reader.decodeImageBounds
-import com.example.ui.reader.decodePreview
-import com.example.util.describe
 import eu.kanade.tachiyomi.source.online.HttpSource
-import java.io.File
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -152,26 +151,12 @@ fun ReaderScreen(
     // differs); every check in the reader should treat them alike.
     val isWebtoon = readerMode == ReaderMode.WEBTOON || readerMode == ReaderMode.WEBTOON_GAPS
 
-    var pages by remember { mutableStateOf<List<MangaSource.PageDescriptor>?>(null) }
+    var pages by remember { mutableStateOf<List<Any>?>(null) }
     var pageError by remember { mutableStateOf<String?>(null) }
     var pageLoading by remember { mutableStateOf(true) }
     var retryKey by remember { mutableStateOf(0) }
     var pageImageErrors by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
     val pageRetries = remember { mutableStateMapOf<Int, Int>() }
-    // Per-page download state (keyed by image URL). The reader streams every page through the
-    // source's own client into the on-device reader_pages cache (Tadami HttpPageLoader model),
-    // then renders it with the tiled SubsamplingScaleImageView — so first view downloads once,
-    // every re-read after that is instant, and no full-page bitmap is ever decoded.
-    val pageStates = remember(chapter.id) { mutableStateMapOf<String, PageFileState>() }
-    // Chapter-wide page aspect ratio (height/width), learned from the first decoded page. While
-    // pages are still downloading, placeholders at this aspect (fit-width) already match the
-    // page's real size — so when a page lands and its true bounds are known there is no height
-    // change and no reflow/jump blink. Falls back to a fraction of the viewport until the first
-    // page decodes.
-    var chapterAspect by remember(chapter.id) { mutableStateOf<Float?>(null) }
-    // Reads hit the CDN a couple at a time so we never saturate a host (a constant download storm
-    // made the CDN throttle every request to the host, including pages actually on screen).
-    val downloadGate = remember { Semaphore(3) }
     // Slider thumb while the user is dragging it; the actual scroll happens once on release so a
     // drag can't fire a storm of conflicting scrollToItem calls into unloaded content.
     var sliderDragPage by remember { mutableStateOf<Float?>(null) }
@@ -197,7 +182,7 @@ fun ReaderScreen(
         previousChapters.clear()
         try {
             pages = withTimeout(MAIN_LOAD_TIMEOUT_MS) {
-                viewModel.repository.getChapterPageDescriptors(chapter.id)
+                viewModel.repository.getChapterPageImageModels(chapter.id)
             }
         } catch (e: Throwable) {
             pageError = e.describe()
@@ -223,9 +208,15 @@ fun ReaderScreen(
         chapterDownloads[c.id] = 0f
         coroutineScope.launch {
             val list = runCatching {
-                withTimeout(QUEUED_LOAD_TIMEOUT_MS) { viewModel.repository.getChapterPageDescriptors(c.id) }
+                withTimeout(QUEUED_LOAD_TIMEOUT_MS) { viewModel.repository.getChapterPageImageModels(c.id) }
             }.getOrNull() ?: run { chapterDownloads.remove(c.id); return@launch }
-            val targets = list.map { Triple(c.id, it.pageUrl, it.imageUrl) }
+            val targets = list.mapNotNull { m ->
+                when (m) {
+                    is ExtensionPageImage -> Triple(c.id, m.pageUrl, m.imageUrl)
+                    is String -> Triple(c.id, "", m)
+                    else -> null
+                }
+            }
             if (targets.isEmpty()) { chapterDownloads.remove(c.id); return@launch }
             withContext(Dispatchers.IO) {
                 val gate = Semaphore(2)
@@ -252,7 +243,7 @@ fun ReaderScreen(
             coroutineScope.launch {
                 try {
                     val p = withTimeout(QUEUED_LOAD_TIMEOUT_MS) {
-                        viewModel.repository.getChapterPageDescriptors(qc.chapter.id)
+                        viewModel.repository.getChapterPageImageModels(qc.chapter.id)
                     }
                     val cur = queuedChapters.getOrNull(i)
                     if (cur != null && cur.chapter.id == qc.chapter.id) {
@@ -275,7 +266,7 @@ fun ReaderScreen(
         coroutineScope.launch {
             try {
                 val p = withTimeout(QUEUED_LOAD_TIMEOUT_MS) {
-                    viewModel.repository.getChapterPageDescriptors(pc.chapter.id)
+                    viewModel.repository.getChapterPageImageModels(pc.chapter.id)
                 }
                 val cur = previousChapters.getOrNull(j)
                 if (cur != null && cur.chapter.id == pc.chapter.id) {
@@ -290,26 +281,50 @@ fun ReaderScreen(
         }
     }
 
-    // Display size used to size webtoon items to each page's real aspect ratio before SSIV renders.
+    // Display size + image loader used to downsample reader pages to screen width (much cheaper to
+    // decode than full-resolution, which is what made webtoon scrolling lag).
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
     val context = LocalContext.current
+    val imageLoader = LocalImageLoader.current
 
-    // Stop the source's background page-list prefetches when the reader leaves, so nothing keeps
-    // hammering the CDN. (No Coil memory-cache eviction needed anymore: the reader no longer caches
-    // page bitmaps — SSIV keeps only the tiles on screen and frees them when pages scroll away.)
+    // Reading a long chapter floods Coil's shared in-memory cache with page bitmaps. Evict ONLY
+    // those page entries when the reader leaves (freeing the memory) — NOT the whole cache, which
+    // would force every library/catalog cover thumbnail to re-download and show as blank tiles
+    // right after closing the reader. Reader pages are memory-cached under their image URL
+    // (ExtensionPageImageKeyer), so we can evict exactly those keys; covers (keyed
+    // "cover:<source>|<url>") are untouched and load instantly from memory.
+    // Also stop the source's background page-list prefetches so nothing keeps hammering the CDN.
     DisposableEffect(Unit) {
         onDispose {
+            runCatching {
+                val mc = imageLoader?.memoryCache
+                if (mc != null) {
+                    val urls = LinkedHashSet<String>()
+                    fun collect(list: List<Any>?) {
+                        list?.forEach { p -> if (p is ExtensionPageImage) urls.add(p.imageUrl) }
+                    }
+                    collect(pages)
+                    queuedChapters.forEach { collect(it.pages) }
+                    previousChapters.forEach { collect(it.pages) }
+                    urls.forEach { mc.remove(MemoryCache.Key(it)) }
+                }
+            }
             HttpSource.cancelAllPrefetches()
         }
     }
 
     val screenW = with(density) { configuration.screenWidthDp.dp.roundToPx() }
+    // Decode webtoon pages at most this tall (in pixels). Bounded so the biggest possible bitmap
+    // (screenW x this) stays small enough that several can coexist in memory — the old ~8000px cap
+    // made 34MB bitmaps, which is exactly what froze/ANR'd and crashed the app on slow networks.
+    // Strips taller than 2 screens are downscaled; typical per-panel webtoon pages keep full detail.
     val screenH = with(density) { configuration.screenHeightDp.dp.roundToPx() }
-    // Loading placeholder height (px): a decent fraction of the viewport so the strip stays
-    // scrollable while a page's bytes download. Once the file is on disk the item is resized to
-    // the page's true aspect ratio, so there's no permanent layout mismatch.
-    val webtoonPlaceholderH = (screenH * 0.4f).toInt().coerceAtLeast(160)
+    val webtoonDecodeH = minOf(screenH * 2, 4800).coerceAtLeast(1600)
+    // Loading placeholder: a SMALL minimum height. A viewport-tall placeholder centered short
+    // pages inside a full-screen box, leaving big black bands that cut the artwork — this was the
+    // "image cut in half" bug. With a small placeholder the item collapses to the image size.
+    val webtoonPlaceholderH = 200.dp
     val activity = context as? Activity
 
     fun toggleRotation() {
@@ -407,7 +422,7 @@ fun ReaderScreen(
             val pp = pc.pages
             if (pp != null) {
                 add(DividerItem(pc.chapter))
-                addAll(pp.map { PageItem(pc.chapter, it) })
+                addAll(pp)
             } else {
                 add(LoadingItem(pc.chapter, pc.error))
             }
@@ -415,13 +430,13 @@ fun ReaderScreen(
         val cur = pages
         if (cur != null) {
             if (previousChapters.isNotEmpty()) add(DividerItem(chapter))
-            addAll(cur.map { PageItem(chapter, it) })
+            addAll(cur)
         }
         for (qc in queuedChapters) {
             val qp = qc.pages
             if (qp != null) {
                 add(DividerItem(qc.chapter))
-                addAll(qp.map { PageItem(qc.chapter, it) })
+                addAll(qp)
             } else {
                 add(LoadingItem(qc.chapter, qc.error))
             }
@@ -467,8 +482,9 @@ fun ReaderScreen(
         derivedStateOf { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
     }
 
-    // Reading order for the whole chapter list — the chapter sheet, prev/next navigation and
-    // continuous scroll all follow it.
+    // Stable reading order for the whole chapter list. Extension sources that leave the -1 default
+    // chapter number (TheBlank) can't be meaningfully sorted by number, so fall back to upload
+    // date. Powers the chapter sheet, prev/next navigation and continuous scroll.
     val orderedChapters = remember(allChapters) {
         if (allChapters.any { it.chapterNumber > 0f }) {
             allChapters.sortedBy { it.chapterNumber }
@@ -504,7 +520,7 @@ fun ReaderScreen(
         val qi = queuedChapters.size - 1
         coroutineScope.launch {
             try {
-                val p = withTimeout(QUEUED_LOAD_TIMEOUT_MS) { viewModel.repository.getChapterPageDescriptors(cid) }
+                val p = withTimeout(QUEUED_LOAD_TIMEOUT_MS) { viewModel.repository.getChapterPageImageModels(cid) }
                 val cur = queuedChapters.getOrNull(qi)
                 if (cur != null && cur.chapter.id == cid) queuedChapters[qi] = QueuedCh(next, p, null)
             } catch (e: Throwable) {
@@ -540,7 +556,7 @@ fun ReaderScreen(
         val pi = previousChapters.indexOfFirst { it.chapter.id == pid }
         coroutineScope.launch {
             try {
-                val p = withTimeout(QUEUED_LOAD_TIMEOUT_MS) { viewModel.repository.getChapterPageDescriptors(pid) }
+                val p = withTimeout(QUEUED_LOAD_TIMEOUT_MS) { viewModel.repository.getChapterPageImageModels(pid) }
                 val cur = previousChapters.getOrNull(pi)
                 if (cur != null && cur.chapter.id == pid) {
                     previousChapters[pi] = QueuedCh(prev, p, null)
@@ -579,71 +595,37 @@ fun ReaderScreen(
         }
     }
 
-    // Shared page-file prefetcher (Tadami's preload manager): downloads a page's bytes through the
-    // source's own client into the reader_pages cache AND marks it Ready (with decoded bounds), so
-    // when the page actually scrolls into view it renders from disk instantly — no spinner, no
-    // "loads from the top down to where I am". Skips pages that are already downloaded or already
-    // downloading (the on-screen item's own effect owns those). Gated by the same 3-at-a-time
-    // semaphore as the reader, so prefetching can never starve the page actually on screen.
-    val prefetchPage: suspend (String, String, String) -> Unit = { cid, pUrl, iUrl ->
-        val key = iUrl
-        if (pageStates[key] !is PageFileState.Ready && pageStates[key] !is PageFileState.Loading) {
-            downloadGate.withPermit {
-                try {
-                    val f = viewModel.repository.getPageImageFile(cid, pUrl, iUrl)
-                    val (w, h) = withContext(Dispatchers.IO) { decodeImageBounds(f) }
-                    if (chapterAspect == null && w > 0 && h > 0) chapterAspect = h.toFloat() / w
-                    pageStates[key] = PageFileState.Ready(f, w, h)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (_: Throwable) {
-                    // A failed prefetch is non-fatal — the page's own item shows the error state.
-                }
-            }
-        }
-    }
-
-    // Webtoon: preload a window on BOTH sides of the viewport, so scrolling forward, scrolling
-    // back up, and slider-jumping all hit already-cached pages instead of waiting on downloads.
-    // Forward first (the usual direction), then behind.
+    // Preload pages ahead of the viewport (like Tadami's preload manager): by the time an item
+    // scrolls into view its bytes are already downloaded AND decoded, so continuous scroll never
+    // sits on a spinner. Must use the SAME size as the display request (screenW/webtoonDecodeH)
+    // so Coil's cache/in-flight coalescing reuses the result — a different size decodes a second,
+    // full-height bitmap, which is what blew up memory (freeze/crash) and made pages re-download.
     LaunchedEffect(isWebtoon, firstVisible, entries.size) {
         if (!isWebtoon || entries.isEmpty()) return@LaunchedEffect
         val info = listState.layoutInfo
-        val first = info.visibleItemsInfo.firstOrNull()?.index ?: firstVisible
-        val last = info.visibleItemsInfo.lastOrNull()?.index ?: first
+        val last = info.visibleItemsInfo.lastOrNull()?.index ?: firstVisible
         val visibleCount = info.visibleItemsInfo.size.coerceAtLeast(1)
-        val aheadEnd = minOf(last + visibleCount + PRELOAD_PAGES, entries.size)
-        val behindStart = (first - visibleCount - PRELOAD_PAGES).coerceAtLeast(0)
-        for (i in (last + 1) until aheadEnd) {
-            (entries.getOrNull(i) as? PageItem)?.let { prefetchPage(it.chapter.id, it.desc.pageUrl, it.desc.imageUrl) }
-        }
-        for (i in behindStart until first) {
-            (entries.getOrNull(i) as? PageItem)?.let { prefetchPage(it.chapter.id, it.desc.pageUrl, it.desc.imageUrl) }
-        }
-    }
-
-    // Paged modes: preload a bounded window ahead of the current page. Flipping or slider-jumping
-    // to a page renders it the instant it lands — its bytes are already on disk (the on-screen
-    // page's own effect covers the current page). Same gate, so it never starves the visible page.
-    LaunchedEffect(isWebtoon, pagerState.currentPage, pages?.size) {
-        if (isWebtoon) return@LaunchedEffect
-        val pl = pages ?: return@LaunchedEffect
-        if (pl.isEmpty()) return@LaunchedEffect
-        val cur = pagerState.currentPage
-        val aheadEnd = minOf(cur + PRELOAD_PAGES, pl.size)
-        for (i in (cur + 1) until aheadEnd) {
-            val desc = pl[i]
-            prefetchPage(chapter.id, desc.pageUrl, desc.imageUrl)
+        val start = last + 1
+        val end = minOf(start + visibleCount + PRELOAD_PAGES, entries.size)
+        for (i in start until end) {
+            val m = entries.getOrNull(i) ?: continue
+            if (m is DividerItem || m is LoadingItem) continue
+            imageLoader?.enqueue(
+                ImageRequest.Builder(context)
+                    .data(m)
+                    .size(screenW, webtoonDecodeH)
+                    .crossfade(false)
+                    .build()
+            )
         }
     }
 
-    // Pages stream ON DEMAND through the source's own client into the reader_pages cache (like
-    // Tadami online reading): each visible page downloads once and is then served from disk with
-    // the tiled SSIV, so re-reads/scroll-back are instant. Deliberately NO full-chapter background
-    // download here — a constant download stream at the CDN made the CDN throttle every request to
-    // the host, including the pages actually on screen, turning fast loads into 20-30s hangs.
-    // Users who want chapters offline/instant use the download button in the chapter sheet
-    // (startChapterDownload).
+    // Pages stream ON DEMAND through Coil (like Tadami's online reader): the visible window plus a
+    // couple of pages ahead are requested as the reader scrolls, and Coil's memory + disk caches
+    // make scroll-back instant. Deliberately NO full-chapter background download here — a constant
+    // download stream at the CDN made the CDN throttle every request to the host, including the
+    // pages actually on screen, turning fast loads into 20-30s hangs. Users who want chapters
+    // offline/instant use the download button in the chapter sheet (startChapterDownload).
     val prevChapter = remember(orderedChapters, chapter) { prevChapterBefore(chapter) }
 
     val nextChapter = remember(orderedChapters, chapter) { nextChapterAfter(chapter) }
@@ -738,6 +720,11 @@ fun ReaderScreen(
             else -> {
                 val pageList = pages!!
                 if (isWebtoon) {
+                    // Per-page loading state for the COMPOSED (visible) items only. The spinner is
+                    // shown on at most the first two pages that are still loading, so wherever you
+                    // scroll in a long chapter there's always 1-2 loading indicators but never one
+                    // on every unloaded page (the rest keep a dark placeholder).
+                    val pageLoadState = remember { mutableStateMapOf<Int, Boolean>() }
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize()
@@ -806,49 +793,33 @@ fun ReaderScreen(
                                         }
                                     }
                                 }
-                                is PageItem -> {
-                                    val page = item
+                                else -> {
                                     val retries = pageRetries[i] ?: 0
-                                    val state = pageStates[page.desc.imageUrl]
-                                    // Stream this page's bytes through the source's own client into
-                                    // the reader_pages cache (Tadami HttpPageLoader model); cached
-                                    // pages return instantly, re-reads never hit the network.
-                                    // Scroll-away cancels the download cleanly (tmp file cleaned by
-                                    // getPageImageFile); scrolling back re-runs this effect.
-                                    LaunchedEffect(page.desc.imageUrl, retries, page.chapter.id) {
-                                        if (pageStates[page.desc.imageUrl] !is PageFileState.Ready) {
-                                            pageStates[page.desc.imageUrl] = PageFileState.Loading
-                                            downloadGate.withPermit {
-                                                try {
-                                                    val f = viewModel.repository.getPageImageFile(page.chapter.id, page.desc.pageUrl, page.desc.imageUrl)
-                                                    val (w, h) = withContext(Dispatchers.IO) { decodeImageBounds(f) }
-                                                    if (chapterAspect == null && w > 0 && h > 0) chapterAspect = h.toFloat() / w
-                                                    pageStates[page.desc.imageUrl] = PageFileState.Ready(f, w, h)
-                                                    pageImageErrors = pageImageErrors - i
-                                                } catch (e: Throwable) {
-                                                    if (e is CancellationException) throw e
-                                                    val msg = e.message ?: "page download failed"
-                                                    pageStates[page.desc.imageUrl] = PageFileState.Failed(msg)
-                                                    pageImageErrors = pageImageErrors + (i to msg)
-                                                }
-                                            }
+                                    // Track this page as loading while it's composed; cleanup on
+                                    // scroll-away keeps the frontier limited to visible pages.
+                                    DisposableEffect(i) {
+                                        pageLoadState[i] = true
+                                        onDispose { pageLoadState.remove(i) }
+                                    }
+                                    val frontier = pageLoadState.filterValues { it }.keys.sorted().take(2)
+                                    key(item, retries) {
+                                        // Memoize the request per page (keyed on the page object +
+                                        // retry count) so it's the SAME object across scroll
+                                        // recompositions. Coil's rememberAsyncImagePainter keys on
+                                        // the model — a fresh ImageRequest every recomposition made
+                                        // it restart the download on every scroll tick, leaving
+                                        // pages stuck on spinners, hammering the network (freeze)
+                                        // and blowing up memory (crash).
+                                        val model = remember(item, retries) {
+                                            ImageRequest.Builder(context)
+                                                .data(item)
+                                                .size(screenW, webtoonDecodeH)
+                                                .crossfade(false)
+                                                .build()
                                         }
-                                    }
-                                    // Size the item to the page's true aspect ratio (fit-width) so
-                                    // the strip flows seamlessly; a fraction-of-viewport
-                                    // placeholder keeps it scrollable while the bytes download.
-                                    val ready = state as? PageFileState.Ready
-                                    val realAspectH = ready?.let {
-                                        if (it.width > 0) (screenW * it.height.toFloat() / it.width).toInt().coerceAtLeast(2) else null
-                                    }
-                                    val itemH = realAspectH
-                                        ?: chapterAspect?.let { (screenW * it).toInt().coerceAtLeast(2) }
-                                        ?: webtoonPlaceholderH
-                                    key(page, retries) {
-                                        Box(
+                                        Column(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .height((itemH / density.density).dp)
                                                 .then(
                                                     if (readerMode == ReaderMode.WEBTOON_GAPS) {
                                                         Modifier.padding(bottom = 16.dp)
@@ -856,44 +827,36 @@ fun ReaderScreen(
                                                         Modifier
                                                     }
                                                 )
-                                                .clipToBounds()
-                                                .testTag("reader_page_$i")
                                         ) {
-                                            // Low-res preview UNDER the tiled view: while SSIV
-                                            // decodes its base tile (a few hundred ms on a tall
-                                            // strip), the page is already visible instead of a blank
-                                            // frame — kills the pop-in blink as each page scrolls
-                                            // into view. SSIV paints over it as soon as it's ready.
-                                            val previewFile = ready?.file
-                                            if (previewFile != null) {
-                                                // Decoded synchronously so the preview is present in
-                                                // the SAME frame the item first composes — the old
-                                                // async decode left the box blank for one frame on
-                                                // every scroll (the visible "blink").
-                                                val previewImage = remember(previewFile) {
-                                                    decodePreview(previewFile)?.asImageBitmap()
-                                                }
-                                                if (previewImage != null) {
-                                                    Image(
-                                                        bitmap = previewImage,
-                                                        contentDescription = null,
-                                                        contentScale = ContentScale.FillWidth,
-                                                        modifier = Modifier.fillMaxSize()
-                                                    )
-                                                }
-                                            }
-                                            TadamiPage(
-                                                descriptor = page.desc,
-                                                file = ready?.file,
-                                                error = (state as? PageFileState.Failed)?.message,
-                                                isWebtoon = true,
-                                                scaleType = SubsamplingScaleImageView.SCALE_TYPE_FIT_WIDTH,
+                                            LoadableReaderImage(
+                                                stableKey = item,
+                                                model = model,
+                                                contentDescription = "Page ${i + 1}",
+                                                contentScale = ContentScale.FillWidth,
+                                                zoom = if (readerFit == ReaderFit.FIT_WIDTH) 1.2f else 1f,
                                                 spinnerColor = contentTextColor,
+                                                onError = { msg ->
+                                                    pageImageErrors = pageImageErrors + (i to msg)
+                                                },
                                                 onRetry = {
                                                     pageImageErrors = pageImageErrors - i
                                                     pageRetries[i] = (pageRetries[i] ?: 0) + 1
                                                 },
-                                                modifier = Modifier.fillMaxSize()
+                                                // At most a couple of loading circles (the user
+                                                // asked): the first two pages that are STILL
+                                                // loading get a spinner; the rest of the loading
+                                                // pages keep a dark placeholder.
+                                                showSpinner = i in frontier,
+                                                onLoadingChanged = { loading -> pageLoadState[i] = loading },
+                                                // A loading page keeps a viewport-height
+                                                // placeholder (like Tadami) so the list stays
+                                                // scrollable and doesn't jump when each image
+                                                // finishes loading.
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .heightIn(min = webtoonPlaceholderH)
+                                                    .clipToBounds()
+                                                    .testTag("reader_page_$i")
                                             )
                                         }
                                     }
@@ -907,70 +870,57 @@ fun ReaderScreen(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            val desc = pageList[pageIndex]
+                            val pageUrl = pageList[pageIndex]
                             val retries = pageRetries[pageIndex] ?: 0
-                            val state = pageStates[desc.imageUrl]
-                            LaunchedEffect(desc.imageUrl, retries) {
-                                if (pageStates[desc.imageUrl] !is PageFileState.Ready) {
-                                    pageStates[desc.imageUrl] = PageFileState.Loading
-                                    downloadGate.withPermit {
-                                        try {
-                                            val f = viewModel.repository.getPageImageFile(chapter.id, desc.pageUrl, desc.imageUrl)
-                                            val (w, h) = withContext(Dispatchers.IO) { decodeImageBounds(f) }
-                                            pageStates[desc.imageUrl] = PageFileState.Ready(f, w, h)
-                                            pageImageErrors = pageImageErrors - pageIndex
-                                        } catch (e: Throwable) {
-                                            if (e is CancellationException) throw e
-                                            val msg = e.message ?: "page download failed"
-                                            pageStates[desc.imageUrl] = PageFileState.Failed(msg)
-                                            pageImageErrors = pageImageErrors + (pageIndex to msg)
-                                        }
-                                    }
+                            key(pageUrl, retries) {
+                                // Sized + memoized request: paged pages were decoded at full
+                                // resolution before — tall pages exceeded the GPU texture limit
+                                // (black band) and ate memory. Same cap as webtoon, so the request
+                                // is also reused via Coil's cache when flipping back.
+                                val model = remember(pageUrl, retries) {
+                                    ImageRequest.Builder(context)
+                                        .data(pageUrl)
+                                        .size(screenW, webtoonDecodeH)
+                                        .crossfade(false)
+                                        .build()
                                 }
-                            }
-                            key(desc, retries) {
-                                TadamiPage(
-                                    descriptor = desc,
-                                    file = (state as? PageFileState.Ready)?.file,
-                                    error = (state as? PageFileState.Failed)?.message,
-                                    isWebtoon = false,
-                                    scaleType = when (readerFit) {
-                                        ReaderFit.FIT_WIDTH -> SubsamplingScaleImageView.SCALE_TYPE_FIT_WIDTH
-                                        ReaderFit.FIT_HEIGHT -> SubsamplingScaleImageView.SCALE_TYPE_FIT_HEIGHT
-                                        ReaderFit.FIT -> SubsamplingScaleImageView.SCALE_TYPE_CENTER_INSIDE
-                                    },
-                                    spinnerColor = contentTextColor,
-                                    onTap = { showHud = !showHud },
-                                    onSwipePage = { forward ->
-                                        coroutineScope.launch {
-                                            val target = (pagerState.currentPage + (if (forward) 1 else -1))
-                                                .coerceIn(0, pageList.lastIndex)
-                                            pagerState.animateScrollToPage(target)
-                                        }
-                                    },
-                                    onRetry = {
-                                        pageImageErrors = pageImageErrors - pageIndex
-                                        pageRetries[pageIndex] = (pageRetries[pageIndex] ?: 0) + 1
-                                    },
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .clipToBounds()
-                                        .testTag("reader_page_$pageIndex")
-                                )
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    LoadableReaderImage(
+                                        stableKey = pageUrl,
+                                        model = model,
+                                        contentDescription = "Page ${pageIndex + 1}",
+                                        contentScale = when (readerFit) {
+                                            ReaderFit.FIT_WIDTH -> ContentScale.Fit
+                                            ReaderFit.FIT_HEIGHT -> ContentScale.FillHeight
+                                            ReaderFit.FIT -> ContentScale.Fit
+                                        },
+                                        zoom = if (readerFit == ReaderFit.FIT_WIDTH) 1.2f else 1f,
+                                        spinnerColor = contentTextColor,
+                                        onError = { msg ->
+                                            pageImageErrors = pageImageErrors + (pageIndex to msg)
+                                        },
+                                        onRetry = {
+                                            pageImageErrors = pageImageErrors - pageIndex
+                                            pageRetries[pageIndex] = (pageRetries[pageIndex] ?: 0) + 1
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clipToBounds()
+                                            .testTag("reader_page_$pageIndex")
+                                    )
+                                }
                             }
                         }
                     }
                     if (readerMode == ReaderMode.VERTICAL) {
                         VerticalPager(
                             state = pagerState,
-                            beyondViewportPageCount = 2,
                             modifier = Modifier.fillMaxSize()
                         ) { pageContent(it) }
                     } else {
                         HorizontalPager(
                             state = pagerState,
                             reverseLayout = readerMode == ReaderMode.RIGHT_TO_LEFT,
-                            beyondViewportPageCount = 2,
                             modifier = Modifier.fillMaxSize()
                         ) { pageContent(it) }
                     }
@@ -1524,7 +1474,7 @@ private fun ModeIcon(mode: ReaderMode, tint: Color, modifier: Modifier = Modifie
 
 private data class QueuedCh(
     val chapter: ChapterEntity,
-    val pages: List<MangaSource.PageDescriptor>?,
+    val pages: List<Any>?,
     val error: String?,
 )
 
@@ -1532,16 +1482,7 @@ private data class DividerItem(val chapter: ChapterEntity)
 
 private data class LoadingItem(val chapter: ChapterEntity, val error: String?)
 
-private data class PageItem(val chapter: ChapterEntity, val desc: MangaSource.PageDescriptor)
-
 private data class PageRange(val chapter: ChapterEntity, val start: Int, val count: Int)
-
-/** Per-page download state in the reader: bytes fetched through the source into reader_pages. */
-private sealed interface PageFileState {
-    object Loading : PageFileState
-    data class Ready(val file: File, val width: Int, val height: Int) : PageFileState
-    data class Failed(val message: String) : PageFileState
-}
 
 private fun formatChapterNum(n: Float): String =
     if (n % 1f == 0f) n.toInt().toString() else n.toString()
@@ -1557,7 +1498,84 @@ private const val MAIN_LOAD_TIMEOUT_MS = 60_000L
 private const val QUEUED_LOAD_TIMEOUT_MS = 45_000L
 private const val MAX_QUEUED_CHAPTERS = 8
 
-// Preload window size (both sides of the viewport in webtoon, ahead in paged): how many items
-// past/around the current viewport are fetched ahead of time. Generous so scrolling — in either
-// direction or via a slider jump — lands on pages that are already on disk.
-private const val PRELOAD_PAGES = 6
+// Webtoon: how many items past the current viewport to preload (like Tadami's preload window).
+// Kept modest so the higher-resolution decodes don't run too many at once.
+private const val PRELOAD_PAGES = 3
+
+/**
+ * A reader page image with its own loading spinner and tap-to-retry error state (like Tadami).
+ *
+ * Plain painter + [Image] rather than SubcomposeAsyncImage: the subcomposed variant hangs / ANRs
+ * inside a LazyColumn when the loading slot's size differs from the loaded image, leaving pages
+ * stuck on eternal spinners. A spinner is drawn as an overlay so the page keeps a minimum height
+ * while loading and the list stays scrollable.
+ */
+@Composable
+private fun LoadableReaderImage(
+    stableKey: Any,
+    model: Any,
+    contentDescription: String,
+    contentScale: ContentScale,
+    spinnerColor: Color,
+    onError: (String) -> Unit,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+    zoom: Float = 1f,
+    showSpinner: Boolean = true,
+    onLoadingChanged: ((Boolean) -> Unit)? = null,
+) {
+    // stableKey is the source model object (stable across recompositions); `model` may be a fresh
+    // ImageRequest wrapper each recomposition, so never key state on it.
+    var loading by remember(stableKey) { mutableStateOf(true) }
+    var failed by remember(stableKey) { mutableStateOf(false) }
+    val painter = rememberAsyncImagePainter(
+        model = model,
+        onState = { state ->
+            val isNowLoading = state is AsyncImagePainter.State.Empty || state is AsyncImagePainter.State.Loading
+            loading = isNowLoading
+            failed = state is AsyncImagePainter.State.Error
+            onLoadingChanged?.invoke(isNowLoading)
+            if (state is AsyncImagePainter.State.Error) {
+                onError(state.result.throwable.message ?: "image load failed")
+            }
+        }
+    )
+    Box(modifier = modifier) {
+        Image(
+            painter = painter,
+            contentDescription = contentDescription,
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (zoom != 1f) Modifier.scale(zoom) else Modifier),
+            contentScale = contentScale
+        )
+        if (loading && showSpinner) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(28.dp),
+                    strokeWidth = 3.dp,
+                    color = spinnerColor
+                )
+            }
+        }
+        if (failed) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0x33000000))
+                    .clickable(onClick = onRetry),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Page failed — tap to retry",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = spinnerColor.copy(alpha = 0.9f),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
