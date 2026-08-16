@@ -525,24 +525,11 @@ abstract class HttpSource : CatalogueSource {
 
     @Suppress("DEPRECATION")
     private fun triggerNextPagePrefetch(page: Page) {
-        val pageKey = "${id}_${page.url}"
-        val nextPage = pageToNextPage[pageKey] ?: return
-
-        prefetchScope.launch {
-            try {
-                if (nextPage.imageUrl == null) {
-                    val nextUrl = fetchImageUrl(nextPage).awaitSingle()
-                    nextPage.imageUrl = nextUrl
-                }
-                // NOTE: deliberately NO full-image download here. Pages are fetched cacheless via
-                // the reader, so pre-downloading the image neither fills Coil's cache nor the
-                // OkHttp cache — it only burns the per-host connection slot. On image-heavy
-                // chapters this spawned a firehose of parallel downloads that starved the actual
-                // foreground page loads ("keeps loading") and blocked cover requests for minutes.
-            } catch (e: Exception) {
-                // Ignore prefetch failures
-            }
-        }
+        // Deliberately disabled: this used to fire a background fetchImageUrl(nextPage) on EVERY
+        // getImage call — doubling network requests to the CDN and burning per-host connection
+        // slots, which starved the reader's actual foreground page loads ("keeps loading"). The
+        // reader resolves every page's imageUrl up front (getPageImageModels), so this next-page
+        // resolution is redundant here anyway.
     }
 
     companion object {
