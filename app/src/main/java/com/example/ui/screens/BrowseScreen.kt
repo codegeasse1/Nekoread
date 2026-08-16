@@ -239,6 +239,9 @@ fun BrowseScreen(
             viewModel.consumePendingCatalogSearch()
             val (sourceId, tag) = ps
             if (sourceId.isNotBlank()) {
+                // Drop any cached load state so the fresh tag search always runs (never swallowed
+                // by the same-key no-op guard), then jump straight to the catalog with the tag.
+                viewModel.clearCatalog()
                 activeSourceId = sourceId
                 activeSourceBaseUrl = extensionSources.firstOrNull { it.id == sourceId }?.baseUrl ?: ""
                 searchQuery = "tag:$tag"
