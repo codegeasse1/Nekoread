@@ -149,21 +149,17 @@ class TachiyomiHttpSourceAdapter(
             }
         }
             .mapIndexed { i, ch -> ch.toChapter(fullMangaId) }
-        // Sources that don't set chapter_number leave the SChapter default (-1) on every chapter,
-        // which shows "-1" all over the UI and breaks chapter ordering, prev/next navigation and
-        // continuous scroll. Extensions return chapters NEWEST FIRST (Mihon convention) — position
-        // 0 is the LAST chapter — so number them in REVERSE to get 1,2,3… in true reading order.
-        // (Numbering in the returned order inverted every number: the oldest chapter became N and
-        // the newest became 1, so the list, "Read", prev/next and continuous scroll all pointed the
-        // wrong way — e.g. TheBlank's "Chapter 1" opened showing "Ch. 109".)
-        if (chapters.isNotEmpty() && chapters.all { it.chapterNumber <= 0f }) {
-            val readingOrder = chapters.asReversed()
-            readingOrder.mapIndexed { i, ch ->
-                if (ch.chapterNumber > 0f) ch else ch.copy(chapterNumber = (i + 1).toFloat())
-            }
-        } else {
-            chapters
-        }
+        // NOTE: -1 chapter numbers (sources that don't set chapter_number) are LEFT AS-IS and never
+        // renumbered by list position. Positional numbering assigned fake numbers 1..N to chapter
+        // URLs based on whatever order the source returned THAT fetch, so whenever the source's
+        // order shifted (aggregator reorders, mirror swaps, new chapters inserted), the same URL
+        // got a different number and the number no longer matched the chapter's real content — the
+        // list, prev/next and continuous scroll then pointed at chapters whose content didn't match
+        // the label (clicking "Ch. 4" could open chapter 1's content; "next" from "Ch. 2" jumped to
+        // a random neighbour). Unnumbered chapters are instead ordered by the source's own upload
+        // dates with the numeric part of their name as tiebreak (see chapterNameNumber), and the
+        // labels the user sees come from the source's own names — both stable across fetches.
+        chapters
     }
 
     override suspend fun getPageUrls(rawChapterId: String): List<String> = withContext(Dispatchers.IO) {
