@@ -1,1 +1,88 @@
-IyBOZWtvUmVhZAoKQW4gQW5kcm9pZCBtYW5nYSByZWFkZXIgKEtvdGxpbiArIEpldHBhY2sgQ29tcG9zZSArIFJvb20pLCBpbnNwaXJlZCBieSBNaWhvbiAvIEFuaXlvbWkgLyBUYWRhbWkuCgojIyBSZWFsIHNvdXJjZXMsIG5vdCBkdW1teSBkYXRhCgpOZWtvUmVhZCBsb2FkcyAqKnJlYWwgbWFuZ2EsIHJlYWwgY2hhcHRlcnMgYW5kIHJlYWwgcGFnZSBpbWFnZXMqKiB0aHJvdWdoIGEgcGx1Z2dhYmxlIHNvdXJjZSBsYXllcjoKCi0gYGFwcC9zcmMvbWFpbi9qYXZhL2NvbS9leGFtcGxlL2RhdGEvc291cmNlL01hbmdhU291cmNlLmt0YCDigJQgdGhlIHNvdXJjZSBpbnRlcmZhY2UgKyBgU291cmNlUmVnaXN0cnlgCi0gYGFwcC9zcmMvbWFpbi9qYXZhL2NvbS9leGFtcGxlL2RhdGEvc291cmNlL01hbmdhRGV4U291cmNlLmt0YCDigJQgd29ya2luZyBzb3VyY2UgYmFja2VkIGJ5IHRoZSBvZmZpY2lhbAogIFtNYW5nYURleCBwdWJsaWMgQVBJXShodHRwczovL2FwaS5tYW5nYWRleC5vcmcvZG9jcy9zd2FnZ2VyLmh0bWwpIChubyBhdXRoIG5lZWRlZCk6CiAgLSBzZWFyY2ggKyAibGF0ZXN0IiBjYXRhbG9nIOKGkiBgR0VUIC9tYW5nYWAKICAtIG1hbmdhIGRldGFpbHMgKyBjb3ZlciDihpIgYEdFVCAvbWFuZ2Eve2lkfWAKICAtIGNoYXB0ZXIgbGlzdCDihpIgYEdFVCAvbWFuZ2Eve2lkfS9mZWVkYAogIC0gcGFnZSBpbWFnZSBVUkxzIOKGkiBgR0VUIC9hdC1ob21lL3NlcnZlci97Y2hhcHRlcklkfWAKCkZsb3c6IEJyb3dzZSDihpIgQ2F0YWxvZyDihpIgdGFwIGEgbWFuZ2Eg4oaSIGRldGFpbHMgKyByZWFsIGNoYXB0ZXJzIGxvYWQgYW5kIGNhY2hlIGludG8gUm9vbSDihpIKdGFwIGEgY2hhcHRlciDihpIgdGhlIHJlYWRlciBmZXRjaGVzIHJlYWwgcGFnZSBVUkxzIGFuZCByZW5kZXJzIHRoZW0gKHdlYnRvb24gLyBMVFIgLyBSVEwpLgoKTGlicmFyeSwgcmVhZGluZyBoaXN0b3J5LCByZWFkLXByb2dyZXNzIGFuZCBjYXRlZ29yaWVzIGFsbCB3b3JrIGFnYWluc3QgdGhlIFJvb20gZGF0YWJhc2UgYW5kIGFyZQpiYWNrZWQgYnkgdGhlIHJlYWwgc291cmNlIGRhdGEgb25jZSBhIG1hbmdhIGhhcyBiZWVuIGJyb3dzZWQgLyBhZGRlZCB0byB0aGUgbGlicmFyeS4KCiMjIEV4dGVuc2lvbnMgKE1paG9uL0FuaXlvbWkvVGFkYW1pLXN0eWxlKQoKVGhlICoqRXh0ZW5zaW9ucyoqIGFuZCAqKkV4dGVuc2lvbiBSZXBvcyoqIHRhYnMgYXJlIGZ1bGx5IHJlYWwsIG1vZGVsZWQgYWZ0ZXIgTWlob24vQW5peW9taS9UYWRhbWk6CgotICoqUmVwb3MqKiDigJQgYWRkIGFueSBleHRlbnNpb24gcmVwbyBieSBpdHMgaW5kZXggVVJMIChvciByZXBvIGJhc2UgVVJMIOKAlCBgaW5kZXguanNvbmAsCiAgYHJlcG8uanNvbmAsIGBpbmRleC5taW4uanNvbmAgYW5kIGJhcmUtYXJyYXkgbGVnYWN5IGZvcm1hdHMgYXJlIGFsbCBhdXRvLWRldGVjdGVkKS4gQWRkaW5nLAogIHJlZnJlc2hpbmcgYW5kIGRlbGV0aW5nIGEgcmVwbyBhY3R1YWxseSBmZXRjaGVzIGFuZCBwYXJzZXMgdGhlIHJlcG8ncyByZWFsIGluZGV4OyB0aGUgZXh0ZW5zaW9uCiAgY291bnQgYW5kICJsYXN0IHVwZGF0ZWQiIHRpbWUgY29tZSBmcm9tIHRoZSBzZXJ2ZXIsIG5ldmVyIGZyb20gaGFyZGNvZGVkIG51bWJlcnMuIEV2ZXJ5IHJlcG8gY2FuCiAgYmUgZGVsZXRlZC4KLSAqKkV4dGVuc2lvbnMqKiDigJQgaW5zdGFsbCBhY3R1YWxseSBkb3dubG9hZHMgdGhlIGV4dGVuc2lvbidzIHJlYWwgQVBLIGludG8gYXBwLXByaXZhdGUgc3RvcmFnZSwKICBsb2FkcyBpdHMgZGV4IGFnYWluc3QgTmVrb1JlYWQncyBpbi1hcHAgVGFjaGl5b21pL01paG9uIHNvdXJjZS1hcGkgcnVudGltZSwgYW5kIGJyaW5ncyBpdHMKICBzb3VyY2VzIG9ubGluZSDigJQgdGhlIGV4YWN0IHNhbWUgbWVjaGFuaXNtIE1paG9uL1RhZGFtaSB1c2UuIFVuaW5zdGFsbCBkZWxldGVzIHRoZSBBUEsgYW5kIGl0cwogIHNvdXJjZXMuCi0gKipTb3VyY2VzKiog4oCUIGV2ZXJ5IHNvdXJjZSBjb21lcyBmcm9tIGFuIGluc3RhbGxlZCBleHRlbnNpb24sIGV4YWN0bHkgbGlrZSBUYWRhbWkgKG5vIGJ1aWx0LWluCiAgc291cmNlcywgbm8gZmFsbGJhY2spLiBFYWNoIGluc3RhbGxlZCBleHRlbnNpb24ncyBzb3VyY2VzIGFyZSBicm93c2VkIGluLWFwcCB0aHJvdWdoIHRoZSByZWFsCiAgVGFjaGl5b21pIGV4dGVuc2lvbiBlbmdpbmU6IHNlYXJjaCDihpIgY2F0YWxvZyDihpIgZGV0YWlscyDihpIgY2hhcHRlcnMg4oaSIHJlYWQgYWxsIHJ1biBpbnNpZGUgdGhlCiAgYXBwIChubyBXZWJWaWV3LCBubyBsZWF2aW5nIHRoZSBhcHApLiBBIHJlYWwgZXh0ZW5zaW9uIChlLmcuIE1hbmdhRGV4IGZyb20gdGhlIGtlaXlvdXNoaSByZXBvKQogIHByb2R1Y2VzIHJlc3VsdHMgZGlyZWN0bHkgZnJvbSBpdHMgSFRUUCBBUEkuCgpGaWxlczogYGRhdGEvZXh0ZW5zaW9uL0V4dGVuc2lvbk5ldHdvcmsua3RgIChyZXBvIGluZGV4IHBhcnNpbmcgKyBBUEsgZG93bmxvYWQpLApgZGF0YS9leHRlbnNpb24vRXh0ZW5zaW9uRGV4TG9hZGVyLmt0YCAoRGV4Q2xhc3NMb2FkZXIg4oaSIGBFeHRlbnNpb25HZW5lcmF0ZWRgKSwKYGRhdGEvc291cmNlL1RhY2hpeW9taUh0dHBTb3VyY2VBZGFwdGVyLmt0YCAoYnJpZGdlcyBsb2FkZWQgc291cmNlcyBvbnRvIGBNYW5nYVNvdXJjZWApLApgZGF0YS9leHRlbnNpb24vRXh0ZW5zaW9uRW5naW5lLmt0YCAoZGVmYXVsdHMpLCB0aGUgdmVuZG9yZWQgYGV1L2thbmFkZS90YWNoaXlvbWkvYCBzb3VyY2UtYXBpCnJ1bnRpbWUgKFNvdXJjZS9IdHRwU291cmNlL25ldHdvcmsvbW9kZWwgY29udHJhY3RzIHRoZSBleHRlbnNpb24gZGV4ZXMgbGluayBhZ2FpbnN0KSwgcGx1cyB0aGUKZXh0ZW5zaW9uIERBTyAvIHJlcG9zaXRvcnkgbG9naWMuCgojIyBBZGRpbmcgYSBuYXRpdmUgc291cmNlCgoxLiBJbXBsZW1lbnQgYE1hbmdhU291cmNlYCAobWlycm9yIGBNYW5nYURleFNvdXJjZWApIGZvciB0aGUgbmV3IHByb3ZpZGVyLgoyLiBSZWdpc3RlciBpdCBpbiBgU291cmNlUmVnaXN0cnlgLgozLiBBZGQgYSByb3cgdG8gYEV4dGVuc2lvbkVuZ2luZS5idWlsdGluU291cmNlYC1zdHlsZSBzZWVkcyBzbyBpdCBzaG93cyB1cCBpbiB0aGUgU291cmNlcyB0YWIuCgojIyBCdWlsZAoKT3BlbiB0aGUgcHJvamVjdCBpbiBBbmRyb2lkIFN0dWRpbyAoQVBJIDI0KywgcmVxdWlyZXMgbmV0d29yayBhY2Nlc3MgYXQgcnVudGltZSB0byByZWFjaApgYXBpLm1hbmdhZGV4Lm9yZ2AgLyBgdXBsb2Fkcy5tYW5nYWRleC5vcmdgIC8gdGhlIGltYWdlIENETikuCgojIyBBdXRvbWF0ZWQgYnVpbGRzICYgcmVsZWFzZXMgKEdpdEh1YiBBY3Rpb25zKQoKLSAqKkRlYnVnIGJ1aWxkIChldmVyeSBwdXNoIHRvIGBtYWluYCkqKiDigJQgYC5naXRodWIvd29ya2Zsb3dzL2J1aWxkLnltbGAgY29tcGlsZXMgdGhlIGFwcCBhbmQgcHVzaGVzCiAgYE5la29yZWFkLWRlYnVnLmFwa2AgdG8gdGhlICoqYGJ1aWxkYCoqIGJyYW5jaCwgYW5kIGFsc28gYXR0YWNoZXMgaXQgdG8gdGhlIHJ1bidzIGFydGlmYWN0cy4KICBEb3dubG9hZCBpdCBzdHJhaWdodCBmcm9tOiBgaHR0cHM6Ly9naXRodWIuY29tL2NvZGVnZWFzc2UxL05la29yZWFkL3Jhdy9idWlsZC9OZWtvcmVhZC1kZWJ1Zy5hcGtgCi0gKipSZWxlYXNlKiog4oCUIGdvIHRvIHRoZSAqKkFjdGlvbnMqKiB0YWIg4oaSICoqUmVsZWFzZSBBUEsqKiDihpIgKipSdW4gd29ya2Zsb3cqKiwgZW50ZXIgYSB2ZXJzaW9uCiAgKGUuZy4gYDEuMC4wYCkgYW5kIG9wdGlvbmFsIG5vdGVzLiBJdCBidWlsZHMgYSBzaWduZWQgcmVsZWFzZSBBUEssIGNyZWF0ZXMgYSBHaXRIdWIgUmVsZWFzZSB3aXRoCiAgdGhlIEFQSyBhdHRhY2hlZCwgYW5kIGRyb3BzIGEgY29weSBvbiB0aGUgYGJ1aWxkYCBicmFuY2ggdG9vLgoKICBTaWduaW5nOiBpZiB5b3Ugc2V0IHJlcG8gc2VjcmV0cyBgS0VZU1RPUkVfQkFTRTY0YCAoYmFzZTY0IG9mIHlvdXIgYC5qa3NgKSwgYFNUT1JFX1BBU1NXT1JEYCBhbmQKICBgS0VZX1BBU1NXT1JEYCwgcmVsZWFzZXMgYXJlIHNpZ25lZCB3aXRoIHlvdXIgcmVhbCBrZXkgKHJlcXVpcmVkIGZvciBpbi1wbGFjZSB1cGRhdGVzIGxhdGVyKS4KICBXaXRob3V0IHNlY3JldHMsIGVhY2ggcmVsZWFzZSBpcyBzaWduZWQgd2l0aCBhIGZyZXNobHkgZ2VuZXJhdGVkIGtleTsgdGhlIGtleXN0b3JlIGlzIGF0dGFjaGVkIHRvCiAgdGhhdCBydW4ncyBhcnRpZmFjdHMgYW5kIHRoZSBwYXNzd29yZCBpcyBwcmludGVkIGluIHRoZSBsb2cuCgojIyBSZWxlYXNlIHNjaGVkdWxlCgpQcmUtcmVsZWFzZSAvIFdJUCDigJQgYnVpbGRzIGZyb20gYG1haW5gLgo=
+<div align="center">
+
+# NekoRead
+
+**A fast, modern manga & manhwa reader for Android.** Browse real catalogs, read real chapters, and keep a library — all through pluggable sources that run inside the app.
+
+[![Platform](https://img.shields.io/badge/Platform-Android-3DDC84?logo=android&logoColor=white)](https://github.com/codegeasse1/Nekoread)
+[![Language](https://img.shields.io/badge/Language-Kotlin-7F52FF?logo=kotlin&logoColor=white)](https://github.com/codegeasse1/Nekoread)
+[![UI](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?logo=jetpackcompose&logoColor=white)](https://github.com/codegeasse1/Nekoread)
+[![Min SDK](https://img.shields.io/badge/Min%20SDK-24-339933?logo=android&logoColor=white)](https://github.com/codegeasse1/Nekoread)
+[![Download](https://img.shields.io/badge/Download-APK-success)](https://github.com/codegeasse1/Nekoread/raw/build/Nekoread-debug.apk)
+
+</div>
+
+---
+
+## About
+
+NekoRead is a free, open-source manga reader for Android, written in **Kotlin** with **Jetpack Compose** and **Room**.
+
+It loads **real manga, real chapters and real page images** through a pluggable source layer — no dummy data, no fake catalogs. Browse, search, read and track everything against live source data.
+
+## Features
+
+### Reading
+- **Webtoon long-strip reader** with automatic chapter continuation — keep scrolling and the next chapter loads seamlessly
+- **Vertical with gaps**, **vertical-paged**, **left-to-right** and **right-to-left** reading modes
+- **Fit screen / fit width / fit height** page fitting
+- **OLED black**, dark, cream and white reader backgrounds
+- **Fast page loading** — nearby pages are prefetched into memory so scrolling feels instant
+- **Immersive mode** — status and navigation bars hide while reading and reappear when you tap
+- **Resume where you left off**, tracked per chapter and per page
+
+### Sources & extensions
+- **Built-in MangaDex source** using the official public API (no account needed)
+- **Extension repositories** — add community repos by index URL (`index.json`, `repo.json`, `index.min.json` and legacy formats are auto-detected); extension counts and update times come from the server, never from hardcoded numbers
+- **Extensions install as APKs** into app-private storage and their sources go online instantly — uninstalling removes them cleanly
+- **In-app browsing** — search, catalog, details, chapters and reading all run inside the app through the real extension engine
+- **Cloudflare helper** — a built-in site-verification dialog for sources behind Cloudflare walls
+
+### Library
+- Add manga to your library from any source
+- Reading history and **read progress**
+- **Categories** to organize your collection
+- Everything backed by a local **Room** database
+
+## Download
+
+Get the latest debug build:
+
+[**⬇ Download Nekoread-debug.apk**](https://github.com/codegeasse1/Nekoread/raw/build/Nekoread-debug.apk)
+
+> **Requires Android 7.0 (API 24) or newer.** When your browser asks, allow installing apps from unknown sources.
+>
+> Debug builds are unsigned — Android will warn you. This is expected and safe for testing.
+
+## Getting started
+
+1. Install the APK and open **NekoRead**.
+2. Browse the built-in MangaDex catalog — or add an extension repository and install the sources you want.
+3. Tap a manga → pick a chapter → read. Your progress is saved automatically.
+
+## Building from source
+
+Open the project in **Android Studio** (JDK 17, API 36 SDK). The app needs network access at runtime to reach MangaDex and your installed extension sources.
+
+```bash
+./gradlew assembleDebug
+```
+
+The APK lands in `app/build/outputs/apk/debug/app-debug.apk`.
+
+### Adding a native source
+
+1. Implement `MangaSource` (mirror `MangaDexSource`) for the new provider.
+2. Register it in `SourceRegistry`.
+3. Add a row to the `ExtensionEngine` built-in-source seeds so it shows up in the Sources tab.
+
+## Releases
+
+- **Debug builds** — every push to `main` triggers the GitHub Actions build, which compiles the app and pushes `Nekoread-debug.apk` to the **`build`** branch (also attached to the run's artifacts).
+- **Release builds** — run the **Release APK** workflow from the Actions tab with a version number to build a signed APK and publish a GitHub Release.
+
+## Privacy
+
+- All browsing and reading happens **directly between your device and each source's servers**.
+- Your library, history and progress stay **on your device** in a local database.
+- **No accounts, no analytics, no tracking.**
