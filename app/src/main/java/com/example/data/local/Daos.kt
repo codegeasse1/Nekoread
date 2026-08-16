@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface MangaDao {
-    @Query("SELECT * FROM manga WHERE inLibrary = 1 ORDER BY lastReadTimestamp DESC, title ASC")
+    @Query("SELECT * FROM manga WHERE inLibrary = 1 OR lastReadTimestamp > 0 ORDER BY lastReadTimestamp DESC, title ASC")
     fun getLibraryManga(): Flow<List<MangaEntity>>
 
     @Query("SELECT * FROM manga ORDER BY title ASC")
