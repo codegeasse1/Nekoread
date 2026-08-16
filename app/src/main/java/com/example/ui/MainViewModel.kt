@@ -183,6 +183,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         lastCatalogKey = null
     }
 
+    // A tag/genre chip tapped on a detail screen: stash (sourceId, tag) so BrowseScreen can open
+    // that source's catalog pre-filled with the tag search when it next composes.
+    private val _pendingCatalogSearch = MutableStateFlow<Pair<String, String>?>(null)
+    val pendingCatalogSearch: StateFlow<Pair<String, String>?> = _pendingCatalogSearch.asStateFlow()
+
+    fun openTagSearch(sourceId: String, tag: String) {
+        _pendingCatalogSearch.value = sourceId to tag
+    }
+
+    fun consumePendingCatalogSearch(): Pair<String, String>? {
+        val v = _pendingCatalogSearch.value
+        _pendingCatalogSearch.value = null
+        return v
+    }
+
     fun globalSearch(query: String) {
         val q = query.trim()
         if (q.isBlank()) {
