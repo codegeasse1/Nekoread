@@ -259,6 +259,67 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         return "repo_$digest"
     }
 
+    /**
+     * Normalize a repo URL into a canonical identity so the same repo added in different URL forms
+     * (github.com vs raw.githubusercontent.com, with or without an index file name, .pb vs .json,
+     * trailing slashes) is recognized as one repo. GitHub-hosted repos collapse to their user/repo
+     * base; any other host keeps scheme://host/path with known index suffixes stripped.
+     */
+    fun canonicalRepoUrl(url: String): String {
+        val trimmed = url.trim()
+        val uri = try {
+            java.net.URI(trimmed)
+        } catch (e: Exception) {
+            return trimmed.trimEnd('/')
+        }
+        val scheme = uri.scheme ?: return trimmed.trimEnd('/')
+        val host = (uri.host ?: return trimmed.trimEnd('/')).lowercase()
+        var path = uri.path ?: ""
+        for (name in ExtensionNetwork.ALL_INDEX_FILE_NAMES) {
+            if (path.endsWith("/$name", ignoreCase = true)) {
+                path = path.dropLast(name.length + 1)
+                break
+            }
+        }
+        path = path.trimEnd('/')
+        val canonicalHost = if (host == "github.com") "raw.githubusercontent.com" else host
+        if (canonicalHost == "raw.githubusercontent.com") {
+            val seg = path.split("/").filter { it.isNotBlank() }
+            path = when {
+                seg.size >= 2 -> "/" + seg.take(2).joinToString("/")
+                seg.size == 1 -> "/" + seg[0]
+                else -> ""
+            }
+        }
+        return "$scheme://$canonicalHost$path"
+    }
+
+    /**
+     * Merge duplicate repos (the same canonical repo added via different URL forms) into a single
+     * row. The earliest-added row wins; installed-extension markers are carried over to it and the
+     * extras' repo/extension/source rows are deleted. Runs on startup so duplicates created before
+     * URL canonicalization get cleaned up once.
+     */
+    suspend fun dedupeRepos() = withContext(Dispatchers.IO) {
+        val repos = db.extensionDao().getAllReposOnce()
+        val byCanonical = repos.groupBy { canonicalRepoUrl(it.url) }
+        for ((_, group) in byCanonical) {
+            if (group.size <= 1) continue
+            val keep = group.minByOrNull { it.addedDate } ?: continue
+            for (dup in group) {
+                if (dup.id == keep.id) continue
+                // Keep any installed-extension markers on the surviving row.
+                for (ext in db.extensionDao().getExtensionsByRepo(dup.id).filter { it.isInstalled }) {
+                    db.extensionDao().clearInstalledState(ext.packageName)
+                    db.extensionDao().updateExtensionInstallState(ext.packageName, keep.id, true, ext.installedVersionName, null)
+                }
+                db.extensionDao().deleteExtensionsByRepo(dup.id)
+                db.extensionDao().deleteSourcesByRepo(dup.id)
+                db.extensionDao().deleteRepo(dup.id)
+            }
+        }
+    }
+
     private fun ParsedExtension.toEntity(repoId: String): ExtensionEntity = ExtensionEntity(
         packageName = packageName,
         repoId = repoId,
@@ -305,11 +366,16 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
             return@withContext "URL must start with http:// or https://"
         }
 
-        val candidates = if (ExtensionNetwork.isIndexUrl(cleanUrl)) {
-            listOf(cleanUrl)
-        } else {
-            ExtensionNetwork.INDEX_FILE_NAMES.map { "$cleanUrl/$it" }
+        // The same repo added twice (in different URL forms — github.com vs raw.githubusercontent.com,
+        // index.json vs index.min.json, .pb vs .json) must not create a duplicate row.
+        val canonical = canonicalRepoUrl(cleanUrl)
+        if (db.extensionDao().getAllReposOnce().any { canonicalRepoUrl(it.url) == canonical }) {
+            return@withContext "Repository already added"
         }
+
+        // A direct .pb index URL is transparently swapped for its .json sibling; a base URL gets
+        // the common index file names appended in order.
+        val candidates = ExtensionNetwork.indexCandidatesFor(cleanUrl)
 
         var lastError: String? = null
         for (indexUrl in candidates) {
