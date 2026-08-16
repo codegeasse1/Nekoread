@@ -10,7 +10,10 @@ import coil.key.Keyer
 import coil.request.Options
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.HttpSource
+import okhttp3.OkHttpClient
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 
 /**
  * Coil model for a reader page served by a Tachiyomi extension.
@@ -47,7 +50,29 @@ data class ExtensionCoverImage(
     val source: HttpSource,
 )
 
+/** Stable memory-cache key for covers (source + url), so a cover loads once and is reused. */
+class ExtensionCoverImageKeyer : Keyer<ExtensionCoverImage> {
+    override fun key(data: ExtensionCoverImage, options: Options): String =
+        "cover:" + data.source.toString() + "|" + data.imageUrl
+}
+
 class ExtensionCoverImageFetcherFactory : Fetcher.Factory<ExtensionCoverImage> {
+
+    // Covers must never hang for minutes behind a burst of reader page requests on the same host
+    // (per-host request cap + long call timeouts on the shared client) — a stuck cover just shows
+    // a blank tile until restart. Use a per-source clone with short timeouts so a slow/failing
+    // cover fails fast, lets Coil show the placeholder, and retries cleanly on next composition.
+    private val coverClients = ConcurrentHashMap<HttpSource, OkHttpClient>()
+
+    private fun coverClient(source: HttpSource): OkHttpClient =
+        coverClients.getOrPut(source) {
+            source.client.newBuilder()
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(20, TimeUnit.SECONDS)
+                .callTimeout(25, TimeUnit.SECONDS)
+                .build()
+        }
+
     override fun create(
         data: ExtensionCoverImage,
         options: Options,
@@ -60,7 +85,7 @@ class ExtensionCoverImageFetcherFactory : Fetcher.Factory<ExtensionCoverImage> {
                     .headers(data.source.headers)
                     .build()
                 val response = try {
-                    data.source.client.newCall(request).execute()
+                    coverClient(data.source).newCall(request).execute()
                 } catch (e: Exception) {
                     throw IOException("${data.source.name} cover load failed (${data.imageUrl.take(80)}): ${e.message}", e)
                 }
