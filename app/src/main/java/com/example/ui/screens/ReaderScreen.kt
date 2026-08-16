@@ -194,11 +194,15 @@ fun ReaderScreen(
 
     val coroutineScope = rememberCoroutineScope()
 
-    // Download-ahead scope: background job that pulls every page of the strip into the on-device
-    // reader_pages cache (Aniyomi/Tadami-style page cache), so scrolling never waits on the network.
-    // It's tied to this composition, so leaving the reader cancels it automatically.
+    // Download-ahead scope: background job that pulls pages into the on-device reader_pages cache
+    // (Aniyomi/Tadami-style page cache), so scrolling never waits on the network. It's tied to this
+    // composition, so leaving the reader cancels it automatically. All prefetch downloads share ONE
+    // gate so their combined concurrency stays well under the CDN's per-host connection limit —
+    // exceeding it made the reader's own foreground page loads stall ("keeps loading").
     val prefetchScope = rememberCoroutineScope()
     val prefetchJob = remember { mutableStateOf<Job?>(null) }
+    val nextPrefetchJob = remember { mutableStateOf<Job?>(null) }
+    val prefetchGate = remember { Semaphore(2) }
 
     // Re-load a queued chapter's pages after a failure (tapped from its error row). A failed
     // queued chapter never blocks continuous scroll — the reader just shows the retry row.
@@ -278,6 +282,7 @@ fun ReaderScreen(
                 }
             }
             prefetchJob.value?.cancel()
+            nextPrefetchJob.value?.cancel()
             HttpSource.cancelAllPrefetches()
         }
     }
@@ -627,10 +632,43 @@ fun ReaderScreen(
         prefetchJob.value?.cancel()
         prefetchJob.value = prefetchScope.launch {
             withContext(Dispatchers.IO) {
-                val gate = Semaphore(3)
                 for ((cid, pUrl, iUrl) in ordered) {
-                    gate.withPermit {
+                    prefetchGate.withPermit {
                         runCatching { viewModel.repository.getPageImageFile(cid, pUrl, iUrl) }
+                    }
+                }
+            }
+        }
+    }
+
+    // Aniyomi-style "load everything": also pull the NEXT chapter's pages into the page cache so
+    // crossing the chapter boundary is seamless too (the strip's own queuing fetches its page list
+    // again when it's actually reached, which the source's page-list cache makes instant). Runs once
+    // per chapter, only if the strip hasn't queued a next chapter yet. Shares the same download gate
+    // as the current chapter so combined prefetch concurrency stays safe.
+    LaunchedEffect(chapter.id, isWebtoon, queuedChapters.size) {
+        if (!isWebtoon) return@LaunchedEffect
+        if (queuedChapters.isNotEmpty()) return@LaunchedEffect
+        val lastCh = queuedChapters.lastOrNull()?.chapter ?: chapter
+        val next = nextChapterAfter(lastCh) ?: return@LaunchedEffect
+        val cid = next.id
+        val list = runCatching {
+            withTimeout(QUEUED_LOAD_TIMEOUT_MS) { viewModel.repository.getChapterPageImageModels(cid) }
+        }.getOrNull() ?: return@LaunchedEffect
+        val targets = list.mapNotNull { m ->
+            when (m) {
+                is ExtensionPageImage -> Triple(cid, m.pageUrl, m.imageUrl)
+                is String -> Triple(cid, "", m)
+                else -> null
+            }
+        }
+        if (targets.isEmpty()) return@LaunchedEffect
+        nextPrefetchJob.value?.cancel()
+        nextPrefetchJob.value = prefetchScope.launch {
+            withContext(Dispatchers.IO) {
+                for ((ch, pUrl, iUrl) in targets) {
+                    prefetchGate.withPermit {
+                        runCatching { viewModel.repository.getPageImageFile(ch, pUrl, iUrl) }
                     }
                 }
             }
