@@ -1,10 +1,13 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -72,13 +75,14 @@ import com.example.data.local.CategoryEntity
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
 import com.example.ui.MainViewModel
+import com.example.ui.theme.GlassCardBorder
 import com.example.ui.theme.NekoGoldBadge
 import com.example.ui.theme.NekoVioletPrimary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun MangaDetailScreen(
     viewModel: MainViewModel,
@@ -89,6 +93,7 @@ fun MangaDetailScreen(
     onRetry: () -> Unit,
     onBackClick: () -> Unit,
     onChapterClick: (String) -> Unit,
+    onTagClick: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (manga == null) {
@@ -338,65 +343,79 @@ fun MangaDetailScreen(
                 }
             }
 
-            // Action Bar (In Library / Category / Download)
+            // Action Bar (Add to Library / Category / Verify)
             item {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Button(
-                        onClick = {
-                            if (manga.inLibrary) {
-                                viewModel.toggleLibraryStatus(manga.id)
-                            } else {
-                                showCategoryDialog = true
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (manga.inLibrary) MaterialTheme.colorScheme.surfaceVariant else NekoVioletPrimary
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("in_library_button")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(
-                            imageVector = if (manga.inLibrary) Icons.Default.Check else Icons.Default.FavoriteBorder,
-                            contentDescription = "Library Status"
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(if (manga.inLibrary) "In Library" else "Add to Library")
+                        Button(
+                            onClick = {
+                                if (manga.inLibrary) {
+                                    viewModel.toggleLibraryStatus(manga.id)
+                                } else {
+                                    showCategoryDialog = true
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (manga.inLibrary) MaterialTheme.colorScheme.surfaceVariant else NekoVioletPrimary
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("in_library_button")
+                        ) {
+                            Icon(
+                                imageVector = if (manga.inLibrary) Icons.Default.Check else Icons.Default.FavoriteBorder,
+                                contentDescription = "Library Status"
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (manga.inLibrary) "In Library" else "Add to Library",
+                                maxLines = 1
+                            )
+                        }
+
+                        // Cloudflare / site verification — some sources challenge the chapter/detail
+                        // pages too, so open the manga's own page here and solve it.
+                        if (isExtensionManga) {
+                            OutlinedButton(
+                                onClick = { openVerifyWebView() },
+                                modifier = Modifier.testTag("detail_verify_webview_button")
+                            ) {
+                                Icon(Icons.Default.Language, contentDescription = "Verify in WebView")
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Verify", maxLines = 1)
+                            }
+                        }
                     }
 
                     if (manga.inLibrary) {
                         OutlinedButton(
                             onClick = { showCategoryDialog = true },
-                            modifier = Modifier.testTag("category_select_button")
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("category_select_button")
                         ) {
                             Icon(Icons.Default.Folder, contentDescription = "Category")
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(manga.category)
-                        }
-                    }
-
-                    // Cloudflare / site verification — some sources challenge the chapter/detail
-                    // pages too, so open the manga's own page here and solve it.
-                    if (isExtensionManga) {
-                        OutlinedButton(
-                            onClick = { openVerifyWebView() },
-                            modifier = Modifier.testTag("detail_verify_webview_button")
-                        ) {
-                            Icon(Icons.Default.Language, contentDescription = "Verify in WebView")
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Verify in WebView")
+                            Text(manga.category, maxLines = 1)
                         }
                     }
                 }
             }
 
-            // Description / Synopsis
+            // Description / Synopsis + clickable genre tags
             item {
+                val genres = manga.genres
+                    .split(',')
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         text = "Synopsis",
@@ -407,19 +426,43 @@ fun MangaDetailScreen(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
-                        text = manga.description,
+                        text = manga.description.ifBlank { "No synopsis available for this title." },
                         style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                         maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 3,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.clickable { isDescriptionExpanded = !isDescriptionExpanded }
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "Genres: ${manga.genres}",
-                        style = MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.primary)
-                    )
+                    if (genres.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Genres",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        // Tapping a tag opens this source's catalog filtered to that tag/genre.
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            genres.forEach { tag ->
+                                Surface(
+                                    onClick = { onTagClick(tag) },
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    border = BorderStroke(1.dp, GlassCardBorder),
+                                    modifier = Modifier.testTag("genre_tag_$tag")
+                                ) {
+                                    Text(
+                                        text = tag,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
