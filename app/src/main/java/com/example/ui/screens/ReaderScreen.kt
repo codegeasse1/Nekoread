@@ -32,6 +32,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RectangleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
@@ -861,48 +862,54 @@ fun ReaderScreen(
             exit = slideOutVertically(targetOffsetY = { -it }),
             modifier = Modifier.align(Alignment.TopCenter)
         ) {
+            // Compact Tadami-style glass top bar: translucent, full-width, minimal height.
+            // Tapping the empty parts falls through to the reader's tap handler (hide/show HUD).
             Surface(
-                color = Color(0xA6161926),
+                color = Color(0x99101622),
                 contentColor = Color.White,
-                modifier = Modifier.statusBarsPadding()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .border(width = 1.dp, color = Color.White.copy(alpha = 0.08f), shape = RectangleShape)
             ) {
-                TopAppBar(
-                    windowInsets = WindowInsets(0),
-                    title = {
-                        Column {
-                            Text(
-                                text = manga.title,
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                ),
-                                maxLines = 1
-                            )
-                            Text(
-                                text = activeChapter?.name ?: chapter.name,
-                                style = MaterialTheme.typography.bodySmall.copy(color = Color.LightGray),
-                                maxLines = 1
-                            )
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(
-                            onClick = onBackClick,
-                            modifier = Modifier.testTag("reader_back_button")
-                        ) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
-                        }
-                    },
-                    actions = {
-                        IconButton(
-                            onClick = { showSettingsDialog = true },
-                            modifier = Modifier.testTag("reader_settings_button")
-                        ) {
-                            Icon(Icons.Default.Settings, contentDescription = "Reader Settings", tint = Color.White)
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = onBackClick,
+                        modifier = Modifier.size(40.dp).testTag("reader_back_button")
+                    ) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = manga.title,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            ),
+                            maxLines = 1
+                        )
+                        Text(
+                            text = activeChapter?.name ?: chapter.name,
+                            style = MaterialTheme.typography.bodySmall.copy(color = Color.LightGray),
+                            maxLines = 1
+                        )
+                    }
+                    IconButton(
+                        onClick = { showSettingsDialog = true },
+                        modifier = Modifier.size(40.dp).testTag("reader_settings_button")
+                    ) {
+                        Icon(Icons.Default.Settings, contentDescription = "Reader Settings", tint = Color.White)
+                    }
+                }
             }
         }
 
@@ -914,14 +921,17 @@ fun ReaderScreen(
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
             Surface(
-                color = Color(0xA6161926),
+                color = Color(0x99101622),
                 contentColor = Color.White,
-                modifier = Modifier.navigationBarsPadding()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .border(width = 1.dp, color = Color.White.copy(alpha = 0.08f), shape = RectangleShape)
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .padding(horizontal = 10.dp, vertical = 2.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -930,7 +940,8 @@ fun ReaderScreen(
                     ) {
                         IconButton(
                             onClick = { prevChapter?.let { onChapterChange(it.id) } },
-                            enabled = prevChapter != null
+                            enabled = prevChapter != null,
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.NavigateBefore,
@@ -969,7 +980,8 @@ fun ReaderScreen(
 
                         IconButton(
                             onClick = { nextChapter?.let { onChapterChange(it.id) } },
-                            enabled = nextChapter != null
+                            enabled = nextChapter != null,
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.NavigateNext,
@@ -1223,13 +1235,20 @@ private fun ReaderToolButton(
     label: String,
     onClick: () -> Unit
 ) {
-    TextButton(
-        onClick = onClick,
-        colors = ButtonDefaults.textButtonColors(contentColor = Color.White)
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Icon(icon, contentDescription = label, modifier = Modifier.size(18.dp))
-        Spacer(modifier = Modifier.width(4.dp))
-        Text(label, style = MaterialTheme.typography.labelMedium)
+        Icon(icon, contentDescription = label, modifier = Modifier.size(15.dp), tint = Color.White)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+            color = Color.White
+        )
     }
 }
 
