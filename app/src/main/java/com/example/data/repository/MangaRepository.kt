@@ -81,10 +81,17 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
 
     fun getChaptersFlow(mangaId: String): Flow<List<ChapterEntity>> = db.chapterDao().getChaptersForManga(mangaId)
 
-    /** Live catalog search against a real source. Results are upserted so the detail screen works offline. */
+    /** Live catalog search against a real source. Results are upserted so the detail screen works offline.
+     *  A query prefixed with "tag:" (e.g. "tag:Action") searches by tag/genre instead of title. */
     suspend fun searchCatalog(sourceId: String, query: String, page: Int): List<MangaEntity> = withContext(Dispatchers.IO) {
         val src = SourceRegistry.source(sourceId)
-        val results = if (query.isBlank()) src.latest(page) else src.search(query, page)
+        val results = if (query.startsWith("tag:")) {
+            src.searchByTag(query.removePrefix("tag:").trim(), page)
+        } else if (query.isBlank()) {
+            src.latest(page)
+        } else {
+            src.search(query, page)
+        }
         if (results.isNotEmpty()) {
             // Never overwrite rows that are already tracked (library state, reading progress).
             val fresh = mutableListOf<MangaEntity>()
@@ -98,11 +105,35 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         results
     }
 
-    /** Make sure a manga fetched from a catalog exists in the DB before opening its detail screen. */
+    /** Make sure a manga fetched from a catalog exists in the DB before opening its detail screen,
+     *  and always refresh its details from the source so the description/genres/status stay current
+     *  (catalog search rows can arrive with an empty description). Library state and reading
+     *  progress are preserved. A failed refresh never blocks: cached data (if any) is kept. */
     suspend fun ensureMangaInDb(fullMangaId: String) = withContext(Dispatchers.IO) {
-        if (db.mangaDao().getMangaById(fullMangaId) != null) return@withContext
-        val manga = SourceRegistry.source(fullMangaId.substringBefore(":")).getDetails(fullMangaId)
-        db.mangaDao().insertManga(manga)
+        val existing = db.mangaDao().getMangaById(fullMangaId)
+        val fresh = try {
+            SourceRegistry.source(fullMangaId.substringBefore(":")).getDetails(fullMangaId)
+        } catch (e: Throwable) {
+            if (existing == null) throw e
+            null
+        }
+        if (existing == null) {
+            fresh?.let { db.mangaDao().insertManga(it) }
+        } else if (fresh != null) {
+            db.mangaDao().updateManga(
+                fresh.copy(
+                    inLibrary = existing.inLibrary,
+                    category = existing.category,
+                    lastReadChapterId = existing.lastReadChapterId,
+                    lastReadChapterName = existing.lastReadChapterName,
+                    lastReadPage = existing.lastReadPage,
+                    lastReadTimestamp = existing.lastReadTimestamp,
+                    unreadCount = existing.unreadCount,
+                    bookmarkCount = existing.bookmarkCount,
+                    rating = existing.rating
+                )
+            )
+        }
     }
 
     /**
