@@ -381,8 +381,8 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
      * downloaded file is deleted and an error is reported if loading fails for any reason.
      * Returns an error message on failure, or null on success.
      */
-    suspend fun installExtension(packageName: String): String? = withContext(Dispatchers.IO) {
-        val ext = db.extensionDao().getExtension(packageName) ?: return@withContext "Extension not found"
+    suspend fun installExtension(packageName: String, repoId: String): String? = withContext(Dispatchers.IO) {
+        val ext = db.extensionDao().getExtension(packageName, repoId) ?: return@withContext "Extension not found"
         if (ext.apkUrl.isBlank()) return@withContext "This extension has no APK URL"
 
         val dest = apkFile(packageName)
@@ -392,10 +392,10 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         try {
             ExtensionNetwork.downloadApk(ext.apkUrl, dest)
         } catch (e: ExtensionNetworkException) {
-            db.extensionDao().updateExtensionInstallState(packageName, false, null, e.message)
+            db.extensionDao().updateExtensionInstallState(packageName, repoId, false, null, e.message)
             return@withContext e.message
         } catch (e: Exception) {
-            db.extensionDao().updateExtensionInstallState(packageName, false, null, "Download failed")
+            db.extensionDao().updateExtensionInstallState(packageName, repoId, false, null, "Download failed")
             return@withContext "Download failed: ${e.message ?: "unknown error"}"
         }
 
@@ -410,7 +410,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         }
         if (info != null && info.packageName != packageName) {
             dest.delete()
-            db.extensionDao().updateExtensionInstallState(packageName, false, null, "Package mismatch")
+            db.extensionDao().updateExtensionInstallState(packageName, repoId, false, null, "Package mismatch")
             return@withContext "APK package (${info.packageName}) does not match index package ($packageName)"
         }
 
@@ -423,17 +423,20 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
             val sources = ExtensionDexLoader.loadApk(dest, dexCacheDir(), packageName, app)
             val registered = registerExtensionSources(ext, sources)
             if (!registered) {
-                db.extensionDao().updateExtensionInstallState(packageName, false, null, "No sources in extension")
+                db.extensionDao().updateExtensionInstallState(packageName, repoId, false, null, "No sources in extension")
                 return@withContext "Extension APK contained no browsable sources"
             }
         } catch (e: Throwable) {
             // Keep the downloaded APK so a reinstall doesn't need to re-download it.
             val msg = e.message ?: "unknown error"
-            db.extensionDao().updateExtensionInstallState(packageName, false, null, msg)
+            db.extensionDao().updateExtensionInstallState(packageName, repoId, false, null, msg)
             return@withContext "Couldn't load extension: $msg"
         }
 
-        db.extensionDao().updateExtensionInstallState(packageName, true, ext.versionName, null)
+        // Only this repo's build is the installed one; other repos' rows for the same package
+        // are just "available in this other repo".
+        db.extensionDao().clearInstalledState(packageName)
+        db.extensionDao().updateExtensionInstallState(packageName, repoId, true, ext.versionName, null)
         null
     }
 
@@ -449,7 +452,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         for (ext in installed) {
             val dest = apkFile(ext.packageName)
             if (!dest.exists()) {
-                db.extensionDao().updateExtensionInstallState(ext.packageName, false, null, "APK file missing")
+                db.extensionDao().updateExtensionInstallState(ext.packageName, ext.repoId, false, null, "APK file missing")
                 continue
             }
             try {
@@ -457,10 +460,10 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
                 val sources = ExtensionDexLoader.loadApk(dest, dexCacheDir(), ext.packageName, app)
                 val registered = registerExtensionSources(ext, sources)
                 if (!registered) {
-                    db.extensionDao().updateExtensionInstallState(ext.packageName, false, null, "No browsable sources in extension")
+                    db.extensionDao().updateExtensionInstallState(ext.packageName, ext.repoId, false, null, "No browsable sources in extension")
                 }
             } catch (e: Throwable) {
-                db.extensionDao().updateExtensionInstallState(ext.packageName, false, null, e.message)
+                db.extensionDao().updateExtensionInstallState(ext.packageName, ext.repoId, false, null, e.message)
             }
         }
     }
@@ -498,14 +501,15 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
     }
 
     /** Remove an installed extension: delete its APK and deactivate its sources. */
-    suspend fun uninstallExtension(packageName: String): String? = withContext(Dispatchers.IO) {
-        if (db.extensionDao().getExtension(packageName) == null) {
+    suspend fun uninstallExtension(packageName: String, repoId: String): String? = withContext(Dispatchers.IO) {
+        if (db.extensionDao().getExtension(packageName, repoId) == null) {
             return@withContext "Extension not found"
         }
         apkFile(packageName).delete()
         ExtensionDexLoader.unregisterExtension(packageName)
         db.extensionDao().deleteSourcesByExtension(packageName)
-        db.extensionDao().updateExtensionInstallState(packageName, false, null, null)
+        db.extensionDao().clearInstalledState(packageName)
+        db.extensionDao().updateExtensionInstallState(packageName, repoId, false, null, null)
         null
     }
 
