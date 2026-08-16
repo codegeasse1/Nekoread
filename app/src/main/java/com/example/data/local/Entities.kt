@@ -62,10 +62,14 @@ data class ExtensionRepoEntity(
  * A single extension available from a repo (e.g. "MangaDex" APK from the keiyoushi repo).
  * Install/uninstall actually downloads the APK into app-private storage and validates it against
  * the extension manifest before marking [isInstalled].
+ *
+ * Keyed on (packageName, repoId) — two repos can ship the SAME extension (e.g. keiyoushi's newer
+ * "The Blank" + a personal fork), and both versions must be listed like in Mihon/Tadami, with the
+ * user picking which repo's build to install.
  */
-@Entity(tableName = "extensions")
+@Entity(tableName = "extensions", primaryKeys = ["packageName", "repoId"])
 data class ExtensionEntity(
-    @PrimaryKey val packageName: String,
+    val packageName: String,
     val repoId: String,
     val name: String,
     val versionName: String,
