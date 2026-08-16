@@ -95,6 +95,10 @@ class MainActivity : ComponentActivity() {
         Coil.setImageLoader(
             ImageLoader.Builder(this)
                 .okHttpClient(NetworkHelper.getInstance().client)
+                // Memory cache sized so the reader's large decoded pages can never blow the heap
+                // (covers are small thumbnails; pages also live on the disk cache below, so a
+                // memory miss just re-decodes from disk instead of re-downloading).
+                .memoryCacheSize(percent = 0.12f)
                 // Disk cache so a loaded cover/page stays on-device: scrolling back to a screen or
                 // returning after the reader shows thumbnails instantly instead of re-downloading
                 // the whole grid (which is what left covers blank/"loading" after navigation).
