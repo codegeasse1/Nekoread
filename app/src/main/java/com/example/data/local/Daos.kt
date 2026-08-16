@@ -120,8 +120,8 @@ interface ExtensionDao {
     @Query("SELECT * FROM extensions WHERE repoId = :repoId ORDER BY name ASC")
     suspend fun getExtensionsByRepo(repoId: String): List<ExtensionEntity>
 
-    @Query("SELECT * FROM extensions WHERE packageName = :packageName")
-    suspend fun getExtension(packageName: String): ExtensionEntity?
+    @Query("SELECT * FROM extensions WHERE packageName = :packageName AND repoId = :repoId")
+    suspend fun getExtension(packageName: String, repoId: String): ExtensionEntity?
 
     @Query("SELECT * FROM extensions WHERE isInstalled = 1 ORDER BY name ASC")
     fun getInstalledExtensions(): Flow<List<ExtensionEntity>>
@@ -135,11 +135,15 @@ interface ExtensionDao {
     @Query("DELETE FROM extensions WHERE repoId = :repoId")
     suspend fun deleteExtensionsByRepo(repoId: String)
 
-    @Query("DELETE FROM extensions WHERE packageName = :packageName")
-    suspend fun deleteExtension(packageName: String)
+    @Query("DELETE FROM extensions WHERE packageName = :packageName AND repoId = :repoId")
+    suspend fun deleteExtension(packageName: String, repoId: String)
 
-    @Query("UPDATE extensions SET isInstalled = :installed, installedVersionName = :installedVersion, installError = :error WHERE packageName = :packageName")
-    suspend fun updateExtensionInstallState(packageName: String, installed: Boolean, installedVersion: String?, error: String?)
+    @Query("UPDATE extensions SET isInstalled = :installed, installedVersionName = :installedVersion, installError = :error WHERE packageName = :packageName AND repoId = :repoId")
+    suspend fun updateExtensionInstallState(packageName: String, repoId: String, installed: Boolean, installedVersion: String?, error: String?)
+
+    /** Only one APK per package can be installed — installing from another repo unmarks the others. */
+    @Query("UPDATE extensions SET isInstalled = 0 WHERE packageName = :packageName")
+    suspend fun clearInstalledState(packageName: String)
 
     @Query("SELECT * FROM extension_sources ORDER BY name ASC")
     fun getAllSources(): Flow<List<ExtensionSourceEntity>>
