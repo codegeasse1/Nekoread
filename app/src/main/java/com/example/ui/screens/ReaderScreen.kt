@@ -326,9 +326,11 @@ fun ReaderScreen(
     }
     DisposableEffect(Unit) {
         onDispose {
-            val window = (view.context as? Activity)?.window ?: return@DisposableEffect
-            WindowCompat.getInsetsController(window, window.decorView)
-                .show(WindowInsetsCompat.Type.systemBars())
+            val activity = view.context as? Activity
+            if (activity != null) {
+                WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+                    .show(WindowInsetsCompat.Type.systemBars())
+            }
         }
     }
 
