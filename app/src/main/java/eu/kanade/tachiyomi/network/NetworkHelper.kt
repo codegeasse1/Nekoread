@@ -5,6 +5,7 @@ import android.content.Context
 import eu.kanade.tachiyomi.AppInfo
 import eu.kanade.tachiyomi.network.interceptor.ApexWwwRetryInterceptor
 import eu.kanade.tachiyomi.network.interceptor.CloudflareInterceptor
+import eu.kanade.tachiyomi.network.interceptor.RetryInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UncaughtExceptionInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UserAgentInterceptor
 import eu.kanade.tachiyomi.util.defaultJson
@@ -70,6 +71,7 @@ class NetworkHelper(context: Context) {
             .addInterceptor(UncaughtExceptionInterceptor())
             .addInterceptor(UserAgentInterceptor(::defaultUserAgentProvider))
             .addInterceptor(ApexWwwRetryInterceptor())
+            .addInterceptor(RetryInterceptor())
     }
 
     /** The one client extensions use. Automatically solves Cloudflare challenges via a hidden WebView. */
