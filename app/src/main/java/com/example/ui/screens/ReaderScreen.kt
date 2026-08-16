@@ -32,7 +32,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RectangleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
@@ -870,7 +869,7 @@ fun ReaderScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .border(width = 1.dp, color = Color.White.copy(alpha = 0.08f), shape = RectangleShape)
+                    .border(width = 1.dp, color = Color.White.copy(alpha = 0.08f))
             ) {
                 Row(
                     modifier = Modifier
@@ -926,7 +925,7 @@ fun ReaderScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding()
-                    .border(width = 1.dp, color = Color.White.copy(alpha = 0.08f), shape = RectangleShape)
+                    .border(width = 1.dp, color = Color.White.copy(alpha = 0.08f))
             ) {
                 Column(
                     modifier = Modifier
