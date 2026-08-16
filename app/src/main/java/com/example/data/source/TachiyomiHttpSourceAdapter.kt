@@ -10,10 +10,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Bridges a DexClassLoader-loaded Tachiyomi [HttpSource] (from an installed extension APK) onto
@@ -93,12 +96,22 @@ class TachiyomiHttpSourceAdapter(
     private fun idOf(mangaUrl: String): String = "${this.id}:" + b64(mangaUrl)
 
     // Nekoread drives extensions through the SUSPEND API (getLatestUpdates/getPopularManga/
-    // getSearchManga/getMangaDetails/getChapterList/getPageList/getImageUrl) — exactly what
-    // Tadami/Mihon call. The old Rx fetch* methods are still provided by the vendored HttpSource
-    // for lib-1.4 sources (their defaults run request+parse), but keiyoushi lib-1.6 (KeiSource)
-    // sources force those Rx methods to throw, so calling fetch* directly broke sources like 4KHD.
+    // getSearchManga/getPageList/getImageUrl) — exactly what Tadami/Mihon call. The old Rx fetch*
+    // methods are still provided by the vendored HttpSource for lib-1.4 sources (their defaults run
+    // request+parse), but keiyoushi lib-1.6 (KeiSource) sources force those Rx methods to throw, so
+    // calling fetch* directly broke sources like 4KHD. KeiSource instead routes EVERYTHING through
+    // the modern getMangaUpdate(manga, chapters, fetchDetails, fetchChapters) API, so details and
+    // chapters are fetched through that — its default in MangaSource still bridges back to
+    // getMangaDetails/getChapterList, so old lib-1.4 sources keep working unchanged.
     private suspend fun <T> loading(tag: String, block: suspend () -> T): T =
         withTimeout(120_000) { block() }
+
+    // KeiSource forbids calling getMangaUpdate concurrently for the same manga (it has an
+    // in-flight check keyed by url that throws), so serialize details/chapter fetches per manga.
+    private val mangaLocks = ConcurrentHashMap<String, Mutex>()
+
+    private suspend fun <T> withMangaLock(mangaUrl: String, block: suspend () -> T): T =
+        mangaLocks.getOrPut(mangaUrl) { Mutex() }.withLock { block() }
 
     override suspend fun search(query: String, page: Int): List<MangaEntity> = withContext(Dispatchers.IO) {
         loading("search") { ext.getSearchManga(page, query, FilterList()) }
@@ -113,11 +126,22 @@ class TachiyomiHttpSourceAdapter(
     }
 
     override suspend fun getDetails(fullMangaId: String): MangaEntity = withContext(Dispatchers.IO) {
-        loading("details") { ext.getMangaDetails(sm(mangaUrl(fullMangaId))) }.toManga()
+        val rawUrl = mangaUrl(fullMangaId)
+        val update = withMangaLock(rawUrl) {
+            loading("details") {
+                ext.getMangaUpdate(sm(rawUrl), emptyList(), fetchDetails = true, fetchChapters = false)
+            }
+        }
+        update.manga.toManga()
     }
 
     override suspend fun getChapters(fullMangaId: String): List<ChapterEntity> = withContext(Dispatchers.IO) {
-        val chapters = loading("chapters") { ext.getChapterList(sm(mangaUrl(fullMangaId))) }
+        val rawUrl = mangaUrl(fullMangaId)
+        val chapters = withMangaLock(rawUrl) {
+            loading("chapters") {
+                ext.getMangaUpdate(sm(rawUrl), emptyList(), fetchDetails = false, fetchChapters = true).chapters
+            }
+        }
             .mapIndexed { i, ch -> ch.toChapter(fullMangaId) }
         // Sources that don't set chapter_number leave the SChapter default (-1) on every chapter,
         // which shows "-1" all over the UI and breaks chapter ordering, prev/next navigation and
