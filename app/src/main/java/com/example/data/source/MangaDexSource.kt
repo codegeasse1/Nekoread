@@ -82,7 +82,7 @@ object MangaDexSource : MangaSource {
     private fun mangaListUrl(query: String, page: Int): String {
         val builder = (API + "/manga").toHttpUrl().newBuilder()
             .addQueryParameter("limit", PAGE_SIZE.toString())
-            .addQueryParameter("offset", (page * PAGE_SIZE).toString())
+            .addQueryParameter("offset", ((page - 1) * PAGE_SIZE).toString())
             .addQueryParameter("hasAvailableChapters", "true")
             .addQueryParameter("includes[]", "cover_art")
             .addQueryParameter("includes[]", "author")
@@ -125,7 +125,7 @@ object MangaDexSource : MangaSource {
         if (tagId == null) return@withContext search(tag, page)
         val url = (API + "/manga").toHttpUrl().newBuilder()
             .addQueryParameter("limit", PAGE_SIZE.toString())
-            .addQueryParameter("offset", (page * PAGE_SIZE).toString())
+            .addQueryParameter("offset", ((page - 1) * PAGE_SIZE).toString())
             .addQueryParameter("hasAvailableChapters", "true")
             .addQueryParameter("includes[]", "cover_art")
             .addQueryParameter("includes[]", "author")
@@ -147,7 +147,7 @@ object MangaDexSource : MangaSource {
     override suspend fun popular(page: Int): List<MangaEntity> = withContext(Dispatchers.IO) {
         val url = (API + "/manga").toHttpUrl().newBuilder()
             .addQueryParameter("limit", PAGE_SIZE.toString())
-            .addQueryParameter("offset", (page * PAGE_SIZE).toString())
+            .addQueryParameter("offset", ((page - 1) * PAGE_SIZE).toString())
             .addQueryParameter("hasAvailableChapters", "true")
             .addQueryParameter("includes[]", "cover_art")
             .addQueryParameter("includes[]", "author")
