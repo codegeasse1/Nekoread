@@ -366,6 +366,9 @@ fun BrowseScreen(
                             containerColor = Color.Transparent,
                             edgePadding = 8.dp
                         ) {
+                            // Tadami-style badge: the Extensions tab shows how many installed
+                            // extensions have a newer version available in their repo.
+                            val pendingUpdates = extensions.count { hasUpdate(it) }
                             tabs.forEachIndexed { index, title ->
                                 Tab(
                                     selected = selectedTabIndex == index,
@@ -377,7 +380,33 @@ fun BrowseScreen(
                                             viewModel.loadCatalog(activeSourceId, searchQuery)
                                         }
                                     },
-                                    text = { Text(title, fontWeight = FontWeight.Bold) },
+                                    text = {
+                                        if (index == TAB_EXTENSIONS && pendingUpdates > 0) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Text(title, fontWeight = FontWeight.Bold)
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(20.dp)
+                                                        .clip(CircleShape)
+                                                        .background(NekoGoldBadge),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        text = if (pendingUpdates > 99) "99+" else "$pendingUpdates",
+                                                        style = MaterialTheme.typography.labelSmall.copy(
+                                                            color = Color.White,
+                                                            fontWeight = FontWeight.Bold
+                                                        )
+                                                    )
+                                                }
+                                            }
+                                        } else {
+                                            Text(title, fontWeight = FontWeight.Bold)
+                                        }
+                                    },
                                     modifier = Modifier.testTag("browse_tab_$index")
                                 )
                             }
@@ -439,7 +468,8 @@ fun BrowseScreen(
                     repoNameById = repoNameById,
                     busyKey = opBusy,
                     onInstall = { ext -> viewModel.installExtension(ext.packageName, ext.repoId) },
-                    onUninstall = { ext -> viewModel.uninstallExtension(ext.packageName, ext.repoId) }
+                    onUninstall = { ext -> viewModel.uninstallExtension(ext.packageName, ext.repoId) },
+                    onUpdateAll = { exts -> viewModel.updateAllExtensions(exts) }
                 )
                 TAB_REPOS -> ReposTabContent(
                     repos = extensionRepos,
@@ -1063,7 +1093,8 @@ fun ExtensionsTabContent(
     repoNameById: Map<String, String>,
     busyKey: String?,
     onInstall: (ExtensionEntity) -> Unit,
-    onUninstall: (ExtensionEntity) -> Unit
+    onUninstall: (ExtensionEntity) -> Unit,
+    onUpdateAll: (List<ExtensionEntity>) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
     // Show EVERY extension from every repo (exactly like Tadami). The only de-duplication is at
@@ -1078,6 +1109,13 @@ fun ExtensionsTabContent(
                 it.packageName.contains(query, ignoreCase = true)
         }
     }
+
+    // Tadami-style sectioning: pending updates float to the top with their own "Update all"
+    // header, installed extensions follow, then everything else that's still available.
+    val updatesPending = remember(filtered) { filtered.filter { hasUpdate(it) } }
+    val installedStable = remember(filtered) { filtered.filter { it.isInstalled && !hasUpdate(it) } }
+    val available = remember(filtered) { filtered.filter { !it.isInstalled } }
+    val updatingAll = busyKey == "update_all"
 
     Column(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -1115,10 +1153,102 @@ fun ExtensionsTabContent(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            items(filtered, key = { "${it.packageName}_${it.repoId}" }) { ext ->
-                val repoName = repoNameById[ext.repoId] ?: "Custom Repo"
-                val isBusy = busyKey == "install_${ext.packageName}_${ext.repoId}" || busyKey == "uninstall_${ext.packageName}_${ext.repoId}"
-                val cwLabel = contentWarningLabel(ext.contentWarning)
+            if (updatesPending.isNotEmpty()) {
+                item(key = "header_updates") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Updates pending (${updatesPending.size})",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = NekoGoldBadge
+                        )
+                        if (updatingAll) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Updating...",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        } else {
+                            Button(
+                                onClick = { onUpdateAll(updatesPending) },
+                                modifier = Modifier.testTag("update_all_button")
+                            ) {
+                                Text("Update all")
+                            }
+                        }
+                    }
+                }
+                items(updatesPending, key = { "${it.packageName}_${it.repoId}" }) { ext ->
+                    ExtensionCardRow(
+                        ext = ext,
+                        repoName = repoNameById[ext.repoId] ?: "Custom Repo",
+                        busyKey = busyKey,
+                        onInstall = onInstall,
+                        onUninstall = onUninstall
+                    )
+                }
+            }
+
+            if (installedStable.isNotEmpty()) {
+                item(key = "header_installed") {
+                    SectionLabel(text = "Installed (${installedStable.size})")
+                }
+                items(installedStable, key = { "inst_${it.packageName}_${it.repoId}" }) { ext ->
+                    ExtensionCardRow(
+                        ext = ext,
+                        repoName = repoNameById[ext.repoId] ?: "Custom Repo",
+                        busyKey = busyKey,
+                        onInstall = onInstall,
+                        onUninstall = onUninstall
+                    )
+                }
+            }
+
+            if (available.isNotEmpty()) {
+                item(key = "header_available") {
+                    SectionLabel(text = "Available (${available.size})")
+                }
+                items(available, key = { "av_${it.packageName}_${it.repoId}" }) { ext ->
+                    ExtensionCardRow(
+                        ext = ext,
+                        repoName = repoNameById[ext.repoId] ?: "Custom Repo",
+                        busyKey = busyKey,
+                        onInstall = onInstall,
+                        onUninstall = onUninstall
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 8.dp)
+    )
+}
+
+@Composable
+private fun ExtensionCardRow(
+    ext: ExtensionEntity,
+    repoName: String,
+    busyKey: String?,
+    onInstall: (ExtensionEntity) -> Unit,
+    onUninstall: (ExtensionEntity) -> Unit
+) {
+    val isBusy = busyKey == "install_${ext.packageName}_${ext.repoId}" || busyKey == "uninstall_${ext.packageName}_${ext.repoId}"
+    val cwLabel = contentWarningLabel(ext.contentWarning)
 
                 GlassCard(modifier = Modifier
                     .fillMaxWidth()
@@ -1250,9 +1380,6 @@ fun ExtensionsTabContent(
                     }
                 }
             }
-        }
-    }
-}
 
 @Composable
 fun ReposTabContent(
