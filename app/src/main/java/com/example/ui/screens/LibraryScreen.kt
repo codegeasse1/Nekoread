@@ -494,7 +494,7 @@ fun LibraryScreen(
         AlertDialog(
             onDismissRequest = { showClearLibraryConfirm = false },
             title = { Text("Clear library?") },
-            text = { Text("Remove every title from your library? Your reading history is kept.") },
+            text = { Text("Remove every title from your library? Reading history for those titles is cleared too.") },
             confirmButton = {
                 TextButton(
                     onClick = {
