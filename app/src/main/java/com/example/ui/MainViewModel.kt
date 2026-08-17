@@ -66,7 +66,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _showPageNumber = MutableStateFlow(true)
     val showPageNumber: StateFlow<Boolean> = _showPageNumber.asStateFlow()
 
-    private val _readerFit = MutableStateFlow(ReaderFit.FIT)
+    private val _readerFit = MutableStateFlow(ReaderFit.FIT_WIDTH)
     val readerFit: StateFlow<ReaderFit> = _readerFit.asStateFlow()
 
     init {
@@ -74,7 +74,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _readerMode.value = ReaderMode.valueOf(prefs.getString("reader_mode", ReaderMode.WEBTOON.name)!!)
         _readerBg.value = ReaderBg.valueOf(prefs.getString("reader_bg", ReaderBg.PURE_BLACK.name)!!)
         _showPageNumber.value = prefs.getBoolean("show_page_number", true)
-        _readerFit.value = ReaderFit.valueOf(prefs.getString("reader_fit", ReaderFit.FIT.name)!!)
+        _readerFit.value = ReaderFit.valueOf(prefs.getString("reader_fit", ReaderFit.FIT_WIDTH.name)!!)
     }
 
     // Library Filter & Search
