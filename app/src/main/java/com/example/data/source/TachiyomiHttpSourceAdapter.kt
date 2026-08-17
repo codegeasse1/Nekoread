@@ -4,6 +4,7 @@ import android.util.Base64
 import com.example.data.extension.ExtensionDexLoader
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -119,11 +120,24 @@ class TachiyomiHttpSourceAdapter(
             .map { it.toManga() }
     }
 
-    // Tag search for extension sources: keiyoushi sources don't expose a portable per-tag API, so
-    // the safest cross-version behavior is a plain keyword search (the tag is a real word in the
-    // catalog, so it surfaces the tagged titles). MangaDex (the built-in source) has true tag
-    // filtering via its API's includedTags[].
-    override suspend fun searchByTag(tag: String, page: Int): List<MangaEntity> = search(tag, page)
+    // Tag search for extension sources: find the genre filter in the source's own filter list whose
+    // name matches the tapped tag, set it to INCLUDED, and run the source's real genre-filtered
+    // search (the exact mechanism Mihon's filter UI uses) — so a tag tap shows every manga carrying
+    // that genre, not a fuzzy title match. If no filter matches the tag, fall back to a plain
+    // keyword search so the tap still returns something instead of an empty page.
+    override suspend fun searchByTag(tag: String, page: Int): List<MangaEntity> = withContext(Dispatchers.IO) {
+        val base = runCatching { ext.getFilterList() }.getOrNull().orEmpty()
+        val genre = base.filterIsInstance<Filter.TriState>()
+            .firstOrNull { it.name.equals(tag.trim(), ignoreCase = true) }
+        loading("searchByTag") {
+            if (genre != null) {
+                genre.state = Filter.TriState.STATE_INCLUDE
+                ext.getSearchManga(page, "", FilterList(base))
+            } else {
+                ext.getSearchManga(page, tag, FilterList())
+            }
+        }.mangas.map { it.toManga() }
+    }
 
     override suspend fun latest(page: Int): List<MangaEntity> = withContext(Dispatchers.IO) {
         loading("latest") { ext.getLatestUpdates(page) }
