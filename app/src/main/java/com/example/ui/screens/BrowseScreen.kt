@@ -118,6 +118,16 @@ private fun contentWarningLabel(cw: String): String? = when (cw) {
     else -> cw.ifBlank { null }
 }
 
+/** True when a NEWER build of an installed extension exists in its repo. Compares numeric
+ *  versionCodes (the same check Mihon/Tadami use for their update badges) — the display
+ *  versionName is just for showing "v1 → v2". */
+private fun hasUpdate(ext: ExtensionEntity): Boolean {
+    if (!ext.isInstalled) return false
+    val installed = ext.installedVersionCode?.toLongOrNull() ?: return false
+    val available = ext.versionCode.toLongOrNull() ?: return false
+    return available > installed
+}
+
 /**
  * Loads the extension's launcher icon straight from its stored APK (the same source Tadami shows)
  * without installing it. Falls back to the repo index icon URL when no APK is present or readable.
@@ -1163,16 +1173,29 @@ fun ExtensionsTabContent(
                                 if (ext.isInstalled) {
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Surface(
-                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        color = if (hasUpdate(ext)) NekoGoldBadge else MaterialTheme.colorScheme.primaryContainer,
                                         shape = RoundedCornerShape(4.dp)
                                     ) {
                                         Text(
-                                            text = "Installed${if (ext.installError != null) " • Error" else ""}",
+                                            text = if (hasUpdate(ext)) "Update available" else "Installed${if (ext.installError != null) " • Error" else ""}",
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                             style = MaterialTheme.typography.labelSmall.copy(
                                                 color = if (ext.installError != null) MaterialTheme.colorScheme.error
+                                                else if (hasUpdate(ext)) Color.White
                                                 else MaterialTheme.colorScheme.onPrimaryContainer
                                             )
+                                        )
+                                    }
+                                    if (hasUpdate(ext)) {
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = "v${ext.installedVersionName} → v${ext.versionName}",
+                                            style = MaterialTheme.typography.labelMedium.copy(
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Bold
+                                            ),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
                                 }
@@ -1192,6 +1215,22 @@ fun ExtensionsTabContent(
 
                             if (isBusy) {
                                 CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
+                            } else if (ext.isInstalled && hasUpdate(ext)) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Button(
+                                        onClick = { onInstall(ext) },
+                                        modifier = Modifier.testTag("update_${ext.packageName}_${ext.repoId}")
+                                    ) {
+                                        Text("Update")
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    OutlinedButton(
+                                        onClick = { onUninstall(ext) },
+                                        modifier = Modifier.testTag("uninstall_${ext.packageName}_${ext.repoId}")
+                                    ) {
+                                        Text("Uninstall")
+                                    }
+                                }
                             } else if (ext.isInstalled) {
                                 OutlinedButton(
                                     onClick = { onUninstall(ext) },
