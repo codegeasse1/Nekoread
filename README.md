@@ -2,7 +2,7 @@
 
 # NekoRead
 
-**A fast, modern manga & manhwa reader for Android.** Browse real catalogs, read real chapters, and keep a library — all through pluggable sources that run inside the app.
+**A fast, modern manga & manhwa reader for Android.** Browse catalogs, read chapters, and keep a library — all through pluggable sources that run inside the app.
 
 [![Platform](https://img.shields.io/badge/Platform-Android-3DDC84?logo=android&logoColor=white)](https://github.com/codegeasse1/Nekoread)
 [![Language](https://img.shields.io/badge/Language-Kotlin-7F52FF?logo=kotlin&logoColor=white)](https://github.com/codegeasse1/Nekoread)
@@ -18,7 +18,7 @@
 
 NekoRead is a free, open-source manga reader for Android, written in **Kotlin** with **Jetpack Compose** and **Room**.
 
-It loads **real manga, real chapters and real page images** through a pluggable source layer — no dummy data, no fake catalogs. Browse, search, read and track everything against live source data.
+It loads manga, chapters and page images through a pluggable source layer. Browse, search, read and track everything against live source data.
 
 ## Features
 
@@ -33,9 +33,9 @@ It loads **real manga, real chapters and real page images** through a pluggable 
 
 ### Sources & extensions
 - **Built-in MangaDex source** using the official public API (no account needed)
-- **Extension repositories** — add community repos by index URL (`index.json`, `repo.json`, `index.min.json` and legacy formats are auto-detected); extension counts and update times come from the server, never from hardcoded numbers
+- **Extension repositories** — add community repos by index URL (`index.json`, `repo.json`, `index.min.json` and legacy formats are auto-detected)
 - **Extensions install as APKs** into app-private storage and their sources go online instantly — uninstalling removes them cleanly
-- **In-app browsing** — search, catalog, details, chapters and reading all run inside the app through the real extension engine
+- **In-app browsing** — search, catalog, details, chapters and reading all run inside the app through the extension engine
 - **Cloudflare helper** — a built-in site-verification dialog for sources behind Cloudflare walls
 
 ### Library
@@ -52,7 +52,7 @@ Get the latest debug build:
 
 > **Requires Android 7.0 (API 24) or newer.** When your browser asks, allow installing apps from unknown sources.
 >
-> Debug builds are unsigned — Android will warn you. This is expected and safe for testing.
+> APKs are signed with NekoRead's signing key, so you can update in place once installed.
 
 ## Getting started
 
