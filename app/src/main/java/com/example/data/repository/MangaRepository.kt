@@ -54,23 +54,33 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
 
         // Sources come from installed extensions only (like Tadami) â nothing is seeded here.
 
-        // Seed the well-known repos only on first launch. Counts are fetched live afterwards.
-        val repoList = db.extensionDao().getAllRepos().first()
-        if (repoList.isEmpty()) {
-            db.extensionDao().insertRepos(ExtensionEngine.defaultRepos)
+        // Seed the well-known repos ADDITIVELY, not just on first launch: an app update can add
+        // new default repos (e.g. the user's own repo) that existing installs must pick up too.
+        // A default repo the user deleted is remembered and never re-seeded, so deleting works
+        // exactly like deleting any other repo.
+        val prefs = app.getSharedPreferences("nekoread_settings", Context.MODE_PRIVATE)
+        val deletedDefaults = prefs.getStringSet("deleted_default_repos", emptySet()) ?: emptySet()
+        var existing = db.extensionDao().getAllReposOnce()
+        for (def in ExtensionEngine.defaultRepos) {
+            if (def.id in deletedDefaults) continue
+            val alreadyPresent = existing.any { canonicalRepoUrl(it.url) == canonicalRepoUrl(def.url) }
+            if (!alreadyPresent) {
+                db.extensionDao().insertRepo(def)
+                existing = existing + def
+            }
         }
     }
 
-    /** Refresh every repo that has never been fetched yet (called in the background on launch). */
-    suspend fun refreshStaleRepos() = withContext(Dispatchers.IO) {
-        val repos = db.extensionDao().getAllRepos().first()
+    /** Refresh every repo's catalog on app launch so new versions / new extensions show up
+     *  automatically (the same auto-update check Mihon/Tadami do on start). Failures are silent â
+     *  the previous catalog stays in place and the Repos tab's refresh button still works. */
+    suspend fun refreshAllRepos() = withContext(Dispatchers.IO) {
+        val repos = db.extensionDao().getAllReposOnce().toList()
         for (repo in repos) {
-            if (repo.extensionCount == 0) {
-                try {
-                    refreshRepoInternal(repo)
-                } catch (e: Exception) {
-                    // offline / unreachable â the Repos tab shows the failure via its refresh button
-                }
+            try {
+                refreshRepoInternal(repo)
+            } catch (e: Exception) {
+                // offline / unreachable â keep the last-known catalog for this repo
             }
         }
     }
@@ -342,7 +352,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
             // Keep any installed-extension markers on the surviving row.
             for (ext in db.extensionDao().getExtensionsByRepo(dup.id).filter { it.isInstalled }) {
                 db.extensionDao().clearInstalledState(ext.packageName)
-                db.extensionDao().updateExtensionInstallState(ext.packageName, keep.id, true, ext.installedVersionName, null)
+                db.extensionDao().updateExtensionInstallState(ext.packageName, keep.id, true, ext.installedVersionName, ext.installedVersionCode, null)
             }
             db.extensionDao().deleteExtensionsByRepo(dup.id)
             db.extensionDao().deleteSourcesByRepo(dup.id)
@@ -369,15 +379,18 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
 
     private suspend fun refreshRepoInternal(repo: ExtensionRepoEntity) {
         val parsed = ExtensionNetwork.fetchRepoIndex(repo.url)
-        val installedPkgs = db.extensionDao().getExtensionsByRepo(repo.id)
+        val installed = db.extensionDao().getExtensionsByRepo(repo.id)
             .filter { it.isInstalled }
-            .map { it.packageName }
-            .toSet()
+            .associate { it.packageName to (it.installedVersionName to it.installedVersionCode) }
 
         db.extensionDao().deleteExtensionsByRepo(repo.id)
         db.extensionDao().insertExtensions(
             parsed.extensions.map { ext ->
-                ext.toEntity(repo.id).copy(isInstalled = ext.packageName in installedPkgs)
+                ext.toEntity(repo.id).copy(
+                    isInstalled = ext.packageName in installed,
+                    installedVersionName = installed[ext.packageName]?.first,
+                    installedVersionCode = installed[ext.packageName]?.second
+                )
             }
         )
         db.extensionDao().updateRepoInfo(repo.id, repo.name, parsed.extensions.size, System.currentTimeMillis())
@@ -439,14 +452,17 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
                     addedDate = existing?.addedDate ?: System.currentTimeMillis()
                 )
                 db.extensionDao().insertRepo(repo)
-                val installedPkgs = db.extensionDao().getExtensionsByRepo(id)
+                val installed = db.extensionDao().getExtensionsByRepo(id)
                     .filter { it.isInstalled }
-                    .map { it.packageName }
-                    .toSet()
+                    .associate { it.packageName to (it.installedVersionName to it.installedVersionCode) }
                 db.extensionDao().deleteExtensionsByRepo(id)
                 db.extensionDao().insertExtensions(
                     parsed.extensions.map { ext ->
-                        ext.toEntity(id).copy(isInstalled = ext.packageName in installedPkgs)
+                        ext.toEntity(id).copy(
+                            isInstalled = ext.packageName in installed,
+                            installedVersionName = installed[ext.packageName]?.first,
+                            installedVersionCode = installed[ext.packageName]?.second
+                        )
                     }
                 )
                 return@withContext null
@@ -472,7 +488,9 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         }
     }
 
-    /** Remove a repo, its catalog, its sources and any installed extension APKs it provided. */
+    /** Remove a repo, its catalog, its sources and any installed extension APKs it provided.
+     *  Deleting one of the app's DEFAULT repos is remembered so it is never re-seeded on the next
+     *  launch (defaults are seeded additively — see [initializeDefaultDataIfNeeded]). */
     suspend fun deleteExtensionRepo(id: String) = withContext(Dispatchers.IO) {
         val exts = db.extensionDao().getExtensionsByRepo(id)
         for (ext in exts) {
@@ -481,6 +499,12 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         db.extensionDao().deleteExtensionsByRepo(id)
         db.extensionDao().deleteSourcesByRepo(id)
         db.extensionDao().deleteRepo(id)
+        if (ExtensionEngine.defaultRepos.any { it.id == id }) {
+            val prefs = app.getSharedPreferences("nekoread_settings", Context.MODE_PRIVATE)
+            val set = (prefs.getStringSet("deleted_default_repos", emptySet()) ?: emptySet()).toMutableSet()
+            set.add(id)
+            prefs.edit().putStringSet("deleted_default_repos", set).apply()
+        }
     }
 
     // ------------------------------------------------------------------------------------------
@@ -519,10 +543,10 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         try {
             ExtensionNetwork.downloadApk(ext.apkUrl, dest)
         } catch (e: ExtensionNetworkException) {
-            db.extensionDao().updateExtensionInstallState(packageName, repoId, false, null, e.message)
+            db.extensionDao().updateExtensionInstallState(packageName, repoId, false, null, null, e.message)
             return@withContext e.message
         } catch (e: Exception) {
-            db.extensionDao().updateExtensionInstallState(packageName, repoId, false, null, "Download failed")
+            db.extensionDao().updateExtensionInstallState(packageName, repoId, false, null, null, "Download failed")
             return@withContext "Download failed: ${e.message ?: "unknown error"}"
         }
 
@@ -537,7 +561,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         }
         if (info != null && info.packageName != packageName) {
             dest.delete()
-            db.extensionDao().updateExtensionInstallState(packageName, repoId, false, null, "Package mismatch")
+            db.extensionDao().updateExtensionInstallState(packageName, repoId, false, null, null, "Package mismatch")
             return@withContext "APK package (${info.packageName}) does not match index package ($packageName)"
         }
 
@@ -550,20 +574,20 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
             val sources = ExtensionDexLoader.loadApk(dest, dexCacheDir(), packageName, app)
             val registered = registerExtensionSources(ext, sources)
             if (!registered) {
-                db.extensionDao().updateExtensionInstallState(packageName, repoId, false, null, "No sources in extension")
+                db.extensionDao().updateExtensionInstallState(packageName, repoId, false, null, null, "No sources in extension")
                 return@withContext "Extension APK contained no browsable sources"
             }
         } catch (e: Throwable) {
             // Keep the downloaded APK so a reinstall doesn't need to re-download it.
             val msg = e.message ?: "unknown error"
-            db.extensionDao().updateExtensionInstallState(packageName, repoId, false, null, msg)
+            db.extensionDao().updateExtensionInstallState(packageName, repoId, false, null, null, msg)
             return@withContext "Couldn't load extension: $msg"
         }
 
         // Only this repo's build is the installed one; other repos' rows for the same package
         // are just "available in this other repo".
         db.extensionDao().clearInstalledState(packageName)
-        db.extensionDao().updateExtensionInstallState(packageName, repoId, true, ext.versionName, null)
+        db.extensionDao().updateExtensionInstallState(packageName, repoId, true, ext.versionName, ext.versionCode, null)
         null
     }
 
@@ -579,7 +603,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         for (ext in installed) {
             val dest = apkFile(ext.packageName)
             if (!dest.exists()) {
-                db.extensionDao().updateExtensionInstallState(ext.packageName, ext.repoId, false, null, "APK file missing")
+                db.extensionDao().updateExtensionInstallState(ext.packageName, ext.repoId, false, null, null, "APK file missing")
                 continue
             }
             try {
@@ -587,10 +611,10 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
                 val sources = ExtensionDexLoader.loadApk(dest, dexCacheDir(), ext.packageName, app)
                 val registered = registerExtensionSources(ext, sources)
                 if (!registered) {
-                    db.extensionDao().updateExtensionInstallState(ext.packageName, ext.repoId, false, null, "No browsable sources in extension")
+                    db.extensionDao().updateExtensionInstallState(ext.packageName, ext.repoId, false, null, null, "No browsable sources in extension")
                 }
             } catch (e: Throwable) {
-                db.extensionDao().updateExtensionInstallState(ext.packageName, ext.repoId, false, null, e.message)
+                db.extensionDao().updateExtensionInstallState(ext.packageName, ext.repoId, false, null, null, e.message)
             }
         }
     }
@@ -636,7 +660,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         ExtensionDexLoader.unregisterExtension(packageName)
         db.extensionDao().deleteSourcesByExtension(packageName)
         db.extensionDao().clearInstalledState(packageName)
-        db.extensionDao().updateExtensionInstallState(packageName, repoId, false, null, null)
+        db.extensionDao().updateExtensionInstallState(packageName, repoId, false, null, null, null)
         null
     }
 
@@ -712,6 +736,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
                             .put("nsfw", e.nsfw)
                             .put("isInstalled", e.isInstalled)
                             .put("installedVersionName", e.installedVersionName)
+                            .put("installedVersionCode", e.installedVersionCode)
                             .put("installError", e.installError)
                             .put("sourcesJson", e.sourcesJson)
                     )
@@ -836,6 +861,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
                         contentWarning = o.optString("contentWarning"), apkUrl = o.getString("apkUrl"),
                         iconUrl = o.optString("iconUrl"), nsfw = o.optBoolean("nsfw"),
                         isInstalled = o.optBoolean("isInstalled"), installedVersionName = o.optString("installedVersionName"),
+                        installedVersionCode = o.optString("installedVersionCode"),
                         installError = o.optString("installError"), sourcesJson = o.optString("sourcesJson")
                     )
                 )
