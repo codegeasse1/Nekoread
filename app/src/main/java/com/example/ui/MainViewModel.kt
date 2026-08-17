@@ -74,7 +74,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _readerMode.value = ReaderMode.valueOf(prefs.getString("reader_mode", ReaderMode.WEBTOON.name)!!)
         _readerBg.value = ReaderBg.valueOf(prefs.getString("reader_bg", ReaderBg.PURE_BLACK.name)!!)
         _showPageNumber.value = prefs.getBoolean("show_page_number", true)
-        _readerFit.value = ReaderFit.valueOf(prefs.getString("reader_fit", ReaderFit.FIT_WIDTH.name)!!)
+        // One-time migration: the OLD default fit was Fit Screen; the new default is Fit Width.
+        // Devices that still hold the old default value get switched to Fit Width exactly once —
+        // any choice made after that is always respected.
+        if (!prefs.getBoolean("fit_width_migrated", false)) {
+            prefs.edit().putBoolean("fit_width_migrated", true).apply()
+            if (prefs.getString("reader_fit", null) == ReaderFit.FIT.name) {
+                prefs.edit().putString("reader_fit", ReaderFit.FIT_WIDTH.name).apply()
+            }
+        }
+        _readerFit.value = runCatching {
+            ReaderFit.valueOf(prefs.getString("reader_fit", ReaderFit.FIT_WIDTH.name)!!)
+        }.getOrDefault(ReaderFit.FIT_WIDTH)
     }
 
     // Library Filter & Search
@@ -182,9 +193,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // Re-running the exact same catalog fetch (e.g. returning to Browse after viewing a manga
         // detail screen) is a no-op — the results are already on screen, so don't flash a reload.
         if (key == lastCatalogKey && _catalogResults.value.isNotEmpty()) return
+        // Show the loading state immediately (synchronously), so switching sources / tag jumps never
+        // flash the stale grid or the "No manga found" empty state while the fetch coroutine starts.
+        _catalogLoading.value = true
+        _catalogError.value = null
         viewModelScope.launch {
-            _catalogLoading.value = true
-            _catalogError.value = null
             try {
                 _catalogSourceName.value = repository.sourceForManga("$sourceId:x").name
                 _catalogResults.value = repository.searchCatalog(sourceId, query, page, _catalogMode.value)
