@@ -83,6 +83,7 @@ import com.example.ui.MainViewModel
 import com.example.ui.ReaderBg
 import com.example.ui.ReaderFit
 import com.example.ui.ReaderMode
+import com.example.util.sortChapters
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -246,7 +247,7 @@ fun ReaderScreen(
         }
     }
 
-    val sortedChapters = remember(allChapters) { allChapters.sortedBy { it.chapterNumber } }
+    val sortedChapters = remember(allChapters) { sortChapters(allChapters) }
 
     // Previous/next chapters are found by POSITION in the chapter list rather than by comparing
     // chapter numbers: sources that don't number their chapters store -1 for every chapter, which
