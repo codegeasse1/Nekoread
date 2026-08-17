@@ -100,7 +100,8 @@ jobs:
           name: Nekoread-release-${{ env.VERSION }}
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
-- name: Create GitHub Release
+
+      - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ env.VERSION }}
@@ -119,7 +120,7 @@ jobs:
               --generate-notes
           fi
 
-- name: Push release APK to the build branch
+      - name: Push release APK to the build branch
         run: |
           set -e
           git config user.name "github-actions[bot]"
