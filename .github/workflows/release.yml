@@ -100,8 +100,26 @@ jobs:
           name: Nekoread-release-${{ env.VERSION }}
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
+- name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ env.VERSION }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          set -e
+          if [ -n "$NOTES" ]; then
+            gh release create "v$VERSION" \
+              "app/build/outputs/apk/release/app-release.apk#Nekoread-$VERSION.apk" \
+              --title "Nekoread v$VERSION" \
+              --notes "$NOTES"
+          else
+            gh release create "v$VERSION" \
+              "app/build/outputs/apk/release/app-release.apk#Nekoread-$VERSION.apk" \
+              --title "Nekoread v$VERSION" \
+              --generate-notes
+          fi
 
-      - name: Push release APK to the build branch
+- name: Push release APK to the build branch
         run: |
           set -e
           git config user.name "github-actions[bot]"
@@ -143,22 +161,3 @@ jobs:
           git push --force origin build
         env:
           VERSION: ${{ env.VERSION }}
-
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ env.VERSION }}
-          NOTES: ${{ inputs.notes }}
-        run: |
-          set -e
-          if [ -n "$NOTES" ]; then
-            gh release create "v$VERSION" \
-              "app/build/outputs/apk/release/app-release.apk#Nekoread-$VERSION.apk" \
-              --title "Nekoread v$VERSION" \
-              --notes "$NOTES"
-          else
-            gh release create "v$VERSION" \
-              "app/build/outputs/apk/release/app-release.apk#Nekoread-$VERSION.apk" \
-              --title "Nekoread v$VERSION" \
-              --generate-notes
-          fi
