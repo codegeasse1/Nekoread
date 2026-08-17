@@ -131,6 +131,12 @@ class TachiyomiHttpSourceAdapter(
             .map { it.toManga() }
     }
 
+    override suspend fun popular(page: Int): List<MangaEntity> = withContext(Dispatchers.IO) {
+        loading("popular") { ext.getPopularManga(page) }
+            .mangas
+            .map { it.toManga() }
+    }
+
     override suspend fun getDetails(fullMangaId: String): MangaEntity = withContext(Dispatchers.IO) {
         val rawUrl = mangaUrl(fullMangaId)
         val update = withMangaLock(rawUrl) {
