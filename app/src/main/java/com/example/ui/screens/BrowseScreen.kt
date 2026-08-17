@@ -19,8 +19,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -60,6 +62,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -212,6 +215,8 @@ fun BrowseScreen(
     val catalogError: String? by viewModel.catalogError.collectAsStateWithLifecycle()
     val catalogSourceName: String by viewModel.catalogSourceName.collectAsStateWithLifecycle()
     val catalogMode: String by viewModel.catalogMode.collectAsStateWithLifecycle()
+    val catalogLoadingMore: Boolean by viewModel.catalogLoadingMore.collectAsStateWithLifecycle()
+    val catalogHasMore: Boolean by viewModel.catalogHasMore.collectAsStateWithLifecycle()
 
     val globalResults: List<MangaEntity> by viewModel.globalResults.collectAsStateWithLifecycle()
     val globalLoading: Boolean by viewModel.globalLoading.collectAsStateWithLifecycle()
@@ -476,6 +481,9 @@ fun BrowseScreen(
                     },
                     onRetry = { viewModel.loadCatalog(activeSourceId, searchQuery, 1, catalogMode) },
                     onMangaClick = onMangaClick,
+                    isLoadingMore = catalogLoadingMore,
+                    hasMore = catalogHasMore,
+                    onLoadMore = { viewModel.loadMoreCatalog() },
                     onOpenWebView = { url ->
                         webviewTarget = url to sourceUserAgent(activeSourceId)
                     }
@@ -959,6 +967,9 @@ fun CatalogTabContent(
     onModeChange: (String) -> Unit = {},
     onRetry: () -> Unit,
     onMangaClick: (String) -> Unit,
+    isLoadingMore: Boolean = false,
+    hasMore: Boolean = true,
+    onLoadMore: () -> Unit = {},
     onOpenWebView: (String) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -1159,8 +1170,22 @@ fun CatalogTabContent(
             }
 
             else -> {
+                val gridState = rememberLazyGridState()
+                // Infinite scroll: when the user scrolls near the bottom and there are more real
+                // pages (page 2, page 3, ...) to load, fetch the next one and append it.
+                val shouldLoadMore by remember {
+                    derivedStateOf {
+                        val last = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+                        val total = gridState.layoutInfo.totalItemsCount
+                        last >= total - 6 && hasMore && !isLoadingMore && !isLoading
+                    }
+                }
+                LaunchedEffect(shouldLoadMore) {
+                    if (shouldLoadMore) onLoadMore()
+                }
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 130.dp),
+                    state = gridState,
                     contentPadding = PaddingValues(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -1171,6 +1196,27 @@ fun CatalogTabContent(
                             manga = manga,
                             onClick = { onMangaClick(manga.id) }
                         )
+                    }
+                    if (isLoadingMore || !hasMore) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 20.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isLoadingMore) {
+                                    CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                                } else {
+                                    Text(
+                                        text = "End of results",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
