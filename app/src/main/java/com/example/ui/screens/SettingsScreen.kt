@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,15 +30,18 @@ import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -49,6 +53,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -66,7 +71,11 @@ import com.example.ui.ReaderBg
 import com.example.ui.ReaderMode
 import com.example.ui.theme.GlassCardBorder
 import com.example.ui.theme.GlassSurface
+import com.example.ui.theme.NekoGoldBadge
 import com.example.ui.theme.NekoVioletPrimary
+import com.example.BuildConfig
+import com.example.updater.AppUpdater
+import com.example.updater.UpdateDownloadService
 import com.example.util.BuildInfo
 import kotlinx.coroutines.launch
 
@@ -98,6 +107,8 @@ fun SettingsScreen(
     var showReaderModeDialog by remember { mutableStateOf(false) }
     var showReaderBgDialog by remember { mutableStateOf(false) }
     var busyMessage by remember { mutableStateOf<String?>(null) }
+    // Bumped to recompute the update banner after a toggle / "Check now".
+    var updateTick by remember { mutableIntStateOf(0) }
 
     val categories: List<CategoryEntity> by viewModel.categories.collectAsStateWithLifecycle()
     val readerMode: ReaderMode by viewModel.readerMode.collectAsStateWithLifecycle()
@@ -299,6 +310,118 @@ fun SettingsScreen(
                 }
             }
 
+            // App Updates
+            item {
+                Text(
+                    text = "App Updates",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            item {
+                val updateInfo = remember(updateTick) { AppUpdater.currentUpdate(context) }
+                val updatesEnabled = remember(updateTick) { AppUpdater.isEnabled(context) }
+                var checkingNow by remember { mutableStateOf(false) }
+
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        if (updateInfo != null) {
+                            Surface(
+                                color = NekoGoldBadge,
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = "Update available: v${BuildConfig.VERSION_NAME} → v${updateInfo.version}",
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row {
+                                Button(
+                                    onClick = { UpdateDownloadService.start(context, updateInfo) },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        Icons.Default.SystemUpdate,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Update")
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                OutlinedButton(
+                                    onClick = { AppUpdater.viewRelease(context, updateInfo) },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("View on GitHub")
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.SystemUpdate, contentDescription = "Updates", tint = NekoVioletPrimary)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Check for updates", fontWeight = FontWeight.Bold)
+                                Text(
+                                    "Notify when a new version is released",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            Switch(
+                                checked = updatesEnabled,
+                                onCheckedChange = {
+                                    AppUpdater.setEnabled(context, it)
+                                    updateTick++
+                                }
+                            )
+                        }
+
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    checkingNow = true
+                                    try {
+                                        AppUpdater.runCheck(context, force = true)
+                                        updateTick++
+                                        val fresh = AppUpdater.currentUpdate(context)
+                                        Toast.makeText(
+                                            context,
+                                            if (fresh != null) "Update available: v${fresh.version}" else "You're up to date",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    } finally {
+                                        checkingNow = false
+                                    }
+                                }
+                            },
+                            enabled = !checkingNow
+                        ) {
+                            if (checkingNow) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            Text("Check now")
+                        }
+                    }
+                }
+            }
+
             // About
             item {
                 Card(
@@ -318,7 +441,7 @@ fun SettingsScreen(
                             modifier = Modifier.height(40.dp)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("NekoRead v1.0.0", fontWeight = FontWeight.Bold)
+                        Text("NekoRead v${BuildConfig.VERSION_NAME}", fontWeight = FontWeight.Bold)
                         Text(
                             text = "A manga reader built on the Tadami/Mihon extension system — install real extensions and browse real sources.",
                             style = MaterialTheme.typography.bodySmall,
