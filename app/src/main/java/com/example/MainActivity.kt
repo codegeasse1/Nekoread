@@ -391,7 +391,9 @@ fun MainAppScreen(viewModel: MainViewModel) {
                         navController.navigate("reader/$mangaId/$chapterId")
                     },
                     onTagClick = { tag ->
-                        mangaState?.sourceId?.let { viewModel.openTagSearch(it, tag) }
+                        val srcId = mangaState?.sourceId?.takeIf { it.isNotBlank() }
+                            ?: mangaState?.id?.substringBefore(":")
+                        if (srcId != null) viewModel.openTagSearch(srcId, tag)
                         navController.navigateToTab(Screen.Browse.route)
                     }
                 )
