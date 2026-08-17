@@ -50,8 +50,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             repository.dedupeRepos()
             // Bring installed extensions' sources back online (their APKs stay in app storage).
             repository.loadInstalledExtensions()
-            // Refresh repo catalogs that have never been fetched (first launch / new repo).
-            repository.refreshStaleRepos()
+            // Refresh every repo's catalog so new extension versions / new extensions show up
+            // automatically on app open (this is the app's auto-update check for extensions).
+            repository.refreshAllRepos()
         }
     }
 
