@@ -65,7 +65,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -444,18 +443,6 @@ fun ReaderScreen(
 
             else -> {
                 val pageList = pages!!
-                val screenHeight = LocalConfiguration.current.screenHeightDp.dp
-                val fitScale = when (readerFit) {
-                    ReaderFit.FIT -> ContentScale.Fit
-                    ReaderFit.FIT_WIDTH -> ContentScale.FillWidth
-                    ReaderFit.FIT_HEIGHT -> ContentScale.FillHeight
-                }
-                val webtoonPageModifier = when (readerFit) {
-                    ReaderFit.FIT_WIDTH -> Modifier.fillMaxWidth()
-                    else -> Modifier
-                        .fillMaxWidth()
-                        .height(screenHeight)
-                }
                 if (isWebtoon) {
                     LazyColumn(
                         state = listState,
@@ -485,9 +472,10 @@ fun ReaderScreen(
                                     ReaderPageImage(
                                         model = pageModel,
                                         contentDescription = "Page ${pi + 1}",
-                                        modifier = webtoonPageModifier
+                                        modifier = Modifier
+                                            .fillMaxWidth()
                                             .testTag("reader_page_${segIdx}_$pi"),
-                                        contentScale = fitScale,
+                                        contentScale = ContentScale.FillWidth,
                                         spinnerColor = contentTextColor
                                     )
                                 }
@@ -565,6 +553,11 @@ fun ReaderScreen(
                         }
                     }
                 } else {
+                    val fitScale = when (readerFit) {
+                        ReaderFit.FIT -> ContentScale.Fit
+                        ReaderFit.FIT_WIDTH -> ContentScale.FillWidth
+                        ReaderFit.FIT_HEIGHT -> ContentScale.FillHeight
+                    }
                     if (readerMode == ReaderMode.VERTICAL) {
                         VerticalPager(
                             state = pagerState,
