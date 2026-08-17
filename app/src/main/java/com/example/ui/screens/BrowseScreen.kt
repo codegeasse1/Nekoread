@@ -1007,16 +1007,16 @@ fun CatalogTabContent(
                 }
             }
 
-            if (!minimal) {
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Tadami-style catalog tabs: Popular / Latest / Filter. The search bar above acts
-                // as the "Filter" — typing a query always searches, whatever tab is active.
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            // Tadami-style catalog tabs: Popular / Latest / Filter. The search bar above acts
+            // as the "Filter" — typing a query always searches, whatever tab is active.
+            // ALWAYS shown — including inside an opened extension (the user taps Popular/Latest
+            // right inside the source's catalog).
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                     listOf("popular" to "Popular", "latest" to "Latest", "filter" to "Filter").forEach { (m, label) ->
                         FilterChip(
                             selected = mode == m,
@@ -1085,7 +1085,6 @@ fun CatalogTabContent(
                         }
                     }
                 }
-            }
         }
 
         when {
