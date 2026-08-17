@@ -135,6 +135,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _catalogMode = MutableStateFlow("latest")
     val catalogMode: StateFlow<String> = _catalogMode.asStateFlow()
 
+    private val _catalogLoadingMore = MutableStateFlow(false)
+    val catalogLoadingMore: StateFlow<Boolean> = _catalogLoadingMore.asStateFlow()
+
+    private val _catalogHasMore = MutableStateFlow(true)
+    val catalogHasMore: StateFlow<Boolean> = _catalogHasMore.asStateFlow()
+
     // Global search across all installed sources
     private val _globalResults = MutableStateFlow<List<MangaEntity>>(emptyList())
     val globalResults: StateFlow<List<MangaEntity>> = _globalResults.asStateFlow()
@@ -160,10 +166,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // So the first catalog request must be page 1 — starting at 0 is what broke 4KHD with
     // "HTTP error 400 — ...&page=0..." while the same URL with page=1 returns 200.
     private var lastCatalogKey: String? = null
+    private var catalogSource = ""
+    private var catalogQuery = ""
+    private var catalogPage = 1
 
     fun loadCatalog(sourceId: String = "", query: String = "", page: Int = 1, mode: String? = null) {
         if (sourceId.isBlank()) return
         if (mode != null) _catalogMode.value = mode
+        catalogSource = sourceId
+        catalogQuery = query
+        catalogPage = page
+        _catalogHasMore.value = true
+        _catalogLoadingMore.value = false
         val key = "$sourceId\u0000$query\u0000$page\u0000${_catalogMode.value}"
         // Re-running the exact same catalog fetch (e.g. returning to Browse after viewing a manga
         // detail screen) is a no-op — the results are already on screen, so don't flash a reload.
@@ -187,6 +201,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setCatalogMode(mode: String) {
         _catalogMode.value = mode
         lastCatalogKey = null
+    }
+
+    /** Append the next catalog page (real pagination: page 2, page 3, ...) to the results shown in
+     *  the catalog grid. Stops automatically when the source returns no new manga (end of list) or
+     *  only items already on screen, so it can never loop the same first-page titles forever. */
+    fun loadMoreCatalog() {
+        if (catalogSource.isBlank()) return
+        if (_catalogLoading.value || _catalogLoadingMore.value || !_catalogHasMore.value) return
+        val nextPage = catalogPage + 1
+        viewModelScope.launch {
+            _catalogLoadingMore.value = true
+            try {
+                val fetched = repository.searchCatalog(catalogSource, catalogQuery, nextPage, _catalogMode.value)
+                val existingIds = _catalogResults.value.map { it.id }.toHashSet()
+                val fresh = fetched.filter { it.id !in existingIds }
+                if (fresh.isEmpty()) {
+                    _catalogHasMore.value = false
+                } else {
+                    _catalogResults.value += fresh
+                    catalogPage = nextPage
+                }
+            } catch (e: Throwable) {
+                _catalogHasMore.value = false
+            } finally {
+                _catalogLoadingMore.value = false
+            }
+        }
     }
 
     fun clearCatalog() {
