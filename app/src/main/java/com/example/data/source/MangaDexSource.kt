@@ -142,6 +142,23 @@ object MangaDexSource : MangaSource {
         parseMangaCollection(getJson(mangaListUrl("", page)))
     }
 
+    // Tadami's "Popular" tab: MangaDex has no "popularity" feed, so use the most-followed titles
+    // (order[followedCount] desc), which is what Mihon/Tadami's MangaDex source uses too.
+    override suspend fun popular(page: Int): List<MangaEntity> = withContext(Dispatchers.IO) {
+        val url = (API + "/manga").toHttpUrl().newBuilder()
+            .addQueryParameter("limit", PAGE_SIZE.toString())
+            .addQueryParameter("offset", (page * PAGE_SIZE).toString())
+            .addQueryParameter("hasAvailableChapters", "true")
+            .addQueryParameter("includes[]", "cover_art")
+            .addQueryParameter("includes[]", "author")
+            .addQueryParameter("includes[]", "artist")
+            .addQueryParameter("contentRating[]", "safe")
+            .addQueryParameter("contentRating[]", "suggestive")
+            .addQueryParameter("order[followedCount]", "desc")
+            .build().toString()
+        parseMangaCollection(getJson(url))
+    }
+
     override suspend fun getDetails(fullMangaId: String): MangaEntity = withContext(Dispatchers.IO) {
         val url = (API + "/manga/" + rawMangaId(fullMangaId)).toHttpUrl().newBuilder()
             .addQueryParameter("includes[]", "cover_art")
