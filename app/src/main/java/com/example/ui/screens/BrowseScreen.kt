@@ -273,9 +273,11 @@ fun BrowseScreen(
         }
     }
 
-    // Debounced real search against the active source.
+    // Debounced real search against the active source. Tag/genre searches jump straight in via the
+    // pending-search handler above (no debounce), so they're skipped here — a tag search is never
+    // delayed or overwritten by a stale default-catalog reload.
     LaunchedEffect(searchQuery, activeSourceId, catalogMode) {
-        if (selectedTabIndex == TAB_CATALOG && activeSourceId.isNotBlank()) {
+        if (selectedTabIndex == TAB_CATALOG && activeSourceId.isNotBlank() && !searchQuery.startsWith("tag:")) {
             delay(350)
             viewModel.loadCatalog(activeSourceId, searchQuery, 1, catalogMode)
         }
