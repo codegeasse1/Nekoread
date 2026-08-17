@@ -52,6 +52,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -323,6 +324,14 @@ fun SettingsScreen(
                 val updateInfo = remember(updateTick) { AppUpdater.currentUpdate(context) }
                 val updatesEnabled = remember(updateTick) { AppUpdater.isEnabled(context) }
                 var checkingNow by remember { mutableStateOf(false) }
+                val updateProgress by UpdateDownloadService.progress.collectAsStateWithLifecycle()
+                // Surface download errors as a Toast too — the failure would otherwise only live in
+                // a notification, which is invisible without POST_NOTIFICATIONS.
+                LaunchedEffect(updateProgress.error) {
+                    updateProgress.error?.let {
+                        Toast.makeText(context, "Update failed: $it", Toast.LENGTH_LONG).show()
+                    }
+                }
 
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -346,7 +355,10 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.height(10.dp))
                             Row {
                                 Button(
-                                    onClick = { UpdateDownloadService.start(context, updateInfo) },
+                                    onClick = {
+                                        Toast.makeText(context, "Downloading update v${updateInfo.version}...", Toast.LENGTH_SHORT).show()
+                                        UpdateDownloadService.start(context, updateInfo)
+                                    },
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Icon(
@@ -366,6 +378,28 @@ fun SettingsScreen(
                                 }
                             }
                             Spacer(modifier = Modifier.height(4.dp))
+                            if (updateProgress.active) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = updateProgress.message.ifBlank { "Downloading..." },
+                                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                            }
+                            if (updateProgress.error != null) {
+                                Text(
+                                    text = "Update failed: ${updateProgress.error}",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.error),
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                            }
                         }
 
                         Row(
