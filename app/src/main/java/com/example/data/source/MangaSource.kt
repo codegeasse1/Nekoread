@@ -30,6 +30,10 @@ interface MangaSource {
 
     suspend fun search(query: String, page: Int): List<MangaEntity>
     suspend fun latest(page: Int): List<MangaEntity>
+
+    /** "Popular" browse list (Tadami's Popular tab). Default: same as [latest] for sources
+     *  without a dedicated popular endpoint. */
+    suspend fun popular(page: Int): List<MangaEntity> = latest(page)
     suspend fun getDetails(fullMangaId: String): MangaEntity
     suspend fun getChapters(fullMangaId: String): List<ChapterEntity>
     suspend fun getPageUrls(rawChapterId: String): List<String>
