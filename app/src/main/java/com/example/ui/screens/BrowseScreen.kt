@@ -33,11 +33,15 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -207,6 +211,7 @@ fun BrowseScreen(
     val catalogLoading: Boolean by viewModel.catalogLoading.collectAsStateWithLifecycle()
     val catalogError: String? by viewModel.catalogError.collectAsStateWithLifecycle()
     val catalogSourceName: String by viewModel.catalogSourceName.collectAsStateWithLifecycle()
+    val catalogMode: String by viewModel.catalogMode.collectAsStateWithLifecycle()
 
     val globalResults: List<MangaEntity> by viewModel.globalResults.collectAsStateWithLifecycle()
     val globalLoading: Boolean by viewModel.globalLoading.collectAsStateWithLifecycle()
@@ -264,10 +269,10 @@ fun BrowseScreen(
     }
 
     // Debounced real search against the active source.
-    LaunchedEffect(searchQuery, activeSourceId) {
+    LaunchedEffect(searchQuery, activeSourceId, catalogMode) {
         if (selectedTabIndex == TAB_CATALOG && activeSourceId.isNotBlank()) {
             delay(350)
-            viewModel.loadCatalog(activeSourceId, searchQuery)
+            viewModel.loadCatalog(activeSourceId, searchQuery, 1, catalogMode)
         }
     }
 
@@ -434,6 +439,13 @@ fun BrowseScreen(
                         viewModel.loadCatalog(source.id, "")
                         selectedTabIndex = TAB_CATALOG
                     },
+                    onBrowsePopular = { source ->
+                        activeSourceId = source.id
+                        activeSourceBaseUrl = source.baseUrl
+                        searchQuery = ""
+                        viewModel.loadCatalog(source.id, "", 1, "popular")
+                        selectedTabIndex = TAB_CATALOG
+                    },
                     onOpenWebView = { source ->
                         webviewTarget = source.baseUrl to sourceUserAgent(source.id)
                     }
@@ -457,7 +469,12 @@ fun BrowseScreen(
                     sourceBaseUrl = activeSourceBaseUrl,
                     hasSource = activeSourceId.isNotBlank(),
                     minimal = inExtensionMode,
-                    onRetry = { viewModel.loadCatalog(activeSourceId, searchQuery) },
+                    mode = catalogMode,
+                    onModeChange = { m ->
+                        viewModel.setCatalogMode(m)
+                        viewModel.loadCatalog(activeSourceId, if (m == "filter") searchQuery else "", 1, m)
+                    },
+                    onRetry = { viewModel.loadCatalog(activeSourceId, searchQuery, 1, catalogMode) },
                     onMangaClick = onMangaClick,
                     onOpenWebView = { url ->
                         webviewTarget = url to sourceUserAgent(activeSourceId)
@@ -633,6 +650,7 @@ fun AddRepoDialog(
 fun SourcesTabContent(
     sources: List<ExtensionSourceEntity>,
     onBrowseSource: (ExtensionSourceEntity) -> Unit,
+    onBrowsePopular: (ExtensionSourceEntity) -> Unit,
     onOpenWebView: (ExtensionSourceEntity) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
@@ -751,11 +769,37 @@ fun SourcesTabContent(
 
                         Spacer(modifier = Modifier.width(4.dp))
 
-                        Button(
-                            onClick = { onBrowseSource(source) },
-                            modifier = Modifier.testTag("browse_source_${source.id}")
-                        ) {
-                            Text("Browse")
+                        // Tadami-style quick actions: Popular (star) and Latest (refresh) open that
+                        // source's catalog directly on the corresponding tab; Browse goes to Latest.
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Button(
+                                onClick = { onBrowseSource(source) },
+                                modifier = Modifier.testTag("browse_source_${source.id}")
+                            ) {
+                                Text("Browse")
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row {
+                                IconButton(
+                                    onClick = { onBrowsePopular(source) },
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .testTag("source_popular_${source.id}")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Star,
+                                        contentDescription = "Popular",
+                                        tint = NekoGoldBadge,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                TextButton(
+                                    onClick = { onBrowseSource(source) },
+                                    modifier = Modifier.testTag("source_latest_${source.id}")
+                                ) {
+                                    Text("Latest")
+                                }
+                            }
                         }
                     }
                 }
@@ -911,6 +955,8 @@ fun CatalogTabContent(
     sourceBaseUrl: String,
     hasSource: Boolean,
     minimal: Boolean = false,
+    mode: String = "latest",
+    onModeChange: (String) -> Unit = {},
     onRetry: () -> Unit,
     onMangaClick: (String) -> Unit,
     onOpenWebView: (String) -> Unit
@@ -964,6 +1010,51 @@ fun CatalogTabContent(
             if (!minimal) {
                 Spacer(modifier = Modifier.height(8.dp))
 
+                // Tadami-style catalog tabs: Popular / Latest / Filter. The search bar above acts
+                // as the "Filter" — typing a query always searches, whatever tab is active.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    listOf("popular" to "Popular", "latest" to "Latest", "filter" to "Filter").forEach { (m, label) ->
+                        FilterChip(
+                            selected = mode == m,
+                            onClick = { onModeChange(m) },
+                            label = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    when (m) {
+                                        "popular" -> Icon(
+                                            imageVector = Icons.Default.Star,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        "latest" -> Icon(
+                                            imageVector = Icons.Default.Refresh,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        else -> Icon(
+                                            imageVector = Icons.Default.FilterList,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(label)
+                                }
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = Color.White
+                            ),
+                            modifier = Modifier.testTag("catalog_mode_$m")
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Surface(
                         color = MaterialTheme.colorScheme.primaryContainer,
@@ -973,6 +1064,7 @@ fun CatalogTabContent(
                             text = when {
                                 searchQuery.startsWith("tag:") ->
                                     "Tag: ${searchQuery.removePrefix("tag:")} • $sourceName"
+                                mode == "popular" && searchQuery.isBlank() -> "Popular in $sourceName"
                                 searchQuery.isBlank() -> "Latest from $sourceName"
                                 else -> "Results from $sourceName"
                             },
