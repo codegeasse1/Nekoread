@@ -93,15 +93,16 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
     fun getChaptersFlow(mangaId: String): Flow<List<ChapterEntity>> = db.chapterDao().getChaptersForManga(mangaId)
 
     /** Live catalog search against a real source. Results are upserted so the detail screen works offline.
-     *  A query prefixed with "tag:" (e.g. "tag:Action") searches by tag/genre instead of title. */
-    suspend fun searchCatalog(sourceId: String, query: String, page: Int): List<MangaEntity> = withContext(Dispatchers.IO) {
+     *  A query prefixed with "tag:" (e.g. "tag:Action") searches by tag/genre instead of title.
+     *  An empty query loads Latest (Tadami's Latest tab); [mode] "popular" loads the source's
+     *  Popular tab instead. */
+    suspend fun searchCatalog(sourceId: String, query: String, page: Int, mode: String = "latest"): List<MangaEntity> = withContext(Dispatchers.IO) {
         val src = SourceRegistry.source(sourceId)
-        val results = if (query.startsWith("tag:")) {
-            src.searchByTag(query.removePrefix("tag:").trim(), page)
-        } else if (query.isBlank()) {
-            src.latest(page)
-        } else {
-            src.search(query, page)
+        val results = when {
+            mode == "popular" && query.isBlank() -> src.popular(page)
+            query.startsWith("tag:") -> src.searchByTag(query.removePrefix("tag:").trim(), page)
+            query.isBlank() -> src.latest(page)
+            else -> src.search(query, page)
         }
         if (results.isNotEmpty()) {
             // Never overwrite rows that are already tracked (library state, reading progress).
