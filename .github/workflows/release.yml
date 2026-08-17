@@ -45,23 +45,23 @@ jobs:
 
       - name: Prepare signing keystore
         env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 || vars.KEYSTORE_BASE64 }}
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || vars.STORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || vars.KEY_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS || vars.KEY_ALIAS }}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          ALIAS: ${{ secrets.ALIAS }}
         run: |
           set -e
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > my-upload-key.jks
-            SP="$STORE_PASSWORD"
+          if [ -n "$SIGNING_KEY" ]; then
+            echo "$SIGNING_KEY" | base64 -d > my-upload-key.jks
+            SP="$KEY_STORE_PASSWORD"
             KP="${KEY_PASSWORD:-$SP}"
             if [ -z "$SP" ]; then
-              echo "::error::KEYSTORE_BASE64 is set but STORE_PASSWORD is missing. Add the STORE_PASSWORD secret (and KEY_PASSWORD if it differs)."
+              echo "::error::SIGNING_KEY is set but KEY_STORE_PASSWORD is missing. Add the KEY_STORE_PASSWORD secret (and KEY_PASSWORD if it differs)."
               exit 1
             fi
             echo "Using the keystore provided via secrets."
           else
-            SP="${STORE_PASSWORD:-$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')}"
+            SP="${KEY_STORE_PASSWORD:-$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')}"
             KP="${KEY_PASSWORD:-$SP}"
             keytool -genkeypair -v \
               -keystore my-upload-key.jks \
@@ -70,13 +70,13 @@ jobs:
               -storepass "$SP" -keypass "$KP" \
               -dname "CN=Nekoread,O=Nekoread,C=US" > /dev/null 2>&1
             touch newly-generated-keystore
-            echo "::warning::Generated a FRESH release keystore for this build. To sign future releases with the SAME key, download my-upload-key.jks from this run's artifacts and add it to repo secrets as KEYSTORE_BASE64 (base64 of the .jks), STORE_PASSWORD and KEY_PASSWORD."
+            echo "::warning::Generated a FRESH release keystore for this build. To sign future releases with the SAME key, download my-upload-key.jks from this run's artifacts and add it to repo secrets as SIGNING_KEY (base64 of the .jks), KEY_STORE_PASSWORD and KEY_PASSWORD."
             echo "Fresh keystore password: $SP"
           fi
           echo "KEYSTORE_PATH=$PWD/my-upload-key.jks" >> "$GITHUB_ENV"
           echo "STORE_PASSWORD=$SP" >> "$GITHUB_ENV"
           echo "KEY_PASSWORD=$KP" >> "$GITHUB_ENV"
-          echo "KEY_ALIAS=${KEY_ALIAS:-upload}" >> "$GITHUB_ENV"
+          echo "KEY_ALIAS=${ALIAS:-upload}" >> "$GITHUB_ENV"
 
       - name: Build release APK
         run: |
