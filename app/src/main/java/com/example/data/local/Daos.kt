@@ -147,8 +147,8 @@ interface ExtensionDao {
     @Query("DELETE FROM extensions WHERE packageName = :packageName AND repoId = :repoId")
     suspend fun deleteExtension(packageName: String, repoId: String)
 
-    @Query("UPDATE extensions SET isInstalled = :installed, installedVersionName = :installedVersion, installError = :error WHERE packageName = :packageName AND repoId = :repoId")
-    suspend fun updateExtensionInstallState(packageName: String, repoId: String, installed: Boolean, installedVersion: String?, error: String?)
+    @Query("UPDATE extensions SET isInstalled = :installed, installedVersionName = :installedVersion, installedVersionCode = :installedVersionCode, installError = :error WHERE packageName = :packageName AND repoId = :repoId")
+    suspend fun updateExtensionInstallState(packageName: String, repoId: String, installed: Boolean, installedVersion: String?, installedVersionCode: String?, error: String?)
 
     /** Only one APK per package can be installed — installing from another repo unmarks the others. */
     @Query("UPDATE extensions SET isInstalled = 0 WHERE packageName = :packageName")
