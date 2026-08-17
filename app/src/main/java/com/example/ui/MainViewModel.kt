@@ -130,6 +130,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _catalogSourceName = MutableStateFlow("")
     val catalogSourceName: StateFlow<String> = _catalogSourceName.asStateFlow()
 
+    // Tadami-style catalog tab: "latest" (default) or "popular". Search/filter is expressed as a
+    // non-blank query on top of whichever tab is active.
+    private val _catalogMode = MutableStateFlow("latest")
+    val catalogMode: StateFlow<String> = _catalogMode.asStateFlow()
+
     // Global search across all installed sources
     private val _globalResults = MutableStateFlow<List<MangaEntity>>(emptyList())
     val globalResults: StateFlow<List<MangaEntity>> = _globalResults.asStateFlow()
@@ -156,9 +161,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // "HTTP error 400 — ...&page=0..." while the same URL with page=1 returns 200.
     private var lastCatalogKey: String? = null
 
-    fun loadCatalog(sourceId: String = "", query: String = "", page: Int = 1) {
+    fun loadCatalog(sourceId: String = "", query: String = "", page: Int = 1, mode: String? = null) {
         if (sourceId.isBlank()) return
-        val key = "$sourceId\u0000$query\u0000$page"
+        if (mode != null) _catalogMode.value = mode
+        val key = "$sourceId\u0000$query\u0000$page\u0000${_catalogMode.value}"
         // Re-running the exact same catalog fetch (e.g. returning to Browse after viewing a manga
         // detail screen) is a no-op — the results are already on screen, so don't flash a reload.
         if (key == lastCatalogKey && _catalogResults.value.isNotEmpty()) return
@@ -167,7 +173,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _catalogError.value = null
             try {
                 _catalogSourceName.value = repository.sourceForManga("$sourceId:x").name
-                _catalogResults.value = repository.searchCatalog(sourceId, query, page)
+                _catalogResults.value = repository.searchCatalog(sourceId, query, page, _catalogMode.value)
                 lastCatalogKey = key
             } catch (e: Throwable) {
                 _catalogResults.value = emptyList()
@@ -176,6 +182,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _catalogLoading.value = false
             }
         }
+    }
+
+    fun setCatalogMode(mode: String) {
+        _catalogMode.value = mode
+        lastCatalogKey = null
     }
 
     fun clearCatalog() {
