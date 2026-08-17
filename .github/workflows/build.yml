@@ -42,22 +42,22 @@ jobs:
 
       - name: Prepare signing keystore
         env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 || vars.KEYSTORE_BASE64 }}
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || vars.STORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || vars.KEY_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS || vars.KEY_ALIAS }}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          ALIAS: ${{ secrets.ALIAS }}
         run: |
           set -e
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > my-upload-key.jks
+          if [ -n "$SIGNING_KEY" ]; then
+            echo "$SIGNING_KEY" | base64 -d > my-upload-key.jks
             echo "KEYSTORE_PATH=$PWD/my-upload-key.jks" >> "$GITHUB_ENV"
-            if [ -z "$STORE_PASSWORD" ]; then
-              echo "::error::KEYSTORE_BASE64 is set but STORE_PASSWORD is missing. Add the STORE_PASSWORD secret (and KEY_PASSWORD if it differs)."
+            if [ -z "$KEY_STORE_PASSWORD" ]; then
+              echo "::error::SIGNING_KEY is set but KEY_STORE_PASSWORD is missing. Add the KEY_STORE_PASSWORD secret (and KEY_PASSWORD if it differs)."
               exit 1
             fi
-            echo "STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
-            echo "KEY_PASSWORD=${KEY_PASSWORD:-$STORE_PASSWORD}" >> "$GITHUB_ENV"
-            echo "KEY_ALIAS=${KEY_ALIAS:-upload}" >> "$GITHUB_ENV"
+            echo "STORE_PASSWORD=$KEY_STORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=${KEY_PASSWORD:-$KEY_STORE_PASSWORD}" >> "$GITHUB_ENV"
+            echo "KEY_ALIAS=${ALIAS:-upload}" >> "$GITHUB_ENV"
             echo "::notice::Debug APK will be signed with the real keystore from secrets (stable signature, installs in-place)."
           else
             # No real key configured yet — fall back to a throwaway debug key.
@@ -69,7 +69,7 @@ jobs:
                 -storepass android -keypass android \
                 -dname "CN=Android Debug,O=Nekoread,C=US" > /dev/null 2>&1
             fi
-            echo "::warning::No KEYSTORE_BASE64 secret configured — using a throwaway debug key."
+            echo "::warning::No SIGNING_KEY secret configured — using a throwaway debug key."
           fi
 
       - name: Build debug APK
