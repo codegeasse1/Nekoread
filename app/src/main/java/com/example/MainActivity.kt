@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -56,12 +57,28 @@ import coil.Coil
 import coil.ImageLoader
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.lifecycleScope
+import com.example.updater.AppUpdater
+import com.example.updater.UpdateDownloadService
+import com.example.updater.UpdateInfo
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import com.example.data.source.ExtensionCoverImageFetcherFactory
 import com.example.data.source.ExtensionPageImageFetcherFactory
 import com.example.data.source.ExtensionPageImageKeyer
 import com.example.data.source.ExtensionCoverImageKeyer
 import com.example.ui.MainViewModel
+import com.example.BuildConfig
 import com.example.ui.screens.BrowseScreen
 import com.example.ui.screens.LibraryScreen
 import com.example.ui.screens.MangaDetailScreen
@@ -83,6 +100,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // A tap on the "update available" notification lands here (or on an already-open activity
+        // via onNewIntent below) — surface the in-app update dialog instead of just the banner.
+        if (intent?.getBooleanExtra(AppUpdater.EXTRA_SHOW_UPDATE, false) == true) {
+            intent.removeExtra(AppUpdater.EXTRA_SHOW_UPDATE)
+            updateDialog.value = AppUpdater.currentUpdate(this)
+        }
 
         // Network stack (shared by loaded extensions + Cloudflare WebView) before anything else.
         NetworkHelper.init(applicationContext)
@@ -158,6 +182,49 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+
+        // Background update check: one small GitHub API call (cached to ~once per 6 hours).
+        // If a newer release exists, post the system "update available" notification.
+        lifecycleScope.launch {
+            delay(2500) // let the app settle before touching the network
+            val update = AppUpdater.runCheck(this@MainActivity) ?: return@launch
+            maybeNotifyUpdate(update)
+        }
+    }
+
+    /** Show the update notification, requesting the notification permission the first time. */
+    private fun maybeNotifyUpdate(update: UpdateInfo) {
+        if (!AppUpdater.canNotify(this)) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQ_NOTIF)
+            return
+        }
+        AppUpdater.showUpdateNotification(this, update)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQ_NOTIF && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            AppUpdater.currentUpdate(this)?.let { AppUpdater.showUpdateNotification(this, it) }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.getBooleanExtra(AppUpdater.EXTRA_SHOW_UPDATE, false)) {
+            intent.removeExtra(AppUpdater.EXTRA_SHOW_UPDATE)
+            updateDialog.value = AppUpdater.currentUpdate(this)
+        }
+    }
+
+    companion object {
+        private const val REQ_NOTIF = 2001
+
+        /** Non-null while the "update available" dialog should be shown over the app. */
+        val updateDialog = MutableStateFlow<UpdateInfo?>(null)
     }
 }
 
@@ -197,6 +264,8 @@ fun MainAppScreen(viewModel: MainViewModel) {
 
     val libraryManga by viewModel.libraryManga.collectAsStateWithLifecycle()
     val historyManga by viewModel.readingHistory.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val updateInfo by MainActivity.updateDialog.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -361,6 +430,39 @@ fun MainAppScreen(viewModel: MainViewModel) {
                 )
             }
         }
+    }
+    // In-app "update available" dialog (shown from the notification tap, or the Settings banner).
+    updateInfo?.let { info ->
+        AlertDialog(
+            onDismissRequest = { MainActivity.updateDialog.value = null },
+            title = { Text("Update available") },
+            text = {
+                Text(
+                    "A new version of Nekoread is ready.\n\n" +
+                        "Installed: v${BuildConfig.VERSION_NAME}\n" +
+                        "Latest: v${info.version}",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    MainActivity.updateDialog.value = null
+                    UpdateDownloadService.start(context, info)
+                }) {
+                    Text("Update")
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { AppUpdater.viewRelease(context, info) }) {
+                        Text("View on GitHub")
+                    }
+                    TextButton(onClick = { MainActivity.updateDialog.value = null }) {
+                        Text("Later")
+                    }
+                }
+            }
+        )
     }
 }
 
