@@ -175,6 +175,25 @@ fun ReaderScreen(
         pageCount = { pages?.size ?: 0 }
     )
 
+    // Force the reader to open on the intended starting page once a chapter's content is on
+    // screen. The list/pager are created with the right initial index, but in-reader prev/next
+    // navigation between chapters can otherwise carry a previous chapter's scroll position over —
+    // which is why a next-chapter tap used to land on a random previously-read page instead of
+    // page 1. Keying on the chapter id makes the start page reliable on every navigation path.
+    LaunchedEffect(chapter.id, pages, isWebtoon, startAtBeginning) {
+        val list = pages ?: return@LaunchedEffect
+        if (list.isEmpty()) return@LaunchedEffect
+        val target = if (startAtBeginning) 0 else (chapter.lastPageRead - 1).coerceAtLeast(0)
+        try {
+            if (isWebtoon) {
+                listState.scrollToItem(target)
+            } else {
+                pagerState.scrollToPage(target.coerceAtMost(list.lastIndex))
+            }
+        } catch (_: Exception) {
+        }
+    }
+
     // The chapter currently on screen (in webtoon modes this can advance past the starting chapter).
     val streamPosition by remember {
         derivedStateOf {
@@ -229,18 +248,25 @@ fun ReaderScreen(
 
     val sortedChapters = remember(allChapters) { allChapters.sortedBy { it.chapterNumber } }
 
-    val prevChapter = remember(sortedChapters, activeChapter) {
-        sortedChapters.lastOrNull { it.chapterNumber < activeChapter.chapterNumber }
+    // Previous/next chapters are found by POSITION in the chapter list rather than by comparing
+    // chapter numbers: sources that don't number their chapters store -1 for every chapter, which
+    // made both buttons permanently disabled and silently killed the webtoon auto-continue
+    // ("End of Chapter / you caught up" even when dozens of chapters were still ahead).
+    val activeIdx = remember(sortedChapters, activeChapter) {
+        sortedChapters.indexOfFirst { it.id == activeChapter.id }
     }
-
-    val nextChapter = remember(sortedChapters, activeChapter) {
-        sortedChapters.firstOrNull { it.chapterNumber > activeChapter.chapterNumber }
+    val prevChapter = remember(sortedChapters, activeIdx) {
+        if (activeIdx > 0) sortedChapters[activeIdx - 1] else null
+    }
+    val nextChapter = remember(sortedChapters, activeIdx) {
+        if (activeIdx in 0 until sortedChapters.lastIndex) sortedChapters[activeIdx + 1] else null
     }
 
     // The next chapter after the LAST one already streamed (used for auto-continue).
     val streamNextChapter = remember(sortedChapters, streamQueue) {
         val last = streamQueue.lastOrNull() ?: return@remember null
-        sortedChapters.firstOrNull { it.chapterNumber > last.chapterNumber }
+        val lastIdx = sortedChapters.indexOfFirst { it.id == last.id }
+        if (lastIdx in 0 until sortedChapters.lastIndex) sortedChapters[lastIdx + 1] else null
     }
 
     fun loadNextIntoStream(next: ChapterEntity) {
