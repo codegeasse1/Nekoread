@@ -81,6 +81,7 @@ data class ExtensionEntity(
     val nsfw: Boolean = false,
     val isInstalled: Boolean = false,
     val installedVersionName: String? = null,
+    val installedVersionCode: String? = null,
     val installError: String? = null,
     // JSON array of {id,name,lang,baseUrl} source descriptors from the repo index — used to
     // activate this extension's sources in the Sources tab when it is installed.
