@@ -45,6 +45,18 @@ object ExtensionEngine {
             extensionCount = 0,
             lastUpdated = 0L,
             addedDate = System.currentTimeMillis()
+        ),
+        // The user's own extension repo (codegeasse-mihon-extension). Seeded by default like the
+        // well-known repos, and deletable by the user like any other repo. NOTE: repo.json on that
+        // branch only carries metadata (name/signing key) — the actual extension list is index.json,
+        // so that URL is what we seed.
+        ExtensionRepoEntity(
+            id = "repo_codegeasse_mihon_extension",
+            name = "Codegeasse Extensions",
+            url = "https://raw.githubusercontent.com/codegeasse1/codegeasse-mihon-extension/repo/index.json",
+            extensionCount = 0,
+            lastUpdated = 0L,
+            addedDate = System.currentTimeMillis()
         )
     )
 }
