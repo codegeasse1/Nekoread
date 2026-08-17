@@ -342,6 +342,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updateAllExtensions(exts: List<ExtensionEntity>) {
+        if (exts.isEmpty()) return
+        viewModelScope.launch {
+            _opBusy.value = "update_all"
+            var firstError: String? = null
+            for (ext in exts) {
+                val error = repository.installExtension(ext.packageName, ext.repoId)
+                if (error != null && firstError == null) firstError = error
+            }
+            _opBusy.value = null
+            _opMessage.value = firstError ?: "All extensions updated"
+        }
+    }
+
     fun uninstallExtension(packageName: String, repoId: String) {
         viewModelScope.launch {
             _opBusy.value = "uninstall_${packageName}_$repoId"
