@@ -222,6 +222,9 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         val manga = db.mangaDao().getMangaById(mangaId) ?: return@withContext
         val newInLibrary = !manga.inLibrary
         db.mangaDao().updateLibraryStatus(mangaId, newInLibrary, category)
+        // The Library home lists anything with recent reading history (inLibrary OR lastReadTimestamp>0),
+        // so toggling OFF must also clear history or the title never leaves the Library screen.
+        if (!newInLibrary) db.mangaDao().clearReadingHistoryFor(mangaId)
     }
 
     suspend fun clearHistory() = withContext(Dispatchers.IO) {
@@ -240,6 +243,9 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         for (id in mangaIds) {
             val manga = db.mangaDao().getMangaById(id) ?: continue
             db.mangaDao().updateLibraryStatus(id, false, manga.category)
+            // Same as toggleLibraryStatus: the Library home query keeps titles with history,
+            // so remove its history too or the delete appears to do nothing.
+            db.mangaDao().clearReadingHistoryFor(id)
         }
     }
 
