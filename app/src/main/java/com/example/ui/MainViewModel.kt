@@ -410,6 +410,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private var lastReposAutoRefreshAt = 0L
+
+    /** Auto-refresh every added repo's catalog when the user opens the Repos/Extensions tab, so new
+     *  extensions / extension updates show up without relaunching. Rate-limited to once per 2 minutes
+     *  (the launch-time refresh in init already covers cold starts); failures are silent — the
+     *  previous catalog stays in place. */
+    fun refreshExtensionReposIfNeeded() {
+        val now = System.currentTimeMillis()
+        if (now - lastReposAutoRefreshAt < 120_000L) return
+        lastReposAutoRefreshAt = now
+        viewModelScope.launch {
+            repository.refreshAllRepos()
+        }
+    }
+
     fun deleteExtensionRepo(id: String) {
         viewModelScope.launch {
             _opBusy.value = "repo_delete_$id"
