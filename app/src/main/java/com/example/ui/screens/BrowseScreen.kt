@@ -315,7 +315,10 @@ fun BrowseScreen(
         contentWindowInsets = WindowInsets(0),
         topBar = {
             if (inExtensionMode) {
-                // Rounded glass header for the catalog-browsing mode too.
+                // Rounded glass header for the catalog-browsing mode: ONE compact row = back arrow +
+                // the search bar with the site-verify globe on its side. The source name shows in the
+                // search placeholder and the "Latest from <source>" label, so the grid below gets more
+                // vertical space (the search bar + tabs no longer stack into a second header row).
                 Surface(
                     color = GlassSurface.copy(alpha = 0.7f),
                     contentColor = MaterialTheme.colorScheme.onSurface,
@@ -323,33 +326,47 @@ fun BrowseScreen(
                     border = BorderStroke(1.dp, GlassCardBorder),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    TopAppBar(
-                        windowInsets = WindowInsets(0),
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                        navigationIcon = {
-                            IconButton(
-                                onClick = {
-                                    activeSourceId = ""
-                                    activeSourceBaseUrl = ""
-                                    searchQuery = ""
-                                    selectedTabIndex = TAB_SOURCES
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "Back to sources",
-                                    tint = MaterialTheme.colorScheme.onSurface
-                                )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 4.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
+                    ) {
+                        IconButton(
+                            onClick = {
+                                activeSourceId = ""
+                                activeSourceBaseUrl = ""
+                                searchQuery = ""
+                                selectedTabIndex = TAB_SOURCES
                             }
-                        },
-                        title = {
-                            Text(
-                                text = catalogSourceName,
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.titleLarge
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back to sources",
+                                tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
-                    )
+                        GlassSearchBar(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = "Search $catalogSourceName...",
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        IconButton(
+                            onClick = {
+                                if (activeSourceBaseUrl.isNotBlank()) {
+                                    webviewTarget = activeSourceBaseUrl to sourceUserAgent(activeSourceId)
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Language,
+                                contentDescription = "Cloudflare check",
+                                tint = NekoVioletPrimary
+                            )
+                        }
+                    }
                 }
             } else {
                 // Rounded glass header (Tadami-style) for the tabbed Browse chrome.
@@ -1001,30 +1018,25 @@ fun CatalogTabContent(
         }
 
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                GlassSearchBar(
-                    value = searchQuery,
-                    onValueChange = onSearchQueryChange,
-                    placeholder = "Search $sourceName...",
-                    modifier = if (minimal && sourceBaseUrl.isNotBlank()) Modifier.weight(1f) else Modifier
-                )
-                if (minimal && sourceBaseUrl.isNotBlank()) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                    IconButton(onClick = { onOpenWebView(sourceBaseUrl) }) {
-                        Icon(
-                            imageVector = Icons.Default.Language,
-                            contentDescription = "Cloudflare check",
-                            tint = NekoVioletPrimary
-                        )
-                    }
+            // In extension mode the search bar lives in the compact header above (the back-arrow
+            // row), so it's not duplicated here and the grid gets more room. In the tabbed Browse
+            // view (Catalog tab) it stays in this column.
+            if (!minimal) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    GlassSearchBar(
+                        value = searchQuery,
+                        onValueChange = onSearchQueryChange,
+                        placeholder = "Search $sourceName...",
+                        modifier = Modifier.weight(1f)
+                    )
                 }
+                Spacer(modifier = Modifier.height(8.dp))
             }
 
             // Tadami-style catalog tabs: Popular / Latest / Filter. The search bar above acts
             // as the "Filter" — typing a query always searches, whatever tab is active.
             // ALWAYS shown — including inside an opened extension (the user taps Popular/Latest
             // right inside the source's catalog).
-            Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
