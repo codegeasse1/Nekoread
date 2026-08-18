@@ -14,6 +14,7 @@ import com.example.data.local.ExtensionEntity
 import com.example.data.local.MangaEntity
 import com.example.data.repository.MangaRepository
 import com.example.util.describe
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -152,6 +153,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _catalogHasMore = MutableStateFlow(true)
     val catalogHasMore: StateFlow<Boolean> = _catalogHasMore.asStateFlow()
 
+    // Slow-load heads-up: set when a catalog fetch has been running >10s with no response (the
+    // usual cause is a Cloudflare/verification challenge), so the UI can nudge the user toward the
+    // site-verification WebView. The UI auto-dismisses it after ~2s.
+    private val _catalogLoadWarning = MutableStateFlow<String?>(null)
+    val catalogLoadWarning: StateFlow<String?> = _catalogLoadWarning.asStateFlow()
+
+    fun clearCatalogLoadWarning() {
+        _catalogLoadWarning.value = null
+    }
+
     // Global search across all installed sources
     private val _globalResults = MutableStateFlow<List<MangaEntity>>(emptyList())
     val globalResults: StateFlow<List<MangaEntity>> = _globalResults.asStateFlow()
@@ -197,6 +208,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // flash the stale grid or the "No manga found" empty state while the fetch coroutine starts.
         _catalogLoading.value = true
         _catalogError.value = null
+        // Slow-load heads-up: if this fetch is still running after 10s, surface a one-shot warning
+        // (Cloudflare/verification challenge is the usual blocker) so the user can verify via WebView.
+        _catalogLoadWarning.value = null
+        viewModelScope.launch {
+            delay(10_000)
+            if (_catalogLoading.value) {
+                _catalogLoadWarning.value =
+                    "Still loading — the site may be blocked by a verification check. Use the globe to verify."
+            }
+        }
         viewModelScope.launch {
             try {
                 _catalogSourceName.value = repository.sourceForManga("$sourceId:x").name
