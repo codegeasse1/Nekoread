@@ -76,7 +76,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.LocalImageLoader
 import coil.compose.SubcomposeAsyncImage
 import coil.request.CachePolicy
-import coil.request.DefaultRetryPolicy
 import coil.request.ImageRequest
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
@@ -932,25 +931,40 @@ private fun ReaderPageImage(
         .heightIn(min = 240.dp)
 ) {
     val context = LocalContext.current
+    // Auto-retry a failed page image up to 5 retries with a short pause between attempts — a
+    // transient network hiccup or Cloudflare challenge usually clears on a later try. Each retry
+    // builds a fresh request (the changing parameter busts Coil's cache key), so it's a real new
+    // fetch through the extension's own client. Stops after 5 retries; a success at any attempt
+    // needs no further refreshes.
+    var attempt by remember(model) { mutableStateOf(0) }
+    var gaveUp by remember(model) { mutableStateOf(false) }
+    var retrying by remember(model) { mutableStateOf(false) }
+
+    // After a failed attempt: pause briefly, then bump the attempt counter to trigger a fresh
+    // request (or mark the page as given-up once the retry budget is spent).
+    LaunchedEffect(retrying) {
+        if (retrying) {
+            delay(1200)
+            if (attempt < 5) {
+                attempt += 1
+            } else {
+                gaveUp = true
+            }
+            retrying = false
+        }
+    }
+
     SubcomposeAsyncImage(
         model = ImageRequest.Builder(context)
             .data(model)
-            // Auto-retry a failed page image up to 5 times with a short pause between attempts —
-            // a transient network hiccup or Cloudflare challenge usually clears on a later try.
-            // Each retry re-runs the extension's own image client, so it's a real fresh request.
-            // The loading spinner stays up while retrying; the error slot only shows after all
-            // 5 attempts have failed.
-            .retryPolicy(
-                DefaultRetryPolicy(
-                    retryCount = 5,
-                    retryIntervalMillis = 1500,
-                    retryPredicate = { _, _ -> true }
-                )
-            )
+            .setParameter("reader_retry", attempt)
             .build(),
         contentDescription = contentDescription,
         modifier = modifier,
         contentScale = contentScale,
+        onError = {
+            if (!gaveUp && !retrying) retrying = true
+        },
         loading = {
             Box(
                 modifier = placeholderModifier,
@@ -968,12 +982,31 @@ private fun ReaderPageImage(
                 modifier = placeholderModifier,
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "Couldn't load page",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = spinnerColor.copy(alpha = 0.7f)
+                if (gaveUp) {
+                    Text(
+                        text = "Couldn't load page",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = spinnerColor.copy(alpha = 0.7f)
+                        )
                     )
-                )
+                } else {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            color = spinnerColor.copy(alpha = 0.6f),
+                            strokeWidth = 3.dp,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Text(
+                            text = "Retrying…",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = spinnerColor.copy(alpha = 0.7f)
+                            )
+                        )
+                    }
+                }
             }
         }
     )
