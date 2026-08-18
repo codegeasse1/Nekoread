@@ -931,10 +931,10 @@ private fun ReaderPageImage(
         .heightIn(min = 240.dp)
 ) {
     val context = LocalContext.current
-    // Auto-retry a failed page image up to 5 retries with a short pause between attempts — a
+    // Auto-retry a failed page image up to 10 retries with a short pause between attempts — a
     // transient network hiccup or Cloudflare challenge usually clears on a later try. Each retry
     // builds a fresh request (the changing parameter busts Coil's cache key), so it's a real new
-    // fetch through the extension's own client. Stops after 5 retries; a success at any attempt
+    // fetch through the extension's own client. Stops after 10 retries; a success at any attempt
     // needs no further refreshes.
     var attempt by remember(model) { mutableStateOf(0) }
     var gaveUp by remember(model) { mutableStateOf(false) }
@@ -945,7 +945,7 @@ private fun ReaderPageImage(
     LaunchedEffect(retrying) {
         if (retrying) {
             delay(1200)
-            if (attempt < 5) {
+            if (attempt < 10) {
                 attempt += 1
             } else {
                 gaveUp = true
