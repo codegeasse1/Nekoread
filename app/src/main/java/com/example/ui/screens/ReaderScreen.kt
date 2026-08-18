@@ -76,6 +76,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.LocalImageLoader
 import coil.compose.SubcomposeAsyncImage
 import coil.request.CachePolicy
+import coil.request.DefaultRetryPolicy
 import coil.request.ImageRequest
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
@@ -930,8 +931,23 @@ private fun ReaderPageImage(
         .fillMaxWidth()
         .heightIn(min = 240.dp)
 ) {
+    val context = LocalContext.current
     SubcomposeAsyncImage(
-        model = model,
+        model = ImageRequest.Builder(context)
+            .data(model)
+            // Auto-retry a failed page image up to 5 times with a short pause between attempts —
+            // a transient network hiccup or Cloudflare challenge usually clears on a later try.
+            // Each retry re-runs the extension's own image client, so it's a real fresh request.
+            // The loading spinner stays up while retrying; the error slot only shows after all
+            // 5 attempts have failed.
+            .retryPolicy(
+                DefaultRetryPolicy(
+                    retryCount = 5,
+                    retryIntervalMillis = 1500,
+                    retryPredicate = { _, _ -> true }
+                )
+            )
+            .build(),
         contentDescription = contentDescription,
         modifier = modifier,
         contentScale = contentScale,
