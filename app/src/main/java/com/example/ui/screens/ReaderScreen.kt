@@ -83,7 +83,9 @@ import com.example.ui.MainViewModel
 import com.example.ui.ReaderBg
 import com.example.ui.ReaderFit
 import com.example.ui.ReaderMode
+import com.example.ui.components.SlowLoadWarningCard
 import com.example.util.sortChapters
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -119,6 +121,7 @@ fun ReaderScreen(
     var pageError by remember { mutableStateOf<String?>(null) }
     var pageLoading by remember { mutableStateOf(true) }
     var retryKey by remember { mutableStateOf(0) }
+    var slowChapterWarning by remember(chapter.id) { mutableStateOf(false) }
 
     // Continuous-reading stream (webtoon modes): chapters in reading order + their loaded pages.
     var streamQueue by remember(chapter.id) { mutableStateOf(listOf(chapter)) }
@@ -129,6 +132,13 @@ fun ReaderScreen(
     LaunchedEffect(chapter.id, retryKey) {
         pageLoading = true
         pageError = null
+        slowChapterWarning = false
+        // Heads-up: if the chapter is still loading after 15s, show a brief warning (the usual
+        // cause is a Cloudflare / verification challenge), with a Verify shortcut to the WebView.
+        val slowTimeout = launch {
+            delay(15_000)
+            if (pageLoading) slowChapterWarning = true
+        }
         try {
             pages = viewModel.repository.getChapterPageImageModels(chapter.id)
         } catch (e: Throwable) {
@@ -136,6 +146,7 @@ fun ReaderScreen(
             pages = null
         } finally {
             pageLoading = false
+            slowTimeout.cancel()
         }
     }
 
@@ -380,26 +391,9 @@ fun ReaderScreen(
             }
             .testTag("reader_container")
     ) {
-        // Reader Content (loading / error / pages)
+        // Reader Content (error / pages). No full-screen blocking loading screen: while the first
+        // chapter's pages load, the previous content stays on screen with a centered spinner.
         when {
-            pageLoading || pages == null -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        CircularProgressIndicator(color = contentTextColor)
-                        Text(
-                            text = "Loading pages...",
-                            style = MaterialTheme.typography.bodyMedium.copy(color = contentTextColor)
-                        )
-                    }
-                }
-            }
-
             pageError != null -> {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -442,7 +436,7 @@ fun ReaderScreen(
             }
 
             else -> {
-                val pageList = pages!!
+                val pageList = pages ?: emptyList()
                 if (isWebtoon) {
                     LazyColumn(
                         state = listState,
@@ -453,6 +447,18 @@ fun ReaderScreen(
                         },
                         modifier = Modifier.fillMaxSize()
                     ) {
+                        // While the chapter's pages are still loading, fill the viewport with a
+                        // centered spinner (no separate full-screen loading screen).
+                        if (pageList.isEmpty()) {
+                            item(key = "initial_loading") {
+                                Box(
+                                    modifier = Modifier.fillParentMaxHeight(1f),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(color = contentTextColor)
+                                }
+                            }
+                        }
                         // Each streamed chapter: a small divider, then its pages.
                         streamQueue.forEachIndexed { segIdx, segChapter ->
                             val segPages = streamSegments.getOrNull(segIdx)
@@ -558,7 +564,14 @@ fun ReaderScreen(
                         ReaderFit.FIT_WIDTH -> ContentScale.FillWidth
                         ReaderFit.FIT_HEIGHT -> ContentScale.FillHeight
                     }
-                    if (readerMode == ReaderMode.VERTICAL) {
+                    if (pageList.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = contentTextColor)
+                        }
+                    } else if (readerMode == ReaderMode.VERTICAL) {
                         VerticalPager(
                             state = pagerState,
                             modifier = Modifier.fillMaxSize()
@@ -600,6 +613,25 @@ fun ReaderScreen(
                     }
                 }
             }
+        }
+
+        // Slow-load heads-up: chapter pages still loading after 15s — usually a Cloudflare /
+        // verification challenge. Brief banner (auto-dismisses ~2s) with a Verify shortcut to the
+        // source's WebView.
+        if (slowChapterWarning) {
+            SlowLoadWarningCard(
+                message = "Chapter still loading — the site may be blocked by a verification check.",
+                onDismiss = { slowChapterWarning = false },
+                actionLabel = "Verify",
+                onAction = {
+                    if (sourceBaseUrl.isNotBlank()) {
+                        webviewTarget = sourceBaseUrl to sourceUserAgent
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(horizontal = 16.dp, vertical = 72.dp)
+            )
         }
 
         // Top HUD Bar
@@ -685,14 +717,18 @@ fun ReaderScreen(
                             )
                         }
 
-                        Text(
-                            text = "Page $currentPage / $pageTotal",
-                            style = MaterialTheme.typography.labelLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            ),
-                            modifier = Modifier.testTag("page_indicator_text")
-                        )
+                        if (pages != null) {
+                            Text(
+                                text = "Page $currentPage / $pageTotal",
+                                style = MaterialTheme.typography.labelLarge.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                ),
+                                modifier = Modifier.testTag("page_indicator_text")
+                            )
+                        } else {
+                            Spacer(modifier = Modifier.width(60.dp))
+                        }
 
                         IconButton(
                             onClick = { nextChapter?.let { onChapterChange(it.id) } },
