@@ -94,6 +94,7 @@ import com.example.ui.components.GlassCard
 import com.example.ui.components.GlassSearchBar
 import com.example.ui.components.MangaGridCard
 import com.example.ui.components.MangaListCard
+import com.example.ui.components.SlowLoadWarningCard
 import com.example.ui.theme.GlassCardBorder
 import com.example.ui.theme.GlassSurface
 import com.example.ui.theme.NekoGoldBadge
@@ -217,6 +218,7 @@ fun BrowseScreen(
     val catalogMode: String by viewModel.catalogMode.collectAsStateWithLifecycle()
     val catalogLoadingMore: Boolean by viewModel.catalogLoadingMore.collectAsStateWithLifecycle()
     val catalogHasMore: Boolean by viewModel.catalogHasMore.collectAsStateWithLifecycle()
+    val catalogLoadWarning: String? by viewModel.catalogLoadWarning.collectAsStateWithLifecycle()
 
     val globalResults: List<MangaEntity> by viewModel.globalResults.collectAsStateWithLifecycle()
     val globalLoading: Boolean by viewModel.globalLoading.collectAsStateWithLifecycle()
@@ -521,6 +523,26 @@ fun BrowseScreen(
                     onAddRepoClick = { showAddRepoDialog = true },
                     onRefreshRepo = { viewModel.refreshExtensionRepo(it) },
                     onDeleteRepo = { repoToDelete = it }
+                )
+            }
+
+            // Slow-load heads-up (catalog fetch still running after 10s — usually a Cloudflare /
+            // verification challenge): show a brief banner with a direct "Verify" jump to the
+            // site-verification WebView. Auto-dismisses after ~2s.
+            val catalogWarning = catalogLoadWarning
+            if (catalogWarning != null) {
+                SlowLoadWarningCard(
+                    message = catalogWarning,
+                    onDismiss = { viewModel.clearCatalogLoadWarning() },
+                    actionLabel = "Verify",
+                    onAction = {
+                        if (activeSourceBaseUrl.isNotBlank()) {
+                            webviewTarget = activeSourceBaseUrl to sourceUserAgent(activeSourceId)
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 )
             }
         }
@@ -1078,38 +1100,6 @@ fun CatalogTabContent(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = CircleShape
-                    ) {
-                        Text(
-                            text = when {
-                                searchQuery.startsWith("tag:") ->
-                                    "Tag: ${searchQuery.removePrefix("tag:")} • $sourceName"
-                                mode == "popular" && searchQuery.isBlank() -> "Popular in $sourceName"
-                                searchQuery.isBlank() -> "Latest from $sourceName"
-                                else -> "Results from $sourceName"
-                            },
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.onPrimaryContainer)
-                        )
-                    }
-                    Spacer(modifier = Modifier.weight(1f))
-                    if (sourceBaseUrl.isNotBlank()) {
-                        TextButton(onClick = { onOpenWebView(sourceBaseUrl) }) {
-                            Icon(
-                                imageVector = Icons.Default.Language,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Cloudflare check")
-                        }
-                    }
-                }
         }
 
         when {
