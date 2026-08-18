@@ -297,6 +297,15 @@ fun BrowseScreen(
         }
     }
 
+    // Auto-refresh added repos' catalogs when the user opens the Repos/Extensions tab, so new
+    // extensions / extension updates show up without relaunching (rate-limited; the launch-time
+    // refresh already covers cold starts).
+    LaunchedEffect(selectedTabIndex) {
+        if (selectedTabIndex == TAB_EXTENSIONS || selectedTabIndex == TAB_REPOS) {
+            viewModel.refreshExtensionReposIfNeeded()
+        }
+    }
+
     val repoNameById: Map<String, String> = extensionRepos.associate { it.id to it.name }
 
     // Browsing a source's catalog hides the outer "Browse & Extensions" chrome (title + tab row)
