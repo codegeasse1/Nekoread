@@ -1186,7 +1186,7 @@ fun CatalogTabContent(
                     if (shouldLoadMore) onLoadMore()
                 }
                 LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 130.dp),
+                    columns = GridCells.Fixed(3),
                     state = gridState,
                     contentPadding = PaddingValues(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
