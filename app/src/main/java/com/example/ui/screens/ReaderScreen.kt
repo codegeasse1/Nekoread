@@ -329,8 +329,8 @@ fun ReaderScreen(
     LaunchedEffect(pages, currentPage, imageLoader) {
         val list = pages ?: return@LaunchedEffect
         if (imageLoader == null || list.isEmpty()) return@LaunchedEffect
-        val start = (currentPage - 2).coerceAtLeast(0)
-        val end = (currentPage + 5).coerceAtMost(list.size)
+        val start = (currentPage - 10).coerceAtLeast(0)
+        val end = (currentPage + 11).coerceAtMost(list.size)
         for (i in start until end) {
             val model = list[i]
             imageLoader.enqueue(
