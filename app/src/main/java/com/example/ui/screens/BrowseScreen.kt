@@ -94,7 +94,6 @@ import com.example.ui.components.GlassCard
 import com.example.ui.components.GlassSearchBar
 import com.example.ui.components.MangaGridCard
 import com.example.ui.components.MangaListCard
-import com.example.ui.components.SlowLoadWarningCard
 import com.example.ui.theme.GlassCardBorder
 import com.example.ui.theme.GlassSurface
 import com.example.ui.theme.NekoGoldBadge
@@ -218,7 +217,7 @@ fun BrowseScreen(
     val catalogMode: String by viewModel.catalogMode.collectAsStateWithLifecycle()
     val catalogLoadingMore: Boolean by viewModel.catalogLoadingMore.collectAsStateWithLifecycle()
     val catalogHasMore: Boolean by viewModel.catalogHasMore.collectAsStateWithLifecycle()
-    val catalogLoadWarning: String? by viewModel.catalogLoadWarning.collectAsStateWithLifecycle()
+    val catalogNeedsVerification: Boolean by viewModel.catalogNeedsVerification.collectAsStateWithLifecycle()
 
     val globalResults: List<MangaEntity> by viewModel.globalResults.collectAsStateWithLifecycle()
     val globalLoading: Boolean by viewModel.globalLoading.collectAsStateWithLifecycle()
@@ -244,6 +243,13 @@ fun BrowseScreen(
         else runCatching { viewModel.repository.sourceForManga("$sourceId:x").userAgent }
             .getOrNull()
             ?.takeIf { it.isNotBlank() }
+
+    LaunchedEffect(catalogNeedsVerification, activeSourceBaseUrl, activeSourceId) {
+        if (catalogNeedsVerification && activeSourceBaseUrl.isNotBlank() && webviewTarget == null) {
+            viewModel.consumeCatalogVerification()
+            webviewTarget = activeSourceBaseUrl to sourceUserAgent(activeSourceId)
+        }
+    }
 
     // Show operation results (repo add/refresh/delete, install errors) in a snackbar.
     LaunchedEffect(opMessage) {
@@ -535,25 +541,6 @@ fun BrowseScreen(
                 )
             }
 
-            // Slow-load heads-up (catalog fetch still running after 10s — usually a Cloudflare /
-            // verification challenge): show a brief banner with a direct "Verify" jump to the
-            // site-verification WebView. Auto-dismisses after ~2s.
-            val catalogWarning = catalogLoadWarning
-            if (catalogWarning != null) {
-                SlowLoadWarningCard(
-                    message = catalogWarning,
-                    onDismiss = { viewModel.clearCatalogLoadWarning() },
-                    actionLabel = "Verify",
-                    onAction = {
-                        if (activeSourceBaseUrl.isNotBlank()) {
-                            webviewTarget = activeSourceBaseUrl to sourceUserAgent(activeSourceId)
-                        }
-                    },
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                )
-            }
         }
     }
 

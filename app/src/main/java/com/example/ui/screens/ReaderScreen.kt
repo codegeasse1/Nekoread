@@ -83,7 +83,7 @@ import com.example.ui.MainViewModel
 import com.example.ui.ReaderBg
 import com.example.ui.ReaderFit
 import com.example.ui.ReaderMode
-import com.example.ui.components.SlowLoadWarningCard
+import com.example.ui.looksLikeCloudflare
 import com.example.util.sortChapters
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -121,6 +121,7 @@ fun ReaderScreen(
     var pageError by remember { mutableStateOf<String?>(null) }
     var pageLoading by remember { mutableStateOf(true) }
     var retryKey by remember { mutableStateOf(0) }
+    var pendingCfVerify by remember(chapter.id) { mutableStateOf(false) }
     var slowChapterWarning by remember(chapter.id) { mutableStateOf(false) }
 
     // Continuous-reading stream (webtoon modes): chapters in reading order + their loaded pages.
@@ -132,21 +133,16 @@ fun ReaderScreen(
     LaunchedEffect(chapter.id, retryKey) {
         pageLoading = true
         pageError = null
-        slowChapterWarning = false
-        // Heads-up: if the chapter is still loading after 15s, show a brief warning (the usual
-        // cause is a Cloudflare / verification challenge), with a Verify shortcut to the WebView.
-        val slowTimeout = launch {
-            delay(15_000)
-            if (pageLoading) slowChapterWarning = true
-        }
         try {
             pages = viewModel.repository.getChapterPageImageModels(chapter.id)
         } catch (e: Throwable) {
             pageError = e.message ?: "Failed to load chapter pages"
             pages = null
+            if (looksLikeCloudflare(e)) {
+                pendingCfVerify = true
+            }
         } finally {
             pageLoading = false
-            slowTimeout.cancel()
         }
     }
 
@@ -337,7 +333,7 @@ fun ReaderScreen(
                 ImageRequest.Builder(context)
                     .data(model)
                     .memoryCachePolicy(CachePolicy.ENABLED)
-                    .diskCachePolicy(CachePolicy.DISABLED)
+                    .diskCachePolicy(CachePolicy.ENABLED)
                     .build()
             )
         }
@@ -357,6 +353,13 @@ fun ReaderScreen(
 
     // Cloudflare / site verification overlay (a Dialog, so closing it keeps the user in the reader).
     var webviewTarget by remember { mutableStateOf<Pair<String, String?>?>(null) }
+
+    LaunchedEffect(pendingCfVerify, sourceBaseUrl) {
+        if (pendingCfVerify && sourceBaseUrl.isNotBlank()) {
+            pendingCfVerify = false
+            webviewTarget = sourceBaseUrl to sourceUserAgent
+        }
+    }
 
     // Immersive reading: hide the system bars (status bar + nav bar) while reading, and only
     // bring them back when the user taps the screen to show the HUD.
@@ -613,25 +616,6 @@ fun ReaderScreen(
                     }
                 }
             }
-        }
-
-        // Slow-load heads-up: chapter pages still loading after 15s — usually a Cloudflare /
-        // verification challenge. Brief banner (auto-dismisses ~2s) with a Verify shortcut to the
-        // source's WebView.
-        if (slowChapterWarning) {
-            SlowLoadWarningCard(
-                message = "Chapter still loading — the site may be blocked by a verification check.",
-                onDismiss = { slowChapterWarning = false },
-                actionLabel = "Verify",
-                onAction = {
-                    if (sourceBaseUrl.isNotBlank()) {
-                        webviewTarget = sourceBaseUrl to sourceUserAgent
-                    }
-                },
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(horizontal = 16.dp, vertical = 72.dp)
-            )
         }
 
         // Top HUD Bar
@@ -895,7 +879,10 @@ fun ReaderScreen(
         WebViewDialog(
             url = url,
             userAgent = ua,
-            onDismiss = { webviewTarget = null }
+            onDismiss = {
+                webviewTarget = null
+                retryKey++
+            }
         )
     }
 }

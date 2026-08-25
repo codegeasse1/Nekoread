@@ -137,7 +137,7 @@ class MainActivity : ComponentActivity() {
                 // parallel requests at the CDN (which throttles every request to the host and turns
                 // instant page loads into 20-30s hangs). Memory-cache hits are unaffected (they
                 // don't occupy threads). 4 is plenty: visible pages + a couple ahead.
-                .dispatcher(Dispatchers.IO.limitedParallelism(4))
+                .dispatcher(Dispatchers.IO.limitedParallelism(6))
                 .components {
                     add(ExtensionPageImageFetcherFactory())
                     add(ExtensionPageImageKeyer())
