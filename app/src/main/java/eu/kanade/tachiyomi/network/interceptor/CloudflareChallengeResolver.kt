@@ -152,14 +152,13 @@ internal class WebViewCloudflareChallengeResolver(
                     // (auto-closes the moment the challenge is solved). Turnstile renders its
                     // widget asynchronously, so re-probe for a few seconds after page finish.
                     if (challengeDialog == null) {
+                        // Only surface a visible WebView when an interactive widget is actually
+                        // present (Turnstile / challenge iframe). Never force-open after a timeout
+                        // — that popped verification over slow-but-normal sources.
                         probeAndShowDialog(view)
                         view.postDelayed({ probeAndShowDialog(view) }, 1500)
                         view.postDelayed({ probeAndShowDialog(view) }, 3500)
                         view.postDelayed({ probeAndShowDialog(view) }, 6000)
-                        // If it still isn't solved silently after ~9s, surface it visibly — a
-                        // challenge that stays unsolved is exactly the "search returns nothing"
-                        // failure the user hit, because the hidden WebView can't finish it.
-                        view.postDelayed({ probeAndShowDialog(view, force = true) }, 9000)
                     }
                 }
 

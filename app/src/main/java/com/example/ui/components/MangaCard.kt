@@ -45,7 +45,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import com.example.data.local.MangaEntity
 import com.example.data.source.SourceRegistry
 import com.example.ui.theme.SleekGoldBadge
@@ -99,8 +101,15 @@ fun MangaGridCard(
                 // State-aware cover: a small spinner ONLY while the thumbnail is genuinely loading,
                 // and a dim broken-image tile on failure (never an endless spinner). With Coil's
                 // disk cache a loaded cover shows instantly when you come back to the screen.
+                val ctx = LocalContext.current
                 SubcomposeAsyncImage(
-                    model = coverModelFor(manga),
+                    model = ImageRequest.Builder(ctx)
+                        .data(coverModelFor(manga))
+                        .crossfade(true)
+                        .size(360, 500)
+                        .memoryCacheKey("cover:${manga.id}")
+                        .diskCacheKey("cover:${manga.id}:${manga.coverUrl}")
+                        .build(),
                     contentDescription = manga.title,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
@@ -332,8 +341,15 @@ fun MangaListCard(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
+            val ctx = LocalContext.current
             SubcomposeAsyncImage(
-                model = coverModelFor(manga),
+                model = ImageRequest.Builder(ctx)
+                    .data(coverModelFor(manga))
+                    .crossfade(true)
+                    .size(180, 240)
+                    .memoryCacheKey("cover:${manga.id}")
+                    .diskCacheKey("cover:${manga.id}:${manga.coverUrl}")
+                    .build(),
                 contentDescription = manga.title,
                 modifier = Modifier
                     .size(width = 60.dp, height = 80.dp)
