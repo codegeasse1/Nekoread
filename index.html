@@ -1,0 +1,388 @@
+<script type="text/x-server-plugin">
+const viewers = new Set();
+self.onopen = ({conn}) => {
+  conn.subscribe("presence");
+  viewers.add(conn.id);
+  pubsub.publish("presence", String(viewers.size));
+};
+self.onclose = ({conn}) => {
+  viewers.delete(conn.id);
+  pubsub.publish("presence", String(viewers.size));
+};
+</script>
+
+<style>
+  :root {
+    --bg: #0b0f17;
+    --panel: #121a28;
+    --panel2: #0f1622;
+    --border: #1f2a3a;
+    --text: #e6edf7;
+    --muted: #8b98ab;
+    --accent: #6c8cff;
+    --accent2: #9d5cff;
+    --user: #1c3a6e;
+    --code-bg: #0a0f18;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 20% -10%, #152040, var(--bg) 60%);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    text-align: left;
+  }
+  #app {
+    display: flex;
+    height: 100dvh;
+    width: 100%;
+    overflow: hidden;
+  }
+  #mainEl {
+    flex: 1; min-width: 0;
+    display: flex; flex-direction: column; height: 100dvh;
+    max-width: 860px; margin: 0 auto; padding: 0 14px;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 2px 10px;
+    border-bottom: 1px solid var(--border);
+    flex: 0 0 auto;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 0 1 auto; }
+  .logo .text { min-width: 0; overflow: hidden; }
+  .logo .mark {
+    width: 32px; height: 32px; border-radius: 9px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: grid; place-items: center; font-weight: 800; font-size: 15px; color: #fff;
+    box-shadow: 0 2px 12px rgba(108,140,255,.35);
+    flex: 0 0 auto;
+  }
+  .logo h1 { font-size: 17px; margin: 0; letter-spacing: .2px; }
+  .logo .tag { font-size: 11px; color: var(--muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  header .spacer { flex: 1; }
+  .viewer {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--muted);
+    background: var(--panel); border: 1px solid var(--border);
+    padding: 5px 10px; border-radius: 999px; flex: 0 0 auto; white-space: nowrap;
+    transition: all .15s;
+  }
+  .viewer .vdot {
+    width: 8px; height: 8px; border-radius: 50%; background: #3ddc84;
+    box-shadow: 0 0 8px #3ddc84; animation: pulse 2s infinite; flex: 0 0 auto;
+  }
+  .viewer.off { color: #7a8598; }
+  .viewer.off .vdot { background: #55606f; box-shadow: none; animation: none; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+  .toggle {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--muted); cursor: pointer; user-select: none;
+    background: var(--panel); border: 1px solid var(--border);
+    padding: 5px 10px; border-radius: 999px; flex: 0 0 auto;
+    transition: all .15s;
+  }
+  .toggle.on { color: var(--text); border-color: rgba(108,140,255,.55); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #55606f; flex: 0 0 auto; }
+  .toggle.on .dot { background: #3ddc84; box-shadow: 0 0 8px #3ddc84; }
+  .iconbtn {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-size: 14px;
+    display: grid; place-items: center; flex: 0 0 auto; transition: all .15s;
+  }
+  .iconbtn:hover { color: var(--text); border-color: #33415a; }
+  #newChatBtn {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none; color: #fff; font-weight: 700; font-size: 12.5px;
+    border-radius: 999px; padding: 7px 13px; cursor: pointer; flex: 0 0 auto;
+    box-shadow: 0 2px 10px rgba(108,140,255,.3); white-space: nowrap;
+    transition: all .15s;
+  }
+  #newChatBtn:hover { filter: brightness(1.1); }
+  #sidebarEl {
+    flex: 0 0 250px; width: 250px;
+    background: var(--panel2); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 14px 10px;
+  }
+  .side-head { padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .side-title { font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 10px; }
+  .newbtn {
+    width: 100%; background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none; color: #fff; font-weight: 700; font-size: 13px;
+    border-radius: 10px; padding: 9px 12px; cursor: pointer;
+    box-shadow: 0 2px 10px rgba(108,140,255,.3);
+  }
+  #chatListEl { flex: 1; overflow-y: auto; margin-top: 10px; min-height: 0; }
+  .chatitem {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; border-radius: 9px; cursor: pointer;
+    font-size: 13px; color: var(--muted); border: 1px solid transparent;
+  }
+  .chatitem:hover { background: #16223a; color: var(--text); }
+  .chatitem.active { background: #1a2a4a; color: var(--text); border-color: rgba(108,140,255,.4); }
+  .ctitle { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cdel {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 11px; padding: 2px 5px; border-radius: 5px; flex: 0 0 auto; opacity: 0;
+  }
+  .chatitem:hover .cdel, .chatitem.active .cdel { opacity: 1; }
+  .cdel:hover { color: #ff9db0; background: #3a1620; }
+  .side-empty { font-size: 12px; color: var(--muted); padding: 14px 6px; }
+  .side-foot { font-size: 11px; color: var(--muted); padding-top: 12px; border-top: 1px solid var(--border); margin-top: 10px; }
+  #backdropEl { display: none; }
+  #messagesEl {
+    flex: 1; overflow-y: auto; padding: 18px 2px 8px; scroll-behavior: smooth;
+    min-height: 0;
+  }
+  .row { display: flex; margin-bottom: 14px; }
+  .row.user { justify-content: flex-end; }
+  .row.bot .avatar {
+    flex: 0 0 30px; width: 30px; height: 30px; border-radius: 9px; margin-right: 10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: grid; place-items: center; font-weight: 800; font-size: 14px; color: #fff;
+  }
+  .bubble {
+    max-width: 82%; padding: 10px 14px; border-radius: 14px;
+    font-size: 14.5px; line-height: 1.55; overflow-wrap: break-word;
+  }
+  .row.user .bubble { background: var(--user); border-bottom-right-radius: 4px; }
+  .row.bot .bubble {
+    background: var(--panel); border: 1px solid var(--border);
+    border-bottom-left-radius: 4px; max-width: 88%;
+  }
+  .bubble p { margin: 0 0 8px; }
+  .bubble p:last-child { margin-bottom: 0; }
+  .bubble pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 12px; overflow-x: auto;
+    margin: 8px 0;
+  }
+  .bubble code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+  }
+  .bubble :not(pre) > code { background: #1a2440; padding: 1.5px 5px; border-radius: 5px; color: #b6c6ff; }
+  .bubble h3, .bubble h4 { margin: 10px 0 6px; }
+  .bubble blockquote { margin: 6px 0; padding: 2px 0 2px 10px; border-left: 3px solid var(--accent); color: var(--muted); }
+  .bubble ul { margin: 6px 0; padding-left: 20px; }
+  .bubble li { margin: 2px 0; }
+  .bubble a { color: #7fa0ff; }
+  .status {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--muted);
+    background: var(--panel2); border: 1px solid var(--border);
+    padding: 5px 11px; border-radius: 999px; margin-top: 8px;
+  }
+  .status .spinner {
+    width: 11px; height: 11px; border-radius: 50%;
+    border: 2px solid #2a3650; border-top-color: var(--accent);
+    animation: spin .8s linear infinite; flex: 0 0 auto;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .typing { display: inline-flex; gap: 5px; padding: 4px 2px; }
+  .typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite; }
+  .typing span:nth-child(2) { animation-delay: .2s; }
+  .typing span:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink {
+    0%, 100% { opacity: .25; transform: translateY(0); }
+    50% { opacity: 1; transform: translateY(-3px); }
+  }
+  .actions { margin-top: 8px; display: flex; gap: 6px; }
+  .actbtn {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    border-radius: 7px; font-size: 11.5px; padding: 3px 9px; cursor: pointer; transition: all .15s;
+  }
+  .actbtn:hover { color: var(--text); border-color: #33415a; }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 6px; margin-top: 10px; }
+  .gimg { display: block; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); background: var(--code-bg); aspect-ratio: 1 / 1; text-decoration: none; }
+  .gimg img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #suggestions { display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 0 4px; flex: 0 0 auto; }
+  .chip {
+    background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+    font-size: 12px; padding: 6px 12px; border-radius: 999px; cursor: pointer; transition: all .15s;
+  }
+  .chip:hover { color: var(--text); border-color: rgba(108,140,255,.55); background: #14203a; }
+  form {
+    display: flex; gap: 8px; align-items: flex-end;
+    padding: 10px 0 14px; flex: 0 0 auto;
+  }
+  #chatInput {
+    flex: 1; resize: none; max-height: 160px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    color: var(--text); font: inherit; font-size: 14px; line-height: 1.5;
+    padding: 10px 12px; outline: none;
+  }
+  #chatInput::placeholder { color: #5b687c; }
+  #chatInput:focus { border-color: rgba(108,140,255,.6); box-shadow: 0 0 0 3px rgba(108,140,255,.12); }
+  #sendBtn {
+    height: 40px; padding: 0 18px; border: none; border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; flex: 0 0 auto;
+    box-shadow: 0 2px 14px rgba(108,140,255,.3);
+  }
+  #sendBtn:disabled { opacity: .45; cursor: default; box-shadow: none; }
+  #stopBtn {
+    height: 40px; padding: 0 16px; border-radius: 12px;
+    background: #3a1620; border: 1px solid #6b2638; color: #ff9db0;
+    font-weight: 700; font-size: 13px; cursor: pointer; flex: 0 0 auto;
+  }
+  .hint { font-size: 11.5px; color: var(--muted); text-align: center; padding-bottom: 12px; flex: 0 0 auto; }
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-thumb { background: #243149; border-radius: 4px; }
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(4, 8, 16, .66); backdrop-filter: blur(3px);
+    display: grid; place-items: center; padding: 16px;
+  }
+  .modal {
+    width: 100%; max-width: 440px; max-height: 90dvh; overflow-y: auto;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
+    padding: 18px; box-shadow: 0 18px 60px rgba(0,0,0,.6);
+  }
+  .modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .modal-title { font-size: 16px; font-weight: 800; }
+  .gh-intro { font-size: 12px; color: var(--muted); line-height: 1.55; margin-bottom: 6px; }
+  .gh-intro b { color: var(--text); }
+  .gh-label { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin: 10px 0 5px; }
+  .gh-clear { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 10.5px; text-transform: none; letter-spacing: 0; padding: 0; }
+  .gh-clear:hover { text-decoration: underline; }
+  .gh-input {
+    width: 100%; background: var(--panel2); border: 1px solid var(--border); border-radius: 9px;
+    color: var(--text); font: inherit; font-size: 13.5px; padding: 9px 11px; outline: none;
+  }
+  .gh-input:focus { border-color: rgba(108,140,255,.6); box-shadow: 0 0 0 3px rgba(108,140,255,.12); }
+  .gh-input::placeholder { color: #5b687c; }
+  .gh-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .gh-files { font-size: 11.5px; color: var(--muted); background: var(--panel2); border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; margin: 14px 0 12px; line-height: 1.5; }
+  #ghCommitBtn {
+    width: 100%; padding: 11px 14px; border: none; border-radius: 11px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff;
+    font-weight: 700; font-size: 14px; cursor: pointer;
+    box-shadow: 0 2px 14px rgba(108,140,255,.3);
+  }
+  #ghCommitBtn:hover { filter: brightness(1.08); }
+  #ghCommitBtn:disabled { opacity: .5; cursor: default; box-shadow: none; }
+  .gh-status { margin-top: 10px; font-size: 12.5px; color: var(--muted); min-height: 16px; }
+  .gh-status.error { color: #ff9db0; }
+  .gh-status.ok { color: #3ddc84; }
+  .gh-result { margin-top: 6px; font-size: 13px; }
+  .gh-result a { color: #7fa0ff; }
+  @media (max-width: 560px) {
+    .bubble { max-width: 92%; }
+    .row.bot .bubble { max-width: 96%; }
+    #mainEl { padding: 0 10px; }
+    .toggle { padding: 5px 8px; font-size: 11px; }
+    .viewer { padding: 5px 8px; font-size: 11px; }
+    header { gap: 5px; }
+    .toggle { padding: 5px 6px; }
+    .logo .text { display: none; }
+    #newChatBtn { padding: 7px 9px; font-size: 12px; }
+  }
+  @media (max-width: 760px) {
+    #sidebarEl {
+      position: fixed; left: 0; top: 0; bottom: 0; z-index: 50;
+      width: 272px; transform: translateX(-100%); transition: transform .22s ease;
+      box-shadow: 2px 0 28px rgba(0,0,0,.55);
+    }
+    #sidebarEl.open { transform: translateX(0); }
+    #backdropEl.show { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 40; }
+    .viewer { display: none; }
+    #newChatBtn { padding: 7px 9px; }
+  }
+  @media (min-width: 761px) {
+    #sidebarToggleBtn { display: none; }
+  }
+</style>
+
+<div id="app">
+  <aside id="sidebarEl">
+    <div class="side-head">
+      <div class="side-title">Chats</div>
+      <button type="button" id="sideNewChatBtn" class="newbtn">+ New chat</button>
+    </div>
+    <div id="chatListEl"></div>
+    <div class="side-foot">Chats are saved on this device and stay until you delete them.</div>
+  </aside>
+  <div id="backdropEl"></div>
+  <div id="mainEl">
+  <header>
+    <button class="iconbtn" id="sidebarToggleBtn" title="Chat history">&#9776;</button>
+    <div class="logo">
+      <div class="mark">N</div>
+      <div class="text">
+        <h1>Nexo</h1>
+        <div class="tag">AI coding copilot · internet on</div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <button type="button" id="newChatBtn" title="Start a new chat">+ New chat</button>
+    <div class="viewer" id="viewerEl" title="Live viewer count"><span class="vdot"></span><span class="vtext">connecting…</span></div>
+    <label class="toggle" id="quickWrap" title="Terse, fast answers">
+      <span class="dot"></span><span>Quick</span>
+      <input type="checkbox" id="quickToggle" hidden>
+    </label>
+    <label class="toggle on" id="netWrap" title="Web search + page fetch">
+      <span class="dot"></span><span>Internet</span>
+      <input type="checkbox" id="netToggle" checked hidden>
+    </label>
+    <button class="iconbtn" id="clearBtn" title="Clear chat">&#128465;</button>
+    <button class="iconbtn" id="ghBtn" title="Commit to GitHub"><svg class="ghico" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></button>
+  </header>
+  <main id="messagesEl"></main>
+  <footer>
+    <div id="suggestions">
+      <button class="chip" data-q="Write a React hook that debounces a value">React debounce hook</button>
+      <button class="chip" data-q="Explain Big-O notation with examples">Big-O explained</button>
+      <button class="chip" data-q="My fetch promise never resolves. Why, and how do I fix it?">Fix my fetch bug</button>
+      <button class="chip" data-q="How do I bundle a library with esbuild?">esbuild setup</button>
+      <button class="chip" data-q="Give me a 10 line recipe for lazy-loading images">Lazy-load images</button>
+    </div>
+    <form id="chatForm">
+      <textarea id="chatInput" rows="1" placeholder="Ask Nexo about code, debugging, architecture..."></textarea>
+      <button type="button" id="sendBtn">Send</button>
+      <button type="button" id="stopBtn" hidden>Stop</button>
+    </form>
+    <div class="hint" id="hintEl">Internet access on — Nexo can search the web and read pages live.</div>
+  </footer>
+  </div>
+</div>
+
+<div id="ghModal" class="modal-overlay" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title"><svg class="ghico" viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true" style="vertical-align:-3px;margin-right:6px"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>Commit to GitHub</div>
+      <button type="button" class="iconbtn" id="ghCloseBtn" title="Close">✕</button>
+    </div>
+    <div class="gh-intro">Paste a GitHub <b>personal access token</b> (github.com &rarr; Developer settings, <b>repo</b> / <b>Contents: Read and write</b> scope). Stored only in this browser — never in the generator source. Your generator must be <b>saved</b> first — the commit pushes the saved version.</div>
+    <label class="gh-label" for="ghTokenInput">Token <button type="button" class="gh-clear" id="ghTokenClearBtn">clear saved</button></label>
+    <input class="gh-input" id="ghTokenInput" type="password" placeholder="github_pat_… or ghp_…" autocomplete="off" spellcheck="false">
+    <div class="gh-row">
+      <div>
+        <label class="gh-label" for="ghOwnerInput">Owner</label>
+        <input class="gh-input" id="ghOwnerInput" type="text" placeholder="github-user">
+      </div>
+      <div>
+        <label class="gh-label" for="ghRepoInput">Repo</label>
+        <input class="gh-input" id="ghRepoInput" type="text" placeholder="my-repo">
+      </div>
+    </div>
+    <div class="gh-row">
+      <div>
+        <label class="gh-label" for="ghBranchInput">Branch</label>
+        <input class="gh-input" id="ghBranchInput" type="text" placeholder="main">
+      </div>
+      <div>
+        <label class="gh-label" for="ghMessageInput">Commit message</label>
+        <input class="gh-input" id="ghMessageInput" type="text" placeholder="Update from Nexo">
+      </div>
+    </div>
+    <div class="gh-files" id="ghFilesEl"></div>
+    <button type="button" id="ghCommitBtn">Commit &amp; push</button>
+    <div class="gh-status" id="ghStatus"></div>
+    <div class="gh-result" id="ghResult"></div>
+  </div>
+</div>
+
+<script>root.initApp()</script>
