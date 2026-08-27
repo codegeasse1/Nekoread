@@ -103,6 +103,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _autoScrollSpeedDp = MutableStateFlow(80f)
     val autoScrollSpeedDp: StateFlow<Float> = _autoScrollSpeedDp.asStateFlow()
 
+    private val _readerQuality = MutableStateFlow(75)
+    val readerQuality: StateFlow<Int> = _readerQuality.asStateFlow()
+
     init {
         // Load persisted reader settings (stored in SharedPreferences, survives app restarts).
         _readerMode.value = ReaderMode.valueOf(prefs.getString("reader_mode", ReaderMode.WEBTOON.name)!!)
@@ -127,6 +130,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _webtoonFade.value = prefs.getBoolean("reader_webtoon_fade", false)
         _autoScroll.value = prefs.getBoolean("reader_auto_scroll", false)
         _autoScrollSpeedDp.value = prefs.getFloat("reader_auto_scroll_speed", 80f)
+        _readerQuality.value = when (prefs.getInt("reader_quality", 75)) {
+            50 -> 50
+            100 -> 100
+            else -> 75
+        }
     }
 
     // Library Filter & Search
@@ -413,6 +421,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setReaderBg(bg: ReaderBg) {
         _readerBg.value = bg
         prefs.edit().putString("reader_bg", bg.name).apply()
+    }
+
+    fun setReaderQuality(quality: Int) {
+        val q = when (quality) {
+            50 -> 50
+            100 -> 100
+            else -> 75
+        }
+        _readerQuality.value = q
+        prefs.edit().putInt("reader_quality", q).apply()
     }
 
     fun setReaderFit(fit: ReaderFit) {
