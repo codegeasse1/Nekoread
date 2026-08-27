@@ -77,6 +77,7 @@ import coil.compose.LocalImageLoader
 import coil.compose.SubcomposeAsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
+import coil.size.Dimension
 import coil.size.Size
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
@@ -337,7 +338,7 @@ fun ReaderScreen(
             imageLoader.enqueue(
                 ImageRequest.Builder(context)
                     .data(model)
-                    .size(Size(screenWidthPx, Size.ORIGINAL))
+                    .size(Size(screenWidthPx, Dimension.Undefined))
                     .memoryCachePolicy(CachePolicy.ENABLED)
                     .diskCachePolicy(CachePolicy.ENABLED)
                     .build()
@@ -951,7 +952,7 @@ private fun ReaderPageImage(
     SubcomposeAsyncImage(
         model = ImageRequest.Builder(context)
             .data(model)
-            .size(Size(screenWidthPx, Size.ORIGINAL))
+            .size(Size(screenWidthPx, Dimension.Undefined))
             .setParameter("reader_retry", attempt)
             .build(),
         contentDescription = contentDescription,
