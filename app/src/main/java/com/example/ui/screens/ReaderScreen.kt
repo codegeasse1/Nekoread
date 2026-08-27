@@ -376,7 +376,7 @@ fun ReaderScreen(
         val list = pages ?: return@LaunchedEffect
         if (imageLoader == null || list.isEmpty()) return@LaunchedEffect
         val start = (currentPage - 1).coerceAtLeast(0)
-        val end = (currentPage + 4).coerceAtMost(list.size)
+        val end = (currentPage + 8).coerceAtMost(list.size)
         for (i in start until end) {
             val model = list[i]
             launch {
@@ -588,11 +588,13 @@ fun ReaderScreen(
                                     val ratio = pageAspectRatios[pageModel.toString()]
                                     if (ratio != null && ratio > 0f) {
                                         // True height known: size the slot exactly so the list never
-                                        // relayouts when the strip finishes decoding.
+                                        // relayouts when the strip finishes decoding. screenWidthPx is
+                                        // in pixels, so convert to dp via the display density.
+                                        val stripHeight = with(density) { (screenWidthPx / ratio).toDp() }
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .height((screenWidthPx / ratio).dp)
+                                                .height(stripHeight)
                                                 .clipToBounds()
                                                 .testTag("reader_page_${segIdx}_$pi")
                                         ) {
