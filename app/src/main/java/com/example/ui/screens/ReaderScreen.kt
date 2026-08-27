@@ -77,6 +77,7 @@ import coil.compose.LocalImageLoader
 import coil.compose.SubcomposeAsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
+import coil.size.Size
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
 import com.example.ui.MainViewModel
@@ -317,21 +318,26 @@ fun ReaderScreen(
         }
     }
 
-    // Quick-load nearby pages: warm Coil's MEMORY cache (no disk cache!) for the pages around the
-    // current one, so scrolling or jumping to a page renders instantly. The image bytes are keyed
-    // by their URL, never by position, so there's no risk of serving another chapter's page.
+    // Quick-load nearby pages: warm Coil's MEMORY cache for the pages around the current one, so
+    // scrolling or jumping to a page renders instantly. The image bytes are keyed by their URL,
+    // never by position, so there's no risk of serving another chapter's page. Pages are decoded
+    // at screen width (exact), not the full source resolution, so strips cost ~4x less memory and
+    // scrolling stays smooth. The memory cache key includes the size, so prewarm and display share
+    // the same decoded bitmap.
     val imageLoader = LocalImageLoader.current
     val context = LocalContext.current
+    val screenWidthPx = context.resources.displayMetrics.widthPixels
     LaunchedEffect(pages, currentPage, imageLoader) {
         val list = pages ?: return@LaunchedEffect
         if (imageLoader == null || list.isEmpty()) return@LaunchedEffect
-        val start = (currentPage - 2).coerceAtLeast(0)
-        val end = (currentPage + 5).coerceAtMost(list.size)
+        val start = (currentPage - 1).coerceAtLeast(0)
+        val end = (currentPage + 4).coerceAtMost(list.size)
         for (i in start until end) {
             val model = list[i]
             imageLoader.enqueue(
                 ImageRequest.Builder(context)
                     .data(model)
+                    .size(Size(screenWidthPx, Size.ORIGINAL))
                     .memoryCachePolicy(CachePolicy.ENABLED)
                     .diskCachePolicy(CachePolicy.ENABLED)
                     .build()
@@ -918,6 +924,7 @@ private fun ReaderPageImage(
         .heightIn(min = 240.dp)
 ) {
     val context = LocalContext.current
+    val screenWidthPx = context.resources.displayMetrics.widthPixels
     // Auto-retry a failed page image up to 10 retries with a short pause between attempts — a
     // transient network hiccup or Cloudflare challenge usually clears on a later try. Each retry
     // builds a fresh request (the changing parameter busts Coil's cache key), so it's a real new
@@ -944,6 +951,7 @@ private fun ReaderPageImage(
     SubcomposeAsyncImage(
         model = ImageRequest.Builder(context)
             .data(model)
+            .size(Size(screenWidthPx, Size.ORIGINAL))
             .setParameter("reader_retry", attempt)
             .build(),
         contentDescription = contentDescription,

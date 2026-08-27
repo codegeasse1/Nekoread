@@ -34,6 +34,9 @@ interface CloudflareChallengeResolver {
  *    ([CloudflareChallengeDialog]) so the user can complete them by hand; the dialog polls the
  *    cookie store and auto-dismisses + retries the moment a fresh `cf_clearance` appears — no
  *    hunting for a "verify" button on whatever screen the request happened on.
+ *  - If a challenge hasn't cleared headlessly within a few seconds, the visible dialog is
+ *    force-opened automatically (some interstitials only finish in a visible WebView), and closes
+ *    itself as soon as the challenge is solved.
  */
 internal class WebViewCloudflareChallengeResolver(
     private val context: Context,
@@ -152,9 +155,6 @@ internal class WebViewCloudflareChallengeResolver(
                     // (auto-closes the moment the challenge is solved). Turnstile renders its
                     // widget asynchronously, so re-probe for a few seconds after page finish.
                     if (challengeDialog == null) {
-                        // Only surface a visible WebView when an interactive widget is actually
-                        // present (Turnstile / challenge iframe). Never force-open after a timeout
-                        // — that popped verification over slow-but-normal sources.
                         probeAndShowDialog(view)
                         view.postDelayed({ probeAndShowDialog(view) }, 1500)
                         view.postDelayed({ probeAndShowDialog(view) }, 3500)
@@ -186,6 +186,16 @@ internal class WebViewCloudflareChallengeResolver(
             }
 
             createdWebView.loadUrl(origRequestUrl, headers)
+
+            // If the challenge hasn't cleared headlessly after a short grace period, force the
+            // visible dialog open — most remaining interstitials only finish in a visible WebView.
+            // It auto-closes the moment a fresh cf_clearance cookie appears (see
+            // CloudflareChallengeDialog), so the user may not even notice it.
+            Handler(Looper.getMainLooper()).postDelayed({
+                if (!cloudflareBypassed && challengeDialog == null) {
+                    probeAndShowDialog(createdWebView, force = true)
+                }
+            }, FORCE_VISIBLE_TIMEOUT_MS)
 
             // Bail quickly (like Tadami's 30s) for challenges that never became interactive.
             Handler(Looper.getMainLooper()).postDelayed({
@@ -254,6 +264,7 @@ internal val INTERACTIVE_WIDGET_PROBE = """
 """.trimIndent()
 
 private const val SILENT_SOLVE_TIMEOUT_MS = 35_000L
+private const val FORCE_VISIBLE_TIMEOUT_MS = 12_000L
 
 internal open class CloudflareBypassException : Exception()
 internal class CloudflareInteractiveChallengeException : CloudflareBypassException()

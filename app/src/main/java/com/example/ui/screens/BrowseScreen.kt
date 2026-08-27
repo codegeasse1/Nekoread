@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Public
@@ -89,6 +90,7 @@ import com.example.data.local.ExtensionEntity
 import com.example.data.local.ExtensionRepoEntity
 import com.example.data.local.ExtensionSourceEntity
 import com.example.data.local.MangaEntity
+import com.example.ui.GlobalSearchSection
 import com.example.ui.MainViewModel
 import com.example.ui.components.GlassCard
 import com.example.ui.components.GlassSearchBar
@@ -219,10 +221,11 @@ fun BrowseScreen(
     val catalogHasMore: Boolean by viewModel.catalogHasMore.collectAsStateWithLifecycle()
     val catalogNeedsVerification: Boolean by viewModel.catalogNeedsVerification.collectAsStateWithLifecycle()
 
-    val globalResults: List<MangaEntity> by viewModel.globalResults.collectAsStateWithLifecycle()
+    val globalSections: List<GlobalSearchSection> by viewModel.globalSections.collectAsStateWithLifecycle()
     val globalLoading: Boolean by viewModel.globalLoading.collectAsStateWithLifecycle()
     val globalError: String? by viewModel.globalError.collectAsStateWithLifecycle()
     val globalSearchedSources: Int by viewModel.globalSearchedSources.collectAsStateWithLifecycle()
+    val globalTotalSources: Int by viewModel.globalTotalSources.collectAsStateWithLifecycle()
 
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var globalQuery by rememberSaveable { mutableStateOf("") }
@@ -494,10 +497,12 @@ fun BrowseScreen(
                 TAB_GLOBAL -> GlobalSearchTabContent(
                     query = globalQuery,
                     onQueryChange = { globalQuery = it },
-                    results = globalResults,
+                    sections = globalSections,
                     isLoading = globalLoading,
                     error = globalError,
                     searchedSources = globalSearchedSources,
+                    totalSources = globalTotalSources,
+                    onStopSearch = { viewModel.stopGlobalSearch() },
                     onMangaClick = onMangaClick
                 )
                 TAB_CATALOG -> CatalogTabContent(
@@ -857,10 +862,12 @@ fun SourcesTabContent(
 fun GlobalSearchTabContent(
     query: String,
     onQueryChange: (String) -> Unit,
-    results: List<MangaEntity>,
+    sections: List<GlobalSearchSection>,
     isLoading: Boolean,
     error: String?,
     searchedSources: Int,
+    totalSources: Int,
+    onStopSearch: () -> Unit,
     onMangaClick: (String) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -878,7 +885,11 @@ fun GlobalSearchTabContent(
                         shape = CircleShape
                     ) {
                         Text(
-                            text = "Searching $searchedSources sources",
+                            text = if (isLoading) {
+                                "Searching $searchedSources of $totalSources sources"
+                            } else {
+                                "Searched $searchedSources sources"
+                            },
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                             style = MaterialTheme.typography.labelMedium.copy(
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -889,11 +900,25 @@ fun GlobalSearchTabContent(
                 }
                 if (query.isNotBlank() && !isLoading && error == null) {
                     Text(
-                        text = "${results.size} results",
+                        text = "${sections.sumOf { it.manga.size }} results",
                         style = MaterialTheme.typography.labelMedium.copy(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     )
+                }
+                if (query.isNotBlank() && isLoading) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    IconButton(
+                        onClick = onStopSearch,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Stop search",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }
@@ -919,6 +944,49 @@ fun GlobalSearchTabContent(
                             style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                             textAlign = TextAlign.Center
                         )
+                    }
+                }
+            }
+
+            sections.isNotEmpty() -> {
+                LazyColumn(
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    sections.forEach { section ->
+                        item(key = "section_${section.sourceId}") {
+                            GlobalSectionHeader(section.sourceName, section.manga.size)
+                        }
+                        items(section.manga, key = { it.id }) { manga ->
+                            MangaListCard(
+                                manga = manga,
+                                onClick = { onMangaClick(manga.id) }
+                            )
+                        }
+                    }
+                    if (isLoading) {
+                        item(key = "searching_more") {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Searching more sources...",
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -956,7 +1024,7 @@ fun GlobalSearchTabContent(
                 }
             }
 
-            results.isEmpty() -> {
+            else -> {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -970,22 +1038,31 @@ fun GlobalSearchTabContent(
                     )
                 }
             }
-
-            else -> {
-                LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(results, key = { it.id }) { manga ->
-                        MangaListCard(
-                            manga = manga,
-                            onClick = { onMangaClick(manga.id) }
-                        )
-                    }
-                }
-            }
         }
+    }
+}
+
+@Composable
+private fun GlobalSectionHeader(sourceName: String, count: Int) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(top = 6.dp)
+    ) {
+        Text(
+            text = sourceName,
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = count.toString(),
+            style = MaterialTheme.typography.labelMedium.copy(
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        )
     }
 }
 

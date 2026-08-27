@@ -14,12 +14,17 @@ import com.example.data.local.ExtensionEntity
 import com.example.data.local.MangaEntity
 import com.example.data.repository.MangaRepository
 import com.example.util.describe
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 enum class ReaderMode {
@@ -33,6 +38,14 @@ enum class ReaderBg {
 enum class ReaderFit {
     FIT, FIT_WIDTH, FIT_HEIGHT
 }
+
+// One source's slice of a global search. Sections are emitted as soon as that source answers, so
+// the UI can stream results in source-by-source instead of waiting for all sources to finish.
+data class GlobalSearchSection(
+    val sourceId: String,
+    val sourceName: String,
+    val manga: List<MangaEntity>,
+)
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -160,9 +173,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _catalogNeedsVerification.value = false
     }
 
-    // Global search across all installed sources
-    private val _globalResults = MutableStateFlow<List<MangaEntity>>(emptyList())
-    val globalResults: StateFlow<List<MangaEntity>> = _globalResults.asStateFlow()
+    // Global search across all installed sources — results stream in per source, so the first
+    // sources to answer show up before slower ones finish.
+    private val _globalSections = MutableStateFlow<List<GlobalSearchSection>>(emptyList())
+    val globalSections: StateFlow<List<GlobalSearchSection>> = _globalSections.asStateFlow()
+
+    private val _globalTotalSources = MutableStateFlow(0)
+    val globalTotalSources: StateFlow<Int> = _globalTotalSources.asStateFlow()
 
     private val _globalLoading = MutableStateFlow(false)
     val globalLoading: StateFlow<Boolean> = _globalLoading.asStateFlow()
@@ -172,6 +189,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _globalSearchedSources = MutableStateFlow(0)
     val globalSearchedSources: StateFlow<Int> = _globalSearchedSources.asStateFlow()
+
+    private var globalSearchJob: Job? = null
 
     // Detail screen loading state
     private val _detailLoading = MutableStateFlow(false)
@@ -276,20 +295,50 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun globalSearch(query: String) {
         val q = query.trim()
+        stopGlobalSearch()
         if (q.isBlank()) {
-            _globalResults.value = emptyList()
+            _globalSections.value = emptyList()
             _globalSearchedSources.value = 0
+            _globalTotalSources.value = 0
             _globalError.value = null
+            _globalLoading.value = false
             return
         }
-        viewModelScope.launch {
-            _globalLoading.value = true
-            _globalError.value = null
-            _globalSearchedSources.value = ExtensionDexLoader.loaded.size
+        val adapters = ExtensionDexLoader.loaded
+        _globalSections.value = emptyList()
+        _globalSearchedSources.value = 0
+        _globalTotalSources.value = adapters.size
+        _globalLoading.value = adapters.isNotEmpty()
+        _globalError.value = null
+        if (adapters.isEmpty()) return
+
+        // Search every source in parallel, but publish each source's results the moment it answers
+        // (instead of waiting for all of them). Sources are also counted as "searched" as they
+        // finish, so the badge reads "X of Y sources". A failing source just contributes nothing;
+        // cancelling stops the remaining sources but keeps what already streamed in.
+        globalSearchJob = viewModelScope.launch {
             try {
-                _globalResults.value = repository.searchAllInstalledSources(q)
+                val children = adapters.map { adapter ->
+                    launch(Dispatchers.IO) {
+                        val manga = try {
+                            adapter.search(q, 1).distinctBy { it.id }.take(20)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Throwable) {
+                            emptyList()
+                        }
+                        if (coroutineContext.isActive && manga.isNotEmpty()) {
+                            _globalSections.update { it + GlobalSearchSection(adapter.id, adapter.name, manga) }
+                        }
+                        if (coroutineContext.isActive) {
+                            _globalSearchedSources.update { it + 1 }
+                        }
+                    }
+                }
+                children.forEach { it.join() }
+            } catch (e: CancellationException) {
+                // Stopped by the user — whatever already streamed in stays visible.
             } catch (e: Throwable) {
-                _globalResults.value = emptyList()
                 _globalError.value = e.describe()
             } finally {
                 _globalLoading.value = false
@@ -297,10 +346,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun stopGlobalSearch() {
+        globalSearchJob?.cancel()
+        globalSearchJob = null
+    }
+
     fun clearGlobalSearch() {
-        _globalResults.value = emptyList()
+        stopGlobalSearch()
+        _globalSections.value = emptyList()
         _globalSearchedSources.value = 0
+        _globalTotalSources.value = 0
         _globalError.value = null
+        _globalLoading.value = false
     }
 
     fun loadMangaDetail(mangaId: String) {
