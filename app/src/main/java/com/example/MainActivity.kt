@@ -102,7 +102,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // A tap on the "update available" notification lands here (or on an already-open activity
-        // via onNewIntent below) — surface the in-app update dialog instead of just the banner.
+        // via onNewIntent below) â surface the in-app update dialog instead of just the banner.
         if (intent?.getBooleanExtra(AppUpdater.EXTRA_SHOW_UPDATE, false) == true) {
             intent.removeExtra(AppUpdater.EXTRA_SHOW_UPDATE)
             updateDialog.value = AppUpdater.currentUpdate(this)
@@ -110,7 +110,7 @@ class MainActivity : ComponentActivity() {
 
         // Network stack (shared by loaded extensions + Cloudflare WebView) before anything else.
         NetworkHelper.init(applicationContext)
-        // All cover thumbnails go through the SAME client the extension requests use — so they
+        // All cover thumbnails go through the SAME client the extension requests use â so they
         // carry the cf_clearance cookies (and UA) that Cloudflare-protected sources require.
         // Without this, catalog covers on CF sources always came back blank.
         Coil.setImageLoader(
@@ -144,7 +144,9 @@ class MainActivity : ComponentActivity() {
                     add(ExtensionCoverImageFetcherFactory())
                     add(ExtensionCoverImageKeyer())
                 }
-                .crossfade(true)
+                // No global crossfade: the reader's long pages pop in with a draw-animation on every
+                // first display while scrolling, which reads as jank. Cards that want a fade request
+                // it themselves (see MangaCard).
                 .build(),
         )
 
@@ -471,7 +473,7 @@ fun MainAppScreen(viewModel: MainViewModel) {
 /** Switch to a bottom-nav tab, always landing on its top-level screen. */
 private fun NavHostController.navigateToTab(route: String) {
     if (currentDestination?.route == route) {
-        // Already on this tab â pop back to its top-level screen if we went deeper.
+        // Already on this tab Ã¢ÂÂ pop back to its top-level screen if we went deeper.
         popBackStack(route, inclusive = false)
         return
     }

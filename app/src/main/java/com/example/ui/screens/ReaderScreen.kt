@@ -1,13 +1,18 @@
 package com.example.ui.screens
 
 import android.app.Activity
+import android.content.pm.ActivityInfo
+import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +20,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -28,13 +34,19 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.NavigateBefore
 import androidx.compose.material.icons.filled.NavigateNext
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -48,6 +60,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -56,6 +69,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -65,7 +79,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -73,8 +89,9 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImagePainter
 import coil.compose.LocalImageLoader
-import coil.compose.SubcomposeAsyncImage
+import coil.compose.rememberAsyncImagePainter
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.size.Dimension
@@ -85,9 +102,11 @@ import com.example.ui.MainViewModel
 import com.example.ui.ReaderBg
 import com.example.ui.ReaderFit
 import com.example.ui.ReaderMode
+import com.example.ui.ReaderOrientation
 import com.example.ui.looksLikeCloudflare
 import com.example.util.sortChapters
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -115,6 +134,13 @@ fun ReaderScreen(
     val readerMode: ReaderMode by viewModel.readerMode.collectAsStateWithLifecycle()
     val readerBg: ReaderBg by viewModel.readerBg.collectAsStateWithLifecycle()
     val readerFit: ReaderFit by viewModel.readerFit.collectAsStateWithLifecycle()
+    val readerOrientation: ReaderOrientation by viewModel.readerOrientation.collectAsStateWithLifecycle()
+    val keepScreenOn: Boolean by viewModel.keepScreenOn.collectAsStateWithLifecycle()
+    val showPageNumber: Boolean by viewModel.showPageNumber.collectAsStateWithLifecycle()
+    val webtoonFade: Boolean by viewModel.webtoonFade.collectAsStateWithLifecycle()
+    val webtoonScrollbar: Boolean by viewModel.webtoonScrollbar.collectAsStateWithLifecycle()
+    val autoScroll: Boolean by viewModel.autoScroll.collectAsStateWithLifecycle()
+    val autoScrollSpeedDp: Float by viewModel.autoScrollSpeedDp.collectAsStateWithLifecycle()
 
     // Both long-strip modes render as one continuous vertical list; only the gap differs.
     val isWebtoon = readerMode == ReaderMode.WEBTOON || readerMode == ReaderMode.WEBTOON_GAPS
@@ -328,6 +354,27 @@ fun ReaderScreen(
     val imageLoader = LocalImageLoader.current
     val context = LocalContext.current
     val screenWidthPx = context.resources.displayMetrics.widthPixels
+    val density = LocalDensity.current
+    // Fallback height for a webtoon strip whose true aspect ratio isn't known yet. Bounded so the
+    // page can start loading (Coil won't decode a page in an unbounded-height list item); the slot
+    // snaps to the real height as soon as the prewarm below learns the page's dimensions.
+    val fallbackPageHeight = with(LocalConfiguration.current) { (screenHeightDp * 0.9f).dp }
+
+    // Known page aspect ratios, filled in as nearby pages decode (prewarm below). Webtoon list
+    // items use them to size their slot to the page's real height up front, so the list doesn't
+    // relayout every strip as it finishes loading — that relayout is what made scrolling feel
+    // laggy. Keyed by the page model's string (a URL for MangaDex, ExtensionPageImage for
+    // extensions — both unique per page).
+    val pageAspectRatios = remember { mutableStateMapOf<String, Float>() }
+
+    // Quick-load nearby pages: warm Coil's MEMORY cache for the pages around the current one, so
+    // scrolling or jumping to a page renders instantly. The image bytes are keyed by their URL,
+    // never by position, so there's no risk of serving another chapter's page. Pages are decoded
+    // at screen width (exact), not the full source resolution, so strips cost ~4x less memory and
+    // scrolling stays smooth. The request matches exactly what ReaderPageImage builds (same size
+    // and reader_retry=0 parameter), so the display request reuses this decoded bitmap instead of
+    // decoding again. The decoded drawable also reports the page's aspect ratio, which webtoon
+    // items use to reserve their true height.
     LaunchedEffect(pages, currentPage, imageLoader) {
         val list = pages ?: return@LaunchedEffect
         if (imageLoader == null || list.isEmpty()) return@LaunchedEffect
@@ -335,14 +382,23 @@ fun ReaderScreen(
         val end = (currentPage + 4).coerceAtMost(list.size)
         for (i in start until end) {
             val model = list[i]
-            imageLoader.enqueue(
-                ImageRequest.Builder(context)
-                    .data(model)
-                    .size(Size(screenWidthPx, Dimension.Undefined))
-                    .memoryCachePolicy(CachePolicy.ENABLED)
-                    .diskCachePolicy(CachePolicy.ENABLED)
-                    .build()
-            )
+            launch {
+                try {
+                    val request = ImageRequest.Builder(context)
+                        .data(model)
+                        .size(Size(screenWidthPx, Dimension.Undefined))
+                        .setParameter("reader_retry", 0)
+                        .memoryCachePolicy(CachePolicy.ENABLED)
+                        .diskCachePolicy(CachePolicy.ENABLED)
+                        .build()
+                    val result = imageLoader.execute(request)
+                    val d = result.drawable
+                    if (d != null && d.intrinsicWidth > 0 && d.intrinsicHeight > 0) {
+                        pageAspectRatios[model.toString()] = d.intrinsicWidth.toFloat() / d.intrinsicHeight
+                    }
+                } catch (_: Throwable) {
+                }
+            }
         }
     }
 
@@ -387,6 +443,43 @@ fun ReaderScreen(
         onDispose {
             // Restore system bars when leaving the reader.
             controller?.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    // Keep the screen awake while reading (a long scroll session shouldn't let the display sleep).
+    DisposableEffect(keepScreenOn, activity) {
+        val window = activity?.window
+        if (keepScreenOn && window != null) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    // Yomi-style orientation lock: PORTRAIT/LANDSCAPE pin the reader to that orientation for as
+    // long as it's open; AUTO restores the system's free rotation. Always reset on dispose so
+    // leaving the reader never leaves the app locked.
+    DisposableEffect(readerOrientation, activity) {
+        val requested = when (readerOrientation) {
+            ReaderOrientation.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            ReaderOrientation.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            ReaderOrientation.AUTO -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+        activity?.requestedOrientation = requested
+        onDispose {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
+    // Auto-scroll (Yomi-style): smoothly scrolls the webtoon list at the chosen speed while
+    // enabled. Any touch on the list stops it (see the pointerInput on the LazyColumn).
+    LaunchedEffect(isWebtoon, autoScroll, autoScrollSpeedDp, listState) {
+        if (!isWebtoon || !autoScroll) return@LaunchedEffect
+        val pxPerMs = with(density) { autoScrollSpeedDp.dp.toPx() } / 1000f
+        while (isActive) {
+            listState.scrollBy(pxPerMs * 16f)
+            delay(16)
         }
     }
 
@@ -448,6 +541,7 @@ fun ReaderScreen(
             else -> {
                 val pageList = pages ?: emptyList()
                 if (isWebtoon) {
+                    Box(modifier = Modifier.fillMaxSize()) {
                     LazyColumn(
                         state = listState,
                         verticalArrangement = if (readerMode == ReaderMode.WEBTOON_GAPS) {
@@ -455,7 +549,16 @@ fun ReaderScreen(
                         } else {
                             Arrangement.Top
                         },
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(autoScroll) {
+                                awaitPointerEventScope {
+                                    while (true) {
+                                        awaitFirstDown(requireUnconsumed = false)
+                                        if (autoScroll) viewModel.setAutoScroll(false)
+                                    }
+                                }
+                            }
                     ) {
                         // While the chapter's pages are still loading, fill the viewport with a
                         // centered spinner (no separate full-screen loading screen).
@@ -485,15 +588,42 @@ fun ReaderScreen(
                                     segPages,
                                     key = { pi, _ -> "${segChapter.id}_$pi" }
                                 ) { pi, pageModel ->
-                                    ReaderPageImage(
-                                        model = pageModel,
-                                        contentDescription = "Page ${pi + 1}",
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .testTag("reader_page_${segIdx}_$pi"),
-                                        contentScale = ContentScale.FillWidth,
-                                        spinnerColor = contentTextColor
-                                    )
+                                    val ratio = pageAspectRatios[pageModel.toString()]
+                                    if (ratio != null && ratio > 0f) {
+                                        // True height known: size the slot exactly so the list never
+                                        // relayouts when the strip finishes decoding.
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height((screenWidthPx / ratio).dp)
+                                                .clipToBounds()
+                                                .testTag("reader_page_${segIdx}_$pi")
+                                        ) {
+                                            ReaderPageImage(
+                                                model = pageModel,
+                                                contentDescription = "Page ${pi + 1}",
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.FillWidth,
+                                                spinnerColor = contentTextColor,
+                                                crossfade = webtoonFade
+                                            )
+                                        }
+                                    } else {
+                                        // Ratio not known yet: bounded fallback height so the image
+                                        // can load; it snaps to its true height once the prewarm
+                                        // decodes it (one-time resize, covered pages ahead).
+                                        ReaderPageImage(
+                                            model = pageModel,
+                                            contentDescription = "Page ${pi + 1}",
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(fallbackPageHeight)
+                                                .testTag("reader_page_${segIdx}_$pi"),
+                                            contentScale = ContentScale.FillWidth,
+                                            spinnerColor = contentTextColor,
+                                            crossfade = webtoonFade
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -567,6 +697,15 @@ fun ReaderScreen(
                                 }
                             }
                         }
+                    }
+                    if (webtoonScrollbar) {
+                        VerticalScrollbar(
+                            adapter = rememberScrollbarAdapter(listState),
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .fillMaxHeight()
+                        )
+                    }
                     }
                 } else {
                     val fitScale = when (readerFit) {
@@ -708,17 +847,33 @@ fun ReaderScreen(
                             )
                         }
 
-                        if (pages != null) {
-                            Text(
-                                text = "Page $currentPage / $pageTotal",
-                                style = MaterialTheme.typography.labelLarge.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                ),
-                                modifier = Modifier.testTag("page_indicator_text")
-                            )
-                        } else {
-                            Spacer(modifier = Modifier.width(60.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            if (isWebtoon) {
+                                IconButton(
+                                    onClick = { viewModel.setAutoScroll(!autoScroll) },
+                                    modifier = Modifier.testTag("reader_autoscroll_button")
+                                ) {
+                                    Icon(
+                                        imageVector = if (autoScroll) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                        contentDescription = if (autoScroll) "Pause auto-scroll" else "Start auto-scroll",
+                                        tint = Color.White
+                                    )
+                                }
+                            }
+
+                            if (pages != null && showPageNumber) {
+                                Text(
+                                    text = "Page $currentPage / $pageTotal",
+                                    style = MaterialTheme.typography.labelLarge.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    ),
+                                    modifier = Modifier.testTag("page_indicator_text")
+                                )
+                            }
                         }
 
                         IconButton(
@@ -767,16 +922,12 @@ fun ReaderScreen(
                 )
             },
             text = {
-                Column {
-                    Text(
-                        text = "Reading Mode",
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(4.dp))
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 460.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    ReaderSettingsSectionTitle("Reading Mode")
 
                     ReaderModeOption(
                         label = "Webtoon (Long Strip)",
@@ -804,17 +955,7 @@ fun ReaderScreen(
                         onClick = { viewModel.setReaderMode(ReaderMode.RIGHT_TO_LEFT) }
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = "Page Fit (paged modes)",
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(4.dp))
+                    ReaderSettingsSectionTitle("Page Fit (paged modes)")
 
                     ReaderModeOption(
                         label = "Fit Screen",
@@ -832,17 +973,7 @@ fun ReaderScreen(
                         onClick = { viewModel.setReaderFit(ReaderFit.FIT_HEIGHT) }
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = "Reader Background",
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
+                    ReaderSettingsSectionTitle("Reader Background")
 
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -872,11 +1003,88 @@ fun ReaderScreen(
                             onClick = { viewModel.setReaderBg(ReaderBg.WHITE) }
                         )
                     }
+
+                    ReaderSettingsSectionTitle("Display")
+
+                    ReaderModeOption(
+                        label = "Auto (follow system)",
+                        selected = readerOrientation == ReaderOrientation.AUTO,
+                        onClick = { viewModel.setReaderOrientation(ReaderOrientation.AUTO) }
+                    )
+                    ReaderModeOption(
+                        label = "Portrait",
+                        selected = readerOrientation == ReaderOrientation.PORTRAIT,
+                        onClick = { viewModel.setReaderOrientation(ReaderOrientation.PORTRAIT) }
+                    )
+                    ReaderModeOption(
+                        label = "Landscape",
+                        selected = readerOrientation == ReaderOrientation.LANDSCAPE,
+                        onClick = { viewModel.setReaderOrientation(ReaderOrientation.LANDSCAPE) }
+                    )
+                    ReaderSettingsSwitchRow(
+                        label = "Show page number",
+                        checked = showPageNumber,
+                        onCheckedChange = { viewModel.setShowPageNumber(it) }
+                    )
+                    ReaderSettingsSwitchRow(
+                        label = "Keep screen on",
+                        checked = keepScreenOn,
+                        onCheckedChange = { viewModel.setKeepScreenOn(it) }
+                    )
+
+                    ReaderSettingsSectionTitle("Webtoon")
+
+                    ReaderSettingsSwitchRow(
+                        label = "Fade pages in",
+                        checked = webtoonFade,
+                        onCheckedChange = { viewModel.setWebtoonFade(it) }
+                    )
+                    ReaderSettingsSwitchRow(
+                        label = "Show scrollbar",
+                        checked = webtoonScrollbar,
+                        onCheckedChange = { viewModel.setWebtoonScrollbar(it) }
+                    )
+                    ReaderSettingsSwitchRow(
+                        label = "Auto-scroll",
+                        checked = autoScroll,
+                        onCheckedChange = { viewModel.setAutoScroll(it) }
+                    )
+                    if (autoScroll) {
+                        Text(
+                            text = "Auto-scroll speed: ${autoScrollSpeedDp.toInt()} dp/s",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(start = 16.dp, top = 8.dp)
+                        )
+                        Slider(
+                            value = autoScrollSpeedDp,
+                            onValueChange = { viewModel.setAutoScrollSpeedDp(it) },
+                            valueRange = 20f..200f,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             },
             confirmButton = {
-                Button(onClick = { showSettingsDialog = false }) {
-                    Text("Done")
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.setReaderOrientation(ReaderOrientation.AUTO)
+                            viewModel.setKeepScreenOn(true)
+                            viewModel.setShowPageNumber(true)
+                            viewModel.setWebtoonFade(false)
+                            viewModel.setWebtoonScrollbar(false)
+                            viewModel.setAutoScroll(false)
+                            viewModel.setAutoScrollSpeedDp(80f)
+                        }
+                    ) {
+                        Text("Reset")
+                    }
+                    Button(onClick = { showSettingsDialog = false }) {
+                        Text("Done")
+                    }
                 }
             }
         )
@@ -922,15 +1130,16 @@ private fun ReaderPageImage(
     spinnerColor: Color,
     placeholderModifier: Modifier = Modifier
         .fillMaxWidth()
-        .heightIn(min = 240.dp)
+        .heightIn(min = 240.dp),
+    crossfade: Boolean = false
 ) {
     val context = LocalContext.current
     val screenWidthPx = context.resources.displayMetrics.widthPixels
     // Auto-retry a failed page image up to 10 retries with a short pause between attempts — a
     // transient network hiccup or Cloudflare challenge usually clears on a later try. Each retry
-    // builds a fresh request (the changing parameter busts Coil's cache key), so it's a real new
-    // fetch through the extension's own client. Stops after 10 retries; a success at any attempt
-    // needs no further refreshes.
+    // bumps the attempt counter, which changes the request's reader_retry parameter and busts
+    // Coil's cache key, so it's a real new fetch through the extension's own client. Stops after
+    // 10 retries; a success at any attempt needs no further refreshes.
     var attempt by remember(model) { mutableStateOf(0) }
     var gaveUp by remember(model) { mutableStateOf(false) }
     var retrying by remember(model) { mutableStateOf(false) }
@@ -949,63 +1158,117 @@ private fun ReaderPageImage(
         }
     }
 
-    SubcomposeAsyncImage(
-        model = ImageRequest.Builder(context)
+    val request = remember(model, attempt) {
+        ImageRequest.Builder(context)
             .data(model)
             .size(Size(screenWidthPx, Dimension.Undefined))
             .setParameter("reader_retry", attempt)
-            .build(),
-        contentDescription = contentDescription,
+            .apply { if (crossfade) crossfade(true) }
+            .build()
+    }
+    val painter = rememberAsyncImagePainter(model = request)
+    val state by painter.state
+
+    // Kick a retry when the request lands in the error state (a success needs no further action).
+    LaunchedEffect(state) {
+        if (state is AsyncImagePainter.State.Error && !gaveUp && !retrying) {
+            retrying = true
+        }
+    }
+
+    Box(
         modifier = modifier,
-        contentScale = contentScale,
-        onError = {
-            if (!gaveUp && !retrying) retrying = true
-        },
-        loading = {
-            Box(
-                modifier = placeholderModifier,
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(
-                    color = spinnerColor.copy(alpha = 0.6f),
-                    strokeWidth = 3.dp,
-                    modifier = Modifier.size(36.dp)
-                )
-            }
-        },
-        error = {
-            Box(
-                modifier = placeholderModifier,
-                contentAlignment = Alignment.Center
-            ) {
-                if (gaveUp) {
-                    Text(
-                        text = "Couldn't load page",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = spinnerColor.copy(alpha = 0.7f)
-                        )
+        contentAlignment = Alignment.Center
+    ) {
+        Image(
+            painter = painter,
+            contentDescription = contentDescription,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = contentScale
+        )
+        when {
+            state is AsyncImagePainter.State.Loading -> {
+                Box(
+                    modifier = placeholderModifier,
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = spinnerColor.copy(alpha = 0.6f),
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(36.dp)
                     )
-                } else {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        CircularProgressIndicator(
-                            color = spinnerColor.copy(alpha = 0.6f),
-                            strokeWidth = 3.dp,
-                            modifier = Modifier.size(28.dp)
-                        )
+                }
+            }
+            state is AsyncImagePainter.State.Error -> {
+                Box(
+                    modifier = placeholderModifier,
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (gaveUp) {
                         Text(
-                            text = "Retrying…",
+                            text = "Couldn't load page",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = spinnerColor.copy(alpha = 0.7f)
                             )
                         )
+                    } else {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                color = spinnerColor.copy(alpha = 0.6f),
+                                strokeWidth = 3.dp,
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Text(
+                                text = "Retrying…",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = spinnerColor.copy(alpha = 0.7f)
+                                )
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ReaderSettingsSectionTitle(text: String) {
+    Spacer(modifier = Modifier.height(16.dp))
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall.copy(
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
     )
+    Spacer(modifier = Modifier.height(4.dp))
+}
+
+@Composable
+private fun ReaderSettingsSwitchRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f)
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
+    }
 }
 
 @Composable

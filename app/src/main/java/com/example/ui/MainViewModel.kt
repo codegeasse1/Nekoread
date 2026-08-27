@@ -39,6 +39,12 @@ enum class ReaderFit {
     FIT, FIT_WIDTH, FIT_HEIGHT
 }
 
+// Yomi-style reader orientation lock: AUTO follows the system, PORTRAIT/LANDSCAPE force the
+// screen orientation while the reader is open (restored to AUTO when the reader closes).
+enum class ReaderOrientation {
+    AUTO, PORTRAIT, LANDSCAPE
+}
+
 // One source's slice of a global search. Sections are emitted as soon as that source answers, so
 // the UI can stream results in source-by-source instead of waiting for all sources to finish.
 data class GlobalSearchSection(
@@ -82,6 +88,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _readerFit = MutableStateFlow(ReaderFit.FIT_WIDTH)
     val readerFit: StateFlow<ReaderFit> = _readerFit.asStateFlow()
 
+    private val _readerOrientation = MutableStateFlow(ReaderOrientation.AUTO)
+    val readerOrientation: StateFlow<ReaderOrientation> = _readerOrientation.asStateFlow()
+
+    private val _keepScreenOn = MutableStateFlow(true)
+    val keepScreenOn: StateFlow<Boolean> = _keepScreenOn.asStateFlow()
+
+    private val _webtoonFade = MutableStateFlow(false)
+    val webtoonFade: StateFlow<Boolean> = _webtoonFade.asStateFlow()
+
+    private val _webtoonScrollbar = MutableStateFlow(false)
+    val webtoonScrollbar: StateFlow<Boolean> = _webtoonScrollbar.asStateFlow()
+
+    private val _autoScroll = MutableStateFlow(false)
+    val autoScroll: StateFlow<Boolean> = _autoScroll.asStateFlow()
+
+    private val _autoScrollSpeedDp = MutableStateFlow(80f)
+    val autoScrollSpeedDp: StateFlow<Float> = _autoScrollSpeedDp.asStateFlow()
+
     init {
         // Load persisted reader settings (stored in SharedPreferences, survives app restarts).
         _readerMode.value = ReaderMode.valueOf(prefs.getString("reader_mode", ReaderMode.WEBTOON.name)!!)
@@ -99,6 +123,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _readerFit.value = runCatching {
             ReaderFit.valueOf(prefs.getString("reader_fit", ReaderFit.FIT_WIDTH.name)!!)
         }.getOrDefault(ReaderFit.FIT_WIDTH)
+        _readerOrientation.value = runCatching {
+            ReaderOrientation.valueOf(prefs.getString("reader_orientation", ReaderOrientation.AUTO.name)!!)
+        }.getOrDefault(ReaderOrientation.AUTO)
+        _keepScreenOn.value = prefs.getBoolean("reader_keep_screen_on", true)
+        _webtoonFade.value = prefs.getBoolean("reader_webtoon_fade", false)
+        _webtoonScrollbar.value = prefs.getBoolean("reader_webtoon_scrollbar", false)
+        _autoScroll.value = prefs.getBoolean("reader_auto_scroll", false)
+        _autoScrollSpeedDp.value = prefs.getFloat("reader_auto_scroll_speed", 80f)
     }
 
     // Library Filter & Search
@@ -395,6 +427,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setShowPageNumber(show: Boolean) {
         _showPageNumber.value = show
         prefs.edit().putBoolean("show_page_number", show).apply()
+    }
+
+    fun setReaderOrientation(orientation: ReaderOrientation) {
+        _readerOrientation.value = orientation
+        prefs.edit().putString("reader_orientation", orientation.name).apply()
+    }
+
+    fun setKeepScreenOn(on: Boolean) {
+        _keepScreenOn.value = on
+        prefs.edit().putBoolean("reader_keep_screen_on", on).apply()
+    }
+
+    fun setWebtoonFade(fade: Boolean) {
+        _webtoonFade.value = fade
+        prefs.edit().putBoolean("reader_webtoon_fade", fade).apply()
+    }
+
+    fun setWebtoonScrollbar(show: Boolean) {
+        _webtoonScrollbar.value = show
+        prefs.edit().putBoolean("reader_webtoon_scrollbar", show).apply()
+    }
+
+    fun setAutoScroll(auto: Boolean) {
+        _autoScroll.value = auto
+        prefs.edit().putBoolean("reader_auto_scroll", auto).apply()
+    }
+
+    fun setAutoScrollSpeedDp(speed: Float) {
+        _autoScrollSpeedDp.value = speed
+        prefs.edit().putFloat("reader_auto_scroll_speed", speed).apply()
     }
 
     suspend fun exportBackup(): String = repository.exportBackupJson()
