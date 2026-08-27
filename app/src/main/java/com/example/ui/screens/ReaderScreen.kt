@@ -390,7 +390,7 @@ fun ReaderScreen(
                         .size(Size(64, Dimension.Undefined))
                         .setParameter("reader_retry", 0)
                         .setParameter("reader_role", "ratio")
-                        .memoryCachePolicy(CachePolicy.NONE)
+                        .memoryCachePolicy(CachePolicy.DISABLED)
                         .diskCachePolicy(CachePolicy.ENABLED)
                         .build()
                     val result = imageLoader.execute(request)
