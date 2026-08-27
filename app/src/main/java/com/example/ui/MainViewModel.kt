@@ -97,9 +97,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _webtoonFade = MutableStateFlow(false)
     val webtoonFade: StateFlow<Boolean> = _webtoonFade.asStateFlow()
 
-    private val _webtoonScrollbar = MutableStateFlow(false)
-    val webtoonScrollbar: StateFlow<Boolean> = _webtoonScrollbar.asStateFlow()
-
     private val _autoScroll = MutableStateFlow(false)
     val autoScroll: StateFlow<Boolean> = _autoScroll.asStateFlow()
 
@@ -128,7 +125,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }.getOrDefault(ReaderOrientation.AUTO)
         _keepScreenOn.value = prefs.getBoolean("reader_keep_screen_on", true)
         _webtoonFade.value = prefs.getBoolean("reader_webtoon_fade", false)
-        _webtoonScrollbar.value = prefs.getBoolean("reader_webtoon_scrollbar", false)
         _autoScroll.value = prefs.getBoolean("reader_auto_scroll", false)
         _autoScrollSpeedDp.value = prefs.getFloat("reader_auto_scroll_speed", 80f)
     }
@@ -442,11 +438,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setWebtoonFade(fade: Boolean) {
         _webtoonFade.value = fade
         prefs.edit().putBoolean("reader_webtoon_fade", fade).apply()
-    }
-
-    fun setWebtoonScrollbar(show: Boolean) {
-        _webtoonScrollbar.value = show
-        prefs.edit().putBoolean("reader_webtoon_scrollbar", show).apply()
     }
 
     fun setAutoScroll(auto: Boolean) {

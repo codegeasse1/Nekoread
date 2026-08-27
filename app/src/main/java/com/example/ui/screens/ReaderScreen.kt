@@ -8,7 +8,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -35,7 +34,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -138,7 +136,6 @@ fun ReaderScreen(
     val keepScreenOn: Boolean by viewModel.keepScreenOn.collectAsStateWithLifecycle()
     val showPageNumber: Boolean by viewModel.showPageNumber.collectAsStateWithLifecycle()
     val webtoonFade: Boolean by viewModel.webtoonFade.collectAsStateWithLifecycle()
-    val webtoonScrollbar: Boolean by viewModel.webtoonScrollbar.collectAsStateWithLifecycle()
     val autoScroll: Boolean by viewModel.autoScroll.collectAsStateWithLifecycle()
     val autoScrollSpeedDp: Float by viewModel.autoScrollSpeedDp.collectAsStateWithLifecycle()
 
@@ -478,7 +475,7 @@ fun ReaderScreen(
         if (!isWebtoon || !autoScroll) return@LaunchedEffect
         val pxPerMs = with(density) { autoScrollSpeedDp.dp.toPx() } / 1000f
         while (isActive) {
-            listState.scrollBy(pxPerMs * 16f)
+            listState.scroll { scrollBy(pxPerMs * 16f) }
             delay(16)
         }
     }
@@ -697,14 +694,6 @@ fun ReaderScreen(
                                 }
                             }
                         }
-                    }
-                    if (webtoonScrollbar) {
-                        VerticalScrollbar(
-                            adapter = rememberScrollbarAdapter(listState),
-                            modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .fillMaxHeight()
-                        )
                     }
                     }
                 } else {
@@ -1040,11 +1029,6 @@ fun ReaderScreen(
                         onCheckedChange = { viewModel.setWebtoonFade(it) }
                     )
                     ReaderSettingsSwitchRow(
-                        label = "Show scrollbar",
-                        checked = webtoonScrollbar,
-                        onCheckedChange = { viewModel.setWebtoonScrollbar(it) }
-                    )
-                    ReaderSettingsSwitchRow(
                         label = "Auto-scroll",
                         checked = autoScroll,
                         onCheckedChange = { viewModel.setAutoScroll(it) }
@@ -1075,7 +1059,6 @@ fun ReaderScreen(
                             viewModel.setKeepScreenOn(true)
                             viewModel.setShowPageNumber(true)
                             viewModel.setWebtoonFade(false)
-                            viewModel.setWebtoonScrollbar(false)
                             viewModel.setAutoScroll(false)
                             viewModel.setAutoScrollSpeedDp(80f)
                         }
@@ -1167,7 +1150,7 @@ private fun ReaderPageImage(
             .build()
     }
     val painter = rememberAsyncImagePainter(model = request)
-    val state by painter.state
+    val state = painter.state
 
     // Kick a retry when the request lands in the error state (a success needs no further action).
     LaunchedEffect(state) {
