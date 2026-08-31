@@ -8,7 +8,7 @@
 [![Language](https://img.shields.io/badge/Language-Kotlin-7F52FF?logo=kotlin&logoColor=white)](https://github.com/codegeasse1/Nekoread)
 [![UI](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?logo=jetpackcompose&logoColor=white)](https://github.com/codegeasse1/Nekoread)
 [![Min SDK](https://img.shields.io/badge/Min%20SDK-24-339933?logo=android&logoColor=white)](https://github.com/codegeasse1/Nekoread)
-[![Download](https://img.shields.io/badge/Download-APK-success)](https://github.com/codegeasse1/Nekoread/raw/build/Nekoread-debug.apk)
+[![Download](https://img.shields.io/badge/Download-APK-success)](https://github.com/codegeasse1/Nekoread/releases/latest)
 
 </div>
 
@@ -19,6 +19,16 @@
 NekoRead is a free, open-source manga reader for Android, written in **Kotlin** with **Jetpack Compose** and **Room**.
 
 It loads manga, chapters and page images through a pluggable source layer. Browse, search, read and track everything against live source data.
+
+## Screenshots
+
+| Browse & search | Manga details | Library |
+|:---:|:---:|:---:|
+| ![Browse](images/browse.jpg) | ![Manga details](images/details.jpg) | ![Library](images/library.jpg) |
+
+| Sources | Extensions | Reading |
+|:---:|:---:|:---:|
+| ![Sources](images/sources.jpg) | ![Extensions](images/extensions.jpg) | ![Reading](images/reader.jpg) |
 
 ## Features
 
@@ -46,9 +56,11 @@ It loads manga, chapters and page images through a pluggable source layer. Brows
 
 ## Download
 
-Get the latest debug build:
+Get the latest release:
 
-[**⬇ Download Nekoread-debug.apk**](https://github.com/codegeasse1/Nekoread/raw/build/Nekoread-debug.apk)
+[**⬇ Download Nekoread v2.2.3 (app-release.apk)**](https://github.com/codegeasse1/Nekoread/releases/download/v2.2.3/app-release.apk)
+
+Or browse all releases: [**Releases**](https://github.com/codegeasse1/Nekoread/releases)
 
 > **Requires Android 7.0 (API 24) or newer.** When your browser asks, allow installing apps from unknown sources.
 >
