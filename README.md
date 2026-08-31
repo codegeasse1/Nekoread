@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="images/icon.png" alt="NekoRead icon" width="96" />
+
 # NekoRead
 
 **A fast, modern manga & manhwa reader for Android.** Browse catalogs, read chapters, and keep a library — all through pluggable sources that run inside the app.
