@@ -58,9 +58,7 @@ It loads manga, chapters and page images through a pluggable source layer. Brows
 
 Get the latest release:
 
-[**⬇ Download Nekoread v2.2.3 (app-release.apk)**](https://github.com/codegeasse1/Nekoread/releases/download/v2.2.3/app-release.apk)
-
-Or browse all releases: [**Releases**](https://github.com/codegeasse1/Nekoread/releases)
+[**⬇ Download the latest Nekoread APK**](https://github.com/codegeasse1/Nekoread/releases/latest)
 
 > **Requires Android 7.0 (API 24) or newer.** When your browser asks, allow installing apps from unknown sources.
 >
