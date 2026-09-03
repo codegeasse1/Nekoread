@@ -2,10 +2,6 @@ package com.example.ui.screens
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.BitmapRegionDecoder
-import android.graphics.Rect
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -81,11 +77,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -99,7 +92,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.math.roundToInt
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
-import coil.request.CachePolicy
+import coil.ImageLoader
+import coil.imageLoader
 import coil.request.ImageRequest
 import coil.size.Dimension
 import coil.size.Size
@@ -112,28 +106,11 @@ import com.example.ui.ReaderMode
 import com.example.ui.ReaderOrientation
 import com.example.ui.looksLikeCloudflare
 import com.example.util.sortChapters
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.ui.draw.alpha
 import com.example.data.source.ExtensionPageImage
-import eu.kanade.tachiyomi.source.model.Page
-import java.io.IOException
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ConcurrentLinkedDeque
-import kotlin.math.ceil
-import kotlin.math.floor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -392,22 +369,16 @@ fun ReaderScreen(
     // page can start loading (Coil won't decode a page in an unbounded-height list item); the slot
     // snaps to the real height as soon as the prewarm below learns the page's dimensions. Sized
     // for a typical ~0.7 page ratio so the snap is small.
-    val fallbackPageHeight = with(LocalConfiguration.current) { (screenWidthDp / 0.7f).dp }
-
-    // Known page aspect ratios, filled in as nearby pages decode (prewarm below). Webtoon list
-    // items use them to size their slot to the page's real height up front, so the list doesn't
-    // relayout every strip as it finishes loading — that relayout is what made scrolling feel
-    // laggy. Keyed by the page model's string (a URL for MangaDex, ExtensionPageImage for
-    // extensions — both unique per page).
+    // Webtoon strips render through Coil (the Mihon pipeline): a rolling preloader below keeps the
+    // window ahead decoded in Coil's memory cache with aspect ratios recorded, so continuous scroll
+    // never waits at a slice boundary.
 
     // Latest in-flight jump warm-up job; cancelling the previous one means a fast slider drag only
     // ever runs the warm for the most recent target.
     var warmJob by remember(chapter.id) { mutableStateOf<Job?>(null) }
 
-    // Pre-fetch the SOURCE BYTES of a window around a target page into the bounded strip-bytes
-    // cache, so jumping there renders immediately: each destination strip decodes its own tiles
-    // from cached bytes instead of waiting on a network fetch. Gated like everything else. The
-    // destination page's tiles are also pre-decoded so a long jump lands already rendered.
+    // Preload a window around a target page into Coil's memory cache (recording aspect ratios), so
+    // jumping there renders instantly — the destination pages' bitmaps are already decoded.
     fun warmWindow(targetPage: Int) {
         val segs = if (streamSegments.isNotEmpty()) streamSegments
         else if (pages != null) listOf(pages!!)
@@ -420,17 +391,9 @@ fun ReaderScreen(
         val to = (target + 6).coerceAtMost(segPages.lastIndex)
         warmJob?.cancel()
         warmJob = coroutineScope.launch {
-            val tUrl = pageUrl(segPages[target])
-            try { ensureBytes(tUrl, segPages[target]) } catch (_: Throwable) {}
-            val g = readerStripGeometry[tUrl]?.let { makeGeometry(it[0], it[1], webtoonDecodeWidth) }
-            if (g != null) {
-                try { preDecodeTiles(tUrl, g, useRgb565) } catch (_: Throwable) {}
-            }
             for (p in from..to) {
                 if (!isActive) return@launch
-                if (p == target) continue
-                val m = segPages[p]
-                try { ensureBytes(pageUrl(m), m) } catch (_: Throwable) {}
+                preloadPage(context.imageLoader, segPages[p], webtoonDecodeWidth, useRgb565)
             }
         }
     }
@@ -444,15 +407,15 @@ fun ReaderScreen(
         }
     }
 
-    // Rolling byte prefetch — ONE persistent loop for webtoon mode, NOT keyed on the current page.
-    // Each strip sizes and decodes itself from its own source bytes (tile-based), so the only
-    // thing a reader needs ahead of time is the source bytes ready before the strip scrolls into
-    // view. Whenever the scroll window slides, this loop kicks off parallel (deduped, gated)
-    // fetches for the whole window ahead — including reading each strip's geometry into the shared
-    // cache — so fast scrolling past 100-slice chapters never waits at a cut boundary. (Paged
-    // modes don't use this — ReaderPageImage handles its own loads via Coil.)
+    // Mihon-style rolling preloader — ONE persistent loop for webtoon mode, NOT keyed on the
+    // current page. Whenever the scroll window slides it enqueues Coil requests for the whole
+    // window ahead: Coil decodes them (6-parallel, into its LRU memory cache) and records each
+    // page's aspect ratio, so by the time a slice scrolls into view its bitmap is a memory-cache
+    // hit and its slot is already the right height — no fetch, no decode, no relayout at the cut
+    // boundary. (Paged modes don't need this — the pager only composes one page at a time.)
     LaunchedEffect(pages, streamSegments, isWebtoon) {
         if (!isWebtoon) return@LaunchedEffect
+        val imageLoader = context.imageLoader
         var lastWindowKey = ""
         while (isActive) {
             val segs = streamSegments
@@ -467,9 +430,7 @@ fun ReaderScreen(
             if (key != lastWindowKey) {
                 lastWindowKey = key
                 for (p in from..to) {
-                    val m = segPages[p]
-                    if (readerStripBytes[pageUrl(m)] != null) continue
-                    launch { try { ensureBytes(pageUrl(m), m) } catch (_: Throwable) {} }
+                    preloadPage(imageLoader, segPages[p], webtoonDecodeWidth, useRgb565)
                 }
             }
             delay(150)
@@ -669,7 +630,6 @@ fun ReaderScreen(
                                         rgb565 = useRgb565,
                                         fade = webtoonFade,
                                         spinnerColor = contentTextColor,
-                                        fallbackHeight = fallbackPageHeight,
                                         testTag = "reader_page_${segIdx}_$pi"
                                     )
                                 }
@@ -1295,200 +1255,46 @@ private fun ReaderPageImage(
     }
 }
 
-/**
- * A webtoon strip rendered as a stack of bounded-height TILES — no full-height bitmap is ever
- * allocated. That is the core trick behind smooth long-image readers: a ~1000x20000 source strip
- * decoded whole is an ~80MB bitmap that thrashes memory and can exceed the GPU's max texture
- * size, which is exactly why tall high-res manhwa chapters stuttered. Here the strip's source
- * bytes are fetched ONCE through the extension's own client (headers/descrambling still apply),
- * the image geometry is read from the header, and each ~2048px-tall tile is decoded independently
- * at (at most) the display width via [BitmapRegionDecoder]. Tiles decode under a shared decode gate,
- * so across the whole reader only two pages' worth of work runs at once. Every tile
- * slot is pre-sized from the same geometry, so a strip never relayouts. Decoded tiles are cached
- * in a bounded global cache, so scrolling back renders instantly without re-fetching.
- */
-private const val WEBTOON_TILE_OUT_H = 2048
-private const val READER_TILE_BYTES_BUDGET = 64L * 1024 * 1024
-private const val READER_STRIP_BYTES_BUDGET = 128L * 1024 * 1024
-
-// Bounded in-memory caches shared across the reader: decoded webtoon TILES (keyed "url#tile") and
-// fetched source BYTES (keyed url). Both evict oldest-first when over budget, so scrolling back
-// re-renders instantly while memory stays flat — the behaviour a smooth reader wants, without
-// holding full-resolution strips.
-private val readerTileCache = ConcurrentHashMap<String, ImageBitmap>()
-private val readerTileOrder = ConcurrentLinkedDeque<String>()
-private val readerTileBytes = java.util.concurrent.atomic.AtomicLong(0)
-
-private fun cacheTile(key: String, bmp: ImageBitmap) {
-    if (readerTileCache.containsKey(key)) return
-    val bytes = bmp.width.toLong() * bmp.height * 4
-    synchronized(readerTileBytes) {
-        readerTileCache[key] = bmp
-        readerTileOrder.addLast(key)
-        readerTileBytes.addAndGet(bytes)
-        while (readerTileBytes.get() > READER_TILE_BYTES_BUDGET) {
-            val k = readerTileOrder.pollFirst() ?: break
-            val old = readerTileCache.remove(k) ?: continue
-            readerTileBytes.addAndGet(-(old.width.toLong() * old.height * 4))
-        }
-    }
-}
-
-private val readerStripBytes = ConcurrentHashMap<String, ByteArray>()
-private val readerStripOrder = ConcurrentLinkedDeque<String>()
-private val readerStripBytesTotal = java.util.concurrent.atomic.AtomicLong(0)
-
-private fun cacheStripBytes(key: String, data: ByteArray) {
-    if (readerStripBytes.containsKey(key)) return
-    synchronized(readerStripBytesTotal) {
-        readerStripBytes[key] = data
-        readerStripOrder.addLast(key)
-        readerStripBytesTotal.addAndGet(data.size.toLong())
-        while (readerStripBytesTotal.get() > READER_STRIP_BYTES_BUDGET) {
-            val k = readerStripOrder.pollFirst() ?: break
-            val old = readerStripBytes.remove(k) ?: continue
-            readerStripBytesTotal.addAndGet(-old.size.toLong())
-        }
-    }
-}
-
-// Natural width/height of each fetched strip (read once from its header), keyed by URL. Lets a
-// webtoon slot be sized from REAL geometry the moment it composes — even before its bytes finish
-// fetching — so scrolling past cut-image boundaries never relayouts the list. (Webtoon slices are
-// small, so this is effectively free memory.)
-private val readerStripGeometry = ConcurrentHashMap<String, IntArray>()
-
-// Fetch and decode are now gated separately. Up to 6 source-byte fetches can be in flight (they're
-// network-bound, so more parallelism keeps a fast scroll ahead of the window), while at most 2
-// strips decode tiles at once (decode is memory-heavy; 2 keeps the whole reader memory-bounded).
-// The old single gate of 2 throttled both, which is what made 100-slice chapters stall at every
-// cut boundary.
-private val readerFetchGate = Semaphore(6)
-private val readerDecodeGate = Semaphore(2)
-
-private fun readImageBounds(bytes: ByteArray): IntArray? {
-    val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o)
-    return if (o.outWidth > 0 && o.outHeight > 0) intArrayOf(o.outWidth, o.outHeight) else null
-}
-
-private fun makeGeometry(nw: Int, nh: Int, decodeWidthPx: Int): StripGeometry {
-    var sample = 1
-    while ((nw / (sample * 2)) >= (decodeWidthPx * 9) / 10) sample *= 2
-    val scale = decodeWidthPx.toFloat() / nw
-    val displayH = ceil(nh * scale).toInt()
-    val tileCount = (displayH + WEBTOON_TILE_OUT_H - 1) / WEBTOON_TILE_OUT_H
-    return StripGeometry(nw, nh, decodeWidthPx, sample, tileCount)
-}
-
-// One shared fetch per URL: the first caller starts it and everyone else awaits the same job. The
-// job lives in a global scope so it survives any single item being scrolled away. On failure the
-// entry is dropped and null returned, so a later retry starts a fresh fetch.
-private val readerByteScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-private val readerByteJobs = ConcurrentHashMap<String, Deferred<ByteArray?>>()
-
-private suspend fun ensureBytes(url: String, model: Any): ByteArray? {
-    readerStripBytes[url]?.let { return it }
-    while (true) {
-        readerByteJobs[url]?.let { return it.await() }
-        val d = readerByteScope.async {
-            try {
-                val b = withTimeout(30000) {
-                    readerFetchGate.withPermit { fetchPageBytes(model) }
-                }
-                cacheStripBytes(url, b)
-                readImageBounds(b)?.let { readerStripGeometry[url] = it }
-                b
-            } catch (e: Exception) {
-                null
-            }
-        }
-        if (readerByteJobs.putIfAbsent(url, d) == null) {
-            try {
-                return d.await()
-            } finally {
-                readerByteJobs.remove(url, d)
-            }
-        }
-    }
-}
-
-// Decode every tile of a strip into the shared tile cache (used when warming a jump destination so
-// it lands already rendered). Slots must already know the strip's geometry.
-private suspend fun preDecodeTiles(url: String, geo: StripGeometry, rgb565: Boolean) {
-    val bytes = readerStripBytes[url] ?: return
-    try {
-        val decoder = BitmapRegionDecoder.newInstance(bytes, 0, bytes.size, false)
-        try {
-            for (t in 0 until geo.tileCount) {
-                if (readerTileCache.containsKey("$url#$t")) continue
-                val rect = Rect(0, geo.srcTop(t), geo.naturalW, geo.srcBottom(t))
-                val opts = BitmapFactory.Options().apply {
-                    inSampleSize = geo.sample
-                    if (rgb565) inPreferredConfig = Bitmap.Config.RGB_565
-                }
-                val bmp = readerDecodeGate.withPermit {
-                    withContext(Dispatchers.IO) { decoder.decodeRegion(rect, opts) }
-                }
-                if (bmp != null && bmp.width > 0 && bmp.height > 0) {
-                    cacheTile("$url#$t", bmp.asImageBitmap())
-                }
-            }
-        } finally {
-            decoder.recycle()
-        }
-    } catch (e: Exception) {
-    }
-}
+// Aspect ratio (width/height) of each webtoon page, recorded when the preloader decodes it. The
+// page slot reads this at composition so it's sized to the page's real height up front — the list
+// never relayouts as pages finish loading. Snapshot-backed so recording a ratio recomposes just
+// that slot.
+private val readerAspectRatios = mutableStateMapOf<String, Float>()
 
 // Stable identity for a reader page (its image URL for extension pages, its string otherwise).
 private fun pageUrl(model: Any): String = (model as? ExtensionPageImage)?.imageUrl ?: model.toString()
 
-// Fetch a page's ORIGINAL bytes through the extension's own client/headers (the same path Coil's
-// fetcher uses), so hotlink-protected CDNs and descrambler interceptors behave identically.
-private suspend fun fetchPageBytes(model: Any): ByteArray {
-    val ep = model as? ExtensionPageImage
-    if (ep != null) {
-        val page = Page(0, url = ep.pageUrl, imageUrl = ep.imageUrl)
-        val response = ep.source.getImage(page)
-        val body = response.body ?: throw IOException("Null response body")
-        return body.bytes()
-    }
-    val url = model.toString()
-    val conn = java.net.URL(url).openConnection()
-    conn.connectTimeout = 15000
-    conn.readTimeout = 30000
-    val stream = conn.getInputStream()
-    return stream.use { it.readBytes() }
-}
-
-// Geometry of a tiled strip: the source's native size, the display width we decode at, and the
-// per-tile slice math that cuts the strip into bounded-height tiles.
-private class StripGeometry(
-    val naturalW: Int,
-    val naturalH: Int,
-    val sampleWidth: Int,
-    val sample: Int,
-    val tileCount: Int,
-) {
-    val scale = sampleWidth.toFloat() / naturalW
-    val displayH: Int = ceil(naturalH * scale).toInt()
-
-    fun tileOutH(t: Int): Int = minOf(WEBTOON_TILE_OUT_H, displayH - t * WEBTOON_TILE_OUT_H)
-
-    fun srcTop(t: Int): Int = floor(t * WEBTOON_TILE_OUT_H / scale.toDouble()).toInt()
-
-    fun srcBottom(t: Int): Int = minOf(naturalH, ceil(((t + 1) * WEBTOON_TILE_OUT_H).toDouble() / scale).toInt())
+// Mihon-style page preload: enqueue a Coil request for this page at the webtoon decode size so its
+// bitmap lands in Coil's memory cache (and its aspect ratio is recorded) before the page scrolls
+// into view. The visible page's own AsyncImage uses the identical request, so it's a memory-cache
+// hit — Coil never fetches or decodes the same page twice.
+private fun preloadPage(imageLoader: ImageLoader, model: Any, decodeWidthPx: Int, rgb565: Boolean) {
+    val url = pageUrl(model)
+    imageLoader.enqueue(
+        ImageRequest.Builder(imageLoader.context)
+            .data(model)
+            .size(Size(decodeWidthPx, Dimension.Undefined))
+            .setParameter("reader_retry", 0)
+            .apply { if (rgb565) allowRgb565(true) }
+            .listener(
+                onSuccess = { _, result ->
+                    val d = result.drawable
+                    if (d != null && d.intrinsicWidth > 0 && d.intrinsicHeight > 0) {
+                        readerAspectRatios[url] = d.intrinsicWidth.toFloat() / d.intrinsicHeight
+                    }
+                }
+            )
+            .build()
+    )
 }
 
 /**
- * One webtoon strip. Unlike the paged-mode [ReaderPageImage], this does NOT fire an independent
- * Coil request per visible page — every load here shares a fetch gate (bytes) and a decode gate
- * (tiles), so at most two pages' worth of decoding happens at any moment. That bound is what keeps a jump into the middle of
- * a 100-page chapter smooth: previously the ~10 newly-composed pages all fetched and decoded at
- * once, spiking memory and dropping frames across the whole app. While loading it shows a static
- * empty slot (no animated spinner — animating many spinners while scrolling is itself jank), and
- * the slot is sized from the strip's own geometry so nothing shifts when tiles land.
+ * One webtoon strip, rendered by Coil exactly like a paged page but width-constrained and
+ * pre-sized from its recorded aspect ratio — the same pipeline Mihon's reader uses. The preloader
+ * keeps the surrounding window decoded in Coil's memory cache, so a slice that scrolls into view
+ * is a cache hit: it paints instantly and its slot is already the right height, so continuous
+ * scroll past 100-slice chapters stays smooth. No animated spinner while scrolling (that itself is
+ * jank); a failed page auto-retries like the paged reader.
  */
 @Composable
 private fun WebtoonPage(
@@ -1498,114 +1304,78 @@ private fun WebtoonPage(
     rgb565: Boolean,
     fade: Boolean,
     spinnerColor: Color,
-    fallbackHeight: Dp,
     testTag: String
 ) {
     val url = remember(model) { pageUrl(model) }
-    // Pre-size the slot from cached geometry (the prefetch reads every strip's header into
-    // [readerStripGeometry]), so a slice is sized correctly the moment it composes instead of
-    // flashing a fallback and relayouting — the main source of the "cut" hitch on 100-slice
-    // chapters.
-    var geometry by remember(model, decodeWidthPx) {
-        mutableStateOf(readerStripGeometry[url]?.let { makeGeometry(it[0], it[1], decodeWidthPx) })
-    }
-    var tiles by remember(model) { mutableStateOf<Map<Int, ImageBitmap>>(emptyMap()) }
-    var failed by remember(model) { mutableStateOf(false) }
-    var retryKey by remember(model) { mutableStateOf(0) }
+    var attempt by remember(model) { mutableStateOf(0) }
+    var gaveUp by remember(model) { mutableStateOf(false) }
+    var retrying by remember(model) { mutableStateOf(false) }
 
-    LaunchedEffect(model, decodeWidthPx, rgb565, retryKey) {
-        tiles = emptyMap()
-        failed = false
-        // Shared, deduped fetch (prefetch + this item + warmWindow all reuse the same job).
-        val bytes = ensureBytes(url, model)
-        if (bytes == null) {
-            failed = true
-            return@LaunchedEffect
-        }
-        val g = geometry ?: readImageBounds(bytes)?.let {
-            readerStripGeometry[url] = it
-            makeGeometry(it[0], it[1], decodeWidthPx)
-        } ?: run {
-            failed = true
-            return@LaunchedEffect
-        }
-        geometry = g
-
-        // Reuse any tiles already decoded for this page, so scrolling back renders instantly.
-        val preloaded = HashMap<Int, ImageBitmap>()
-        for (t in 0 until g.tileCount) readerTileCache["$url#$t"]?.let { preloaded[t] = it }
-        if (preloaded.isNotEmpty()) tiles = preloaded
-
-        try {
-            val decoder = BitmapRegionDecoder.newInstance(bytes, 0, bytes.size, false)
-            try {
-                for (t in 0 until g.tileCount) {
-                    if (tiles.containsKey(t)) continue
-                    val rect = Rect(0, g.srcTop(t), g.naturalW, g.srcBottom(t))
-                    val opts = BitmapFactory.Options().apply {
-                        inSampleSize = g.sample
-                        if (rgb565) inPreferredConfig = Bitmap.Config.RGB_565
-                    }
-                    val bmp = readerDecodeGate.withPermit {
-                        withContext(Dispatchers.IO) { decoder.decodeRegion(rect, opts) }
-                    }
-                    if (bmp != null && bmp.width > 0 && bmp.height > 0) {
-                        val img = bmp.asImageBitmap()
-                        cacheTile("$url#$t", img)
-                        tiles = tiles + (t to img)
-                    }
-                }
-            } finally {
-                decoder.recycle()
+    // After a failed attempt: pause briefly, then bump the attempt counter to trigger a fresh
+    // request (or mark the page as given-up once the retry budget is spent).
+    LaunchedEffect(retrying) {
+        if (retrying) {
+            delay(1200)
+            if (attempt < 10) {
+                attempt += 1
+            } else {
+                gaveUp = true
             }
-        } catch (e: Exception) {
-            failed = true
+            retrying = false
         }
     }
 
-    val geo = geometry
-    if (geo == null) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(fallbackHeight)
-                .clipToBounds()
-                .testTag(testTag),
-            contentAlignment = Alignment.Center
-        ) {
-            if (failed) {
-                Text(
-                    text = "Couldn't load page",
-                    style = MaterialTheme.typography.bodySmall.copy(color = spinnerColor.copy(alpha = 0.7f)),
-                    modifier = Modifier.padding(8.dp)
-                )
+    val request = remember(model, attempt, decodeWidthPx, rgb565) {
+        ImageRequest.Builder(LocalContext.current)
+            .data(model)
+            .size(Size(decodeWidthPx, Dimension.Undefined))
+            .setParameter("reader_retry", attempt)
+            .apply {
+                if (rgb565) allowRgb565(true)
+                if (fade) crossfade(true)
             }
-            // Static empty slot until geometry is known; no animated spinner.
+            .build()
+    }
+    val painter = rememberAsyncImagePainter(model = request)
+    val state = painter.state
+
+    // Kick a retry when the request lands in the error state (a success needs no further action).
+    LaunchedEffect(state) {
+        if (state is AsyncImagePainter.State.Error && !gaveUp && !retrying) {
+            retrying = true
         }
-        return
     }
 
-    Column(modifier = Modifier.fillMaxWidth().testTag(testTag)) {
-        for (t in 0 until geo.tileCount) {
-            val tileH = geo.tileOutH(t)
-            val bmp = tiles[t]
-            val alpha by animateFloatAsState(
-                targetValue = if (bmp != null) 1f else 0f,
-                animationSpec = tween(if (fade) 160 else 0),
-                label = "tileFade"
+    // Slot sized from the recorded aspect ratio (when known) so nothing shifts when the image
+    // lands; otherwise a minimum-height slot that grows to the image's real size.
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                readerAspectRatios[url]?.let { Modifier.aspectRatio(it) }
+                    ?: Modifier.heightIn(min = 120.dp)
             )
+            .testTag(testTag),
+        contentAlignment = Alignment.Center
+    ) {
+        Image(
+            painter = painter,
+            contentDescription = contentDescription,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.FillWidth
+        )
+        if (state is AsyncImagePainter.State.Error) {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(geo.sampleWidth.toFloat() / tileH)
-                    .clipToBounds()
+                modifier = Modifier.fillMaxSize().heightIn(min = 120.dp),
+                contentAlignment = Alignment.Center
             ) {
-                if (bmp != null) {
-                    Image(
-                        bitmap = bmp,
-                        contentDescription = if (t == 0) contentDescription else null,
-                        modifier = Modifier.fillMaxSize().alpha(alpha),
-                        contentScale = ContentScale.FillBounds
+                if (gaveUp) {
+                    Text(
+                        text = "Couldn't load page",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = spinnerColor.copy(alpha = 0.7f)
+                        ),
+                        modifier = Modifier.padding(8.dp)
                     )
                 }
             }
