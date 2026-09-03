@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.app.Activity
+import android.content.Context
 import android.content.pm.ActivityInfo
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
@@ -393,7 +394,7 @@ fun ReaderScreen(
         warmJob = coroutineScope.launch {
             for (p in from..to) {
                 if (!isActive) return@launch
-                preloadPage(context.imageLoader, segPages[p], webtoonDecodeWidth, useRgb565)
+                preloadPage(context.imageLoader, context, segPages[p], webtoonDecodeWidth, useRgb565)
             }
         }
     }
@@ -430,7 +431,7 @@ fun ReaderScreen(
             if (key != lastWindowKey) {
                 lastWindowKey = key
                 for (p in from..to) {
-                    preloadPage(imageLoader, segPages[p], webtoonDecodeWidth, useRgb565)
+                    preloadPage(imageLoader, context, segPages[p], webtoonDecodeWidth, useRgb565)
                 }
             }
             delay(150)
@@ -1268,10 +1269,10 @@ private fun pageUrl(model: Any): String = (model as? ExtensionPageImage)?.imageU
 // bitmap lands in Coil's memory cache (and its aspect ratio is recorded) before the page scrolls
 // into view. The visible page's own AsyncImage uses the identical request, so it's a memory-cache
 // hit — Coil never fetches or decodes the same page twice.
-private fun preloadPage(imageLoader: ImageLoader, model: Any, decodeWidthPx: Int, rgb565: Boolean) {
+private fun preloadPage(imageLoader: ImageLoader, context: Context, model: Any, decodeWidthPx: Int, rgb565: Boolean) {
     val url = pageUrl(model)
     imageLoader.enqueue(
-        ImageRequest.Builder(imageLoader.context)
+        ImageRequest.Builder(context)
             .data(model)
             .size(Size(decodeWidthPx, Dimension.Undefined))
             .setParameter("reader_retry", 0)
@@ -1306,6 +1307,7 @@ private fun WebtoonPage(
     spinnerColor: Color,
     testTag: String
 ) {
+    val context = LocalContext.current
     val url = remember(model) { pageUrl(model) }
     var attempt by remember(model) { mutableStateOf(0) }
     var gaveUp by remember(model) { mutableStateOf(false) }
@@ -1326,7 +1328,7 @@ private fun WebtoonPage(
     }
 
     val request = remember(model, attempt, decodeWidthPx, rgb565) {
-        ImageRequest.Builder(LocalContext.current)
+        ImageRequest.Builder(context)
             .data(model)
             .size(Size(decodeWidthPx, Dimension.Undefined))
             .setParameter("reader_retry", attempt)
