@@ -105,6 +105,8 @@ dependencies {
   implementation(libs.androidx.room.runtime)
   implementation(libs.androidx.webkit)
   implementation(libs.coil.compose)
+  implementation(libs.coil3.core)
+  implementation(libs.coil3.network.okhttp)
   implementation(libs.subsampling.scale.image.view)
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
