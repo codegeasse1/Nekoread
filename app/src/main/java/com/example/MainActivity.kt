@@ -84,9 +84,9 @@ import com.example.BuildConfig
 import com.example.ui.screens.BrowseScreen
 import com.example.ui.screens.LibraryScreen
 import com.example.ui.screens.MangaDetailScreen
-import com.example.ui.screens.ReaderScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.UpdatesHistoryScreen
+import com.example.emakibridge.EmakiReaderHost
 import com.example.ui.theme.BgGradientBottom
 import com.example.ui.theme.BgGradientMid
 import com.example.ui.theme.BgGradientTop
@@ -95,7 +95,10 @@ import com.example.ui.theme.GlowCyan
 import com.example.ui.theme.GlowViolet
 import com.example.ui.theme.NekoReadTheme
 import eu.kanade.tachiyomi.network.NetworkHelper
+import dagger.hilt.android.AndroidEntryPoint
+import androidx.compose.material3.CircularProgressIndicator
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
@@ -417,27 +420,37 @@ fun MainAppScreen(viewModel: MainViewModel) {
             ) { backStackEntry ->
                 val mangaId = backStackEntry.arguments?.getString("mangaId") ?: ""
                 val chapterId = backStackEntry.arguments?.getString("chapterId") ?: ""
-                val startAtBeginning = backStackEntry.arguments?.getBoolean("startAtBeginning") ?: false
+                backStackEntry.arguments?.getBoolean("startAtBeginning") ?: false
 
                 val mangaState by viewModel.repository.getMangaFlow(mangaId).collectAsStateWithLifecycle(initialValue = null)
                 val chaptersState by viewModel.repository.getChaptersFlow(mangaId).collectAsStateWithLifecycle(initialValue = emptyList())
-                val currentChapter = chaptersState.firstOrNull { it.id == chapterId }
 
-                ReaderScreen(
-                    viewModel = viewModel,
-                    manga = mangaState,
-                    chapter = currentChapter,
-                    allChapters = chaptersState,
-                    onBackClick = { navController.popBackStack() },
-                    startAtBeginning = startAtBeginning,
-                    onChapterChange = { newChapterId ->
-                        // In-reader prev/next chapter navigation always starts the new chapter
-                        // at its first page, never at a previously-saved position.
-                        navController.navigate("reader/$mangaId/$newChapterId?startAtBeginning=true") {
-                            popUpTo("reader/$mangaId/$chapterId") { inclusive = true }
+                // Emaki's reader, fed Nekoread's chapters through the HTML bridge. `chapterIndex`
+                // is the 1-based position of the chapter in the chapter list — it becomes the number
+                // in the bridge file name, which is what Emaki's built-in prev/next uses to navigate.
+                val chapterIndex = chaptersState.indexOfFirst { it.id == chapterId } + 1
+
+                if (chaptersState.isNotEmpty() && chapterIndex >= 1) {
+                    EmakiReaderHost(
+                        mangaTitle = mangaState?.title?.ifBlank { "Manga" } ?: "Manga",
+                        chapters = chaptersState,
+                        currentIndex = chapterIndex,
+                        fetchPages = { id -> viewModel.repository.getChapterPageUrls(id) }
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (chaptersState.isEmpty()) {
+                            CircularProgressIndicator()
+                        } else {
+                            Text("Chapter not found")
                         }
                     }
-                )
+                }
             }
         }
     }

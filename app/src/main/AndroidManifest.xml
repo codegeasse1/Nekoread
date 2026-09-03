@@ -11,6 +11,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <application
+        android:name=".NekoreadApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -46,6 +47,19 @@
             android:name=".updater.UpdateDownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- WorkManager is initialized on-demand via NekoreadApplication's Configuration.Provider
+             (see HiltWorkerFactory); remove the default auto-initializer so WorkManager isn't
+             initialized twice. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                tools:node="remove" />
+        </provider>
     </application>
 
 </manifest>

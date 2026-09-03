@@ -8,6 +8,7 @@ plugins {
   alias(libs.plugins.secrets)
   alias(libs.plugins.google.services)
   alias(libs.plugins.serialization)
+  alias(libs.plugins.hilt)
 }
 
 android {
@@ -76,6 +77,10 @@ googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.W
 // Some unused dependencies are commented out below instead of being removed.
 // This makes it easy to add them back in the future if needed.
 dependencies {
+  implementation(project(":emaki"))
+  implementation(libs.androidx.hilt.work)
+  implementation(libs.hilt.android)
+  implementation(libs.hilt.navigation.compose)
   implementation(platform(libs.androidx.compose.bom))
   implementation(platform(libs.firebase.bom))
   // implementation(libs.accompanist.permissions)
@@ -158,4 +163,6 @@ dependencies {
   debugImplementation(libs.androidx.compose.ui.tooling)
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
+  "ksp"(libs.androidx.hilt.compiler)
+  "ksp"(libs.hilt.compiler)
 }
