@@ -84,9 +84,9 @@ import com.example.BuildConfig
 import com.example.ui.screens.BrowseScreen
 import com.example.ui.screens.LibraryScreen
 import com.example.ui.screens.MangaDetailScreen
+import com.example.ui.screens.ReaderScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.UpdatesHistoryScreen
-import com.example.readerbridge.NekoreadReaderHost
 import com.example.ui.theme.BgGradientBottom
 import com.example.ui.theme.BgGradientMid
 import com.example.ui.theme.BgGradientTop
@@ -420,36 +420,39 @@ fun MainAppScreen(viewModel: MainViewModel) {
             ) { backStackEntry ->
                 val mangaId = backStackEntry.arguments?.getString("mangaId") ?: ""
                 val chapterId = backStackEntry.arguments?.getString("chapterId") ?: ""
+                val startAtBeginning = backStackEntry.arguments?.getBoolean("startAtBeginning") ?: false
+
+                // Ensure the manga + its chapter list are in the DB when entering the reader
+                // directly (e.g. from Library/History) rather than via the detail screen.
+                LaunchedEffect(mangaId) {
+                    viewModel.loadMangaDetail(mangaId)
+                }
 
                 val mangaState by viewModel.repository.getMangaFlow(mangaId).collectAsStateWithLifecycle(initialValue = null)
                 val chaptersState by viewModel.repository.getChaptersFlow(mangaId).collectAsStateWithLifecycle(initialValue = emptyList())
 
-                // The vendored engine's reader, fed Nekoread's chapters through the HTML bridge.
-                // `chapterIndex` is the 1-based position of the chapter in the chapter list — it
-                // becomes the number in the bridge file name, which is what the engine's built-in
-                // prev/next uses to navigate.
-                val chapterIndex = chaptersState.indexOfFirst { it.id == chapterId } + 1
-
-                if (chaptersState.isNotEmpty() && chapterIndex >= 1) {
-                    NekoreadReaderHost(
-                        mangaTitle = mangaState?.title?.ifBlank { "Manga" } ?: "Manga",
-                        chapters = chaptersState,
-                        currentIndex = chapterIndex,
-                        fetchPages = { id -> viewModel.repository.getChapterPageUrls(id) }
-                    )
-                } else {
+                if (chaptersState.isEmpty()) {
+                    // Chapters still loading.
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (chaptersState.isEmpty()) {
-                            CircularProgressIndicator()
-                        } else {
-                            Text("Chapter not found")
-                        }
+                        CircularProgressIndicator()
                     }
+                } else {
+                    ReaderScreen(
+                        viewModel = viewModel,
+                        manga = mangaState,
+                        chapter = chaptersState.firstOrNull { it.id == chapterId },
+                        allChapters = chaptersState,
+                        onBackClick = { navController.popBackStack() },
+                        onChapterChange = { cid ->
+                            navController.navigate("reader/$mangaId/$cid?startAtBeginning=true")
+                        },
+                        startAtBeginning = startAtBeginning
+                    )
                 }
             }
         }

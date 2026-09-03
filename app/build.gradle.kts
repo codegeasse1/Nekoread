@@ -77,8 +77,6 @@ googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.W
 // Some unused dependencies are commented out below instead of being removed.
 // This makes it easy to add them back in the future if needed.
 dependencies {
-  implementation(project(":reader"))
-  implementation(libs.androidx.hilt.work)
   implementation(libs.hilt.android)
   implementation(libs.hilt.navigation.compose)
   implementation(platform(libs.androidx.compose.bom))
@@ -105,8 +103,6 @@ dependencies {
   implementation(libs.androidx.room.runtime)
   implementation(libs.androidx.webkit)
   implementation(libs.coil.compose)
-  implementation(libs.coil3)
-  implementation(libs.coil3.network.okhttp)
   implementation(libs.subsampling.scale.image.view)
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
