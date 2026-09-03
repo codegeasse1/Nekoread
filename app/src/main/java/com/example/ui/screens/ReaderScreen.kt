@@ -252,9 +252,8 @@ fun ReaderScreen(
                         delay(100)
                     }
                 }
-                val segItems = streamTiledItems.firstOrNull()
-                val idx = segItems?.indexOfFirst { it.pageIndex == targetPage } ?: -1
-                listState.scrollToItem(if (idx >= 0) idx else targetPage)
+                val index = list.take(targetPage).sumOf { webtoonItemCount(it, screenWidthPx) }
+                listState.scrollToItem(index)
             } else {
                 pagerState.scrollToPage(target.coerceAtMost(list.lastIndex))
             }
