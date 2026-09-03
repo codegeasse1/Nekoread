@@ -28,10 +28,10 @@ import okhttp3.OkHttpClient
 import javax.inject.Inject
 
 /**
- * Nekoread's Hilt application. It also boots Emaki's (EasyReader's) reader engine:
- *  - provides the coil3 image loader with Emaki's own fetchers (tiled reader slices, media cache,
- *    epub images) so Emaki's reader renders exactly as it does in the Emaki app, and
- *  - provides the WorkManager [Configuration] via Emaki's HiltWorkerFactory.
+ * Nekoread's Hilt application. It also boots the vendored reader engine:
+ *  - provides the coil3 image loader with the engine's own fetchers (tiled reader slices, media
+ *    cache, epub images) so the engine's reader renders exactly as intended, and
+ *  - provides the WorkManager [Configuration] via the engine's HiltWorkerFactory.
  */
 @HiltAndroidApp
 class NekoreadApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {

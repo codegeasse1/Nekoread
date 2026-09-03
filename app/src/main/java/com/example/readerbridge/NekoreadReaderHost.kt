@@ -1,4 +1,4 @@
-package com.example.emakibridge
+package com.example.readerbridge
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -36,12 +36,12 @@ import io.aatricks.easyreader.ui.viewmodel.ReaderViewModel
 import kotlinx.coroutines.launch
 
 /**
- * Hosts Emaki's (EasyReader's) own reader — NavHost, ReaderScreen, theme, settings, library —
- * fed from Nekoread's chapter data through [NekoreadChapterBridge]. This is Emaki's reader code
- * running unmodified; Nekoread only supplies the HTML the reader opens.
+ * Hosts the vendored reader engine's own reader — its NavHost, ReaderScreen, theme, settings and
+ * library — fed from Nekoread's chapter data through [NekoreadChapterBridge]. This is the engine's
+ * reader code running unmodified; Nekoread only supplies the HTML the reader opens.
  */
 @Composable
-fun EmakiReaderHost(
+fun NekoreadReaderHost(
     mangaTitle: String,
     chapters: List<ChapterEntity>,
     currentIndex: Int, // 1-based position of the chapter in `chapters`
@@ -49,14 +49,14 @@ fun EmakiReaderHost(
 ) {
     val readerViewModel: ReaderViewModel = hiltViewModel()
     val libraryViewModel: LibraryViewModel = hiltViewModel()
-    val hostViewModel: EmakiHostViewModel = hiltViewModel()
+    val hostViewModel: ReaderHostViewModel = hiltViewModel()
     val navController = rememberNavController()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val uiState by readerViewModel.uiState.collectAsState()
 
     LaunchedEffect(currentIndex) {
-        // Make Emaki's Chapters sheet list this manga's chapters (Emaki's own library DB).
+        // Make the engine's Chapters sheet list this manga's chapters (its own library DB).
         NekoreadChapterBridge.seedLibrary(hostViewModel.libraryRepository, mangaTitle, chapters, context)
         // Write bridge files for the current chapter and its neighbours so prev/next work.
         NekoreadChapterBridge.ensureWindow(context, chapters, currentIndex, fetchPages)
@@ -69,8 +69,8 @@ fun EmakiReaderHost(
         readerViewModel.loadContent(url, libraryItemId = itemId)
     }
 
-    // When Emaki navigates inside the reader (prev/next), keep the bridge-file window warm so the
-    // next navigation always lands on an already-written file.
+    // When the engine navigates inside the reader (prev/next), keep the bridge-file window warm so
+    // the next navigation always lands on an already-written file.
     val currentUrl = uiState.content?.url
     LaunchedEffect(currentUrl) {
         val idx = NekoreadChapterBridge.indexFromUrl(currentUrl) ?: return@LaunchedEffect
@@ -101,8 +101,8 @@ fun EmakiReaderHost(
                     modifier = Modifier.fillMaxSize()
                 )
             }
-            // Emaki's other screens (its own web-library / explore / painting canvas) aren't wired
-            // to Nekoread's data; keep the routes so the reader's internal navigation never crashes.
+            // The engine's other screens (its own web-library / explore / painting canvas) aren't
+            // wired to Nekoread's data; keep the routes so the reader's internal navigation never crashes.
             composable<LibraryRoute> {
                 BridgePlaceholder("Library", onBack = { navController.popBackStack() })
             }

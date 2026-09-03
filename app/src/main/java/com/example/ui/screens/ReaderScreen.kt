@@ -391,7 +391,7 @@ fun ReaderScreen(
         }
     }
 
-    // Emaki-style tiled webtoon renderer. Every strip is split into <=2048px-tall slices that
+    // Tiled webtoon renderer. Every strip is split into <=2048px-tall slices that
     // are region-decoded from the on-disk file as HARDWARE bitmaps (the giant full strip is never
     // materialised, so no slice ever exceeds the GPU's texture size and every draw is cheap). The
     // resolver below keeps the window ahead downloaded and its aspect ratios recorded, so a slice
@@ -1349,7 +1349,7 @@ private val readerAspectRatios = mutableStateMapOf<String, Float>()
 private fun pageUrl(model: Any): String = (model as? ExtensionPageImage)?.imageUrl ?: model.toString()
 
 // Number of LazyColumn items one page contributes: 1 while its aspect ratio is unknown (a
-// placeholder), otherwise the Emaki slice count at the current display width. This is the single
+// placeholder), otherwise the engine slice count at the current display width. This is the single
 // source of truth shared by the item builder, the scroll-position walk and the slider jump math,
 // so all three always agree on where each tile sits in the list.
 private fun webtoonItemCount(model: Any, screenWidthPx: Int): Int {

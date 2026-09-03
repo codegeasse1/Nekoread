@@ -1,5 +1,5 @@
 [versions]
-agp = "9.1.1"
+agp = "9.2.1"
 coreKtx = "1.18.0"
 junit = "4.13.2"
 junitVersion = "1.3.0"
@@ -8,9 +8,9 @@ lifecycleRuntimeKtx = "2.8.7"
 lifecycleViewmodelCompose = "2.8.7"
 lifecycleRuntimeCompose = "2.8.7"
 activityCompose = "1.10.1"
-kotlin = "2.2.10"
+kotlin = "2.3.21"
 composeBom = "2024.09.00"
-googleDevtoolsKsp = "2.2.10-2.0.2"
+googleDevtoolsKsp = "2.3.9"
 navigationCompose = "2.8.9"
 roomRuntime = "2.7.0"
 roomKtx = "2.7.0"
@@ -51,7 +51,7 @@ credentials = "1.5.0"
 googleid = "1.1.1"
 androidxWebkit = "1.11.0"
 
-# --- emaki (EasyReader reader engine) module — pinned to Emaki's own versions so its source compiles unchanged ---
+# --- reader engine module — pinned to the engine's own dependency versions so its source compiles unchanged ---
 hilt = "2.60"
 hiltWork = "1.2.0"
 hiltNavigationCompose = "1.2.0"
@@ -62,10 +62,10 @@ itext7 = "7.2.5"
 bouncycastle = "1.72"
 coreSplashscreen = "1.0.1"
 profileinstaller = "1.4.1"
-roomEmaki = "2.7.0-alpha12"
-serializationJsonEmaki = "1.11.0"
-composeBomEmaki = "2026.06.00"
-navigationComposeEmaki = "2.9.8"
+roomEngine = "2.7.0-alpha12"
+serializationJsonEngine = "1.11.0"
+composeBomEngine = "2026.06.00"
+navigationComposeEngine = "2.9.8"
 errorProne = "2.50.0"
 
 
@@ -137,7 +137,7 @@ androidx-credentials-play-services = { group = "androidx.credentials", name = "c
 googleid = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleid" }
 androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "androidxWebkit" }
 
-# --- emaki module (EasyReader reader engine) ---
+# --- reader engine module ---
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
 hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
@@ -146,11 +146,11 @@ androidx-hilt-compiler = { group = "androidx.hilt", name = "hilt-compiler", vers
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
 androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "profileinstaller" }
-androidx-compose-bom-emaki = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBomEmaki" }
-room-runtime-emaki = { group = "androidx.room", name = "room-runtime", version.ref = "roomEmaki" }
-room-ktx-emaki = { group = "androidx.room", name = "room-ktx", version.ref = "roomEmaki" }
-room-compiler-emaki = { group = "androidx.room", name = "room-compiler", version.ref = "roomEmaki" }
-navigation-compose-emaki = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationComposeEmaki" }
+androidx-compose-bom-engine = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBomEngine" }
+room-runtime-engine = { group = "androidx.room", name = "room-runtime", version.ref = "roomEngine" }
+room-ktx-engine = { group = "androidx.room", name = "room-ktx", version.ref = "roomEngine" }
+room-compiler-engine = { group = "androidx.room", name = "room-compiler", version.ref = "roomEngine" }
+navigation-compose-engine = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationComposeEngine" }
 coil3-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil3-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
 ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }
@@ -162,7 +162,7 @@ bouncycastle-bcprov = { group = "org.bouncycastle", name = "bcprov-jdk15to18", v
 bouncycastle-bcpkix = { group = "org.bouncycastle", name = "bcpkix-jdk15to18", version.ref = "bouncycastle" }
 bouncycastle-bcutil = { group = "org.bouncycastle", name = "bcutil-jdk15to18", version.ref = "bouncycastle" }
 okhttp-sse = { group = "com.squareup.okhttp3", name = "okhttp-sse", version.ref = "okhttp" }
-kotlinx-serialization-json-emaki = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serializationJsonEmaki" }
+kotlinx-serialization-json-engine = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serializationJsonEngine" }
 error-prone-annotations = { group = "com.google.errorprone", name = "error_prone_annotations", version.ref = "errorProne" }
 
 

@@ -86,7 +86,7 @@ import com.example.ui.screens.LibraryScreen
 import com.example.ui.screens.MangaDetailScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.UpdatesHistoryScreen
-import com.example.emakibridge.EmakiReaderHost
+import com.example.readerbridge.NekoreadReaderHost
 import com.example.ui.theme.BgGradientBottom
 import com.example.ui.theme.BgGradientMid
 import com.example.ui.theme.BgGradientTop
@@ -420,18 +420,18 @@ fun MainAppScreen(viewModel: MainViewModel) {
             ) { backStackEntry ->
                 val mangaId = backStackEntry.arguments?.getString("mangaId") ?: ""
                 val chapterId = backStackEntry.arguments?.getString("chapterId") ?: ""
-                backStackEntry.arguments?.getBoolean("startAtBeginning") ?: false
 
                 val mangaState by viewModel.repository.getMangaFlow(mangaId).collectAsStateWithLifecycle(initialValue = null)
                 val chaptersState by viewModel.repository.getChaptersFlow(mangaId).collectAsStateWithLifecycle(initialValue = emptyList())
 
-                // Emaki's reader, fed Nekoread's chapters through the HTML bridge. `chapterIndex`
-                // is the 1-based position of the chapter in the chapter list — it becomes the number
-                // in the bridge file name, which is what Emaki's built-in prev/next uses to navigate.
+                // The vendored engine's reader, fed Nekoread's chapters through the HTML bridge.
+                // `chapterIndex` is the 1-based position of the chapter in the chapter list — it
+                // becomes the number in the bridge file name, which is what the engine's built-in
+                // prev/next uses to navigate.
                 val chapterIndex = chaptersState.indexOfFirst { it.id == chapterId } + 1
 
                 if (chaptersState.isNotEmpty() && chapterIndex >= 1) {
-                    EmakiReaderHost(
+                    NekoreadReaderHost(
                         mangaTitle = mangaState?.title?.ifBlank { "Manga" } ?: "Manga",
                         chapters = chaptersState,
                         currentIndex = chapterIndex,

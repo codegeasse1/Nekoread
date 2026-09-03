@@ -9,7 +9,6 @@
         android:scaleY="0.88"
         android:pivotX="54"
         android:pivotY="54">
-    <!-- Hanging scroll (emaki/kakemono): paper between two rollers -->
     <!-- Paper -->
     <path
         android:pathData="M36,30 h36 v50 h-36 z"

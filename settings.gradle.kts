@@ -26,4 +26,4 @@ dependencyResolutionManagement {
 rootProject.name = "NekoRead"
 
 include(":app")
-include(":emaki")
+include(":reader")

@@ -1,7 +1,7 @@
-// EasyReader ("Emaki") reader engine, vendored byte-for-byte as a library module so its code
-// stays untouched. The app (Nekoread) hosts Emaki's own ReaderScreen via the HTML bridge in
-// com.example.emakibridge. This file wires Emaki's build against Nekoread's toolchain versions
-// (Kotlin 2.2.10, AGP 9 built-in Kotlin, KSP) while keeping Emaki's dependency versions.
+// Reader engine compiled as a library module. The Nekoread app hosts the engine's ReaderScreen
+// via the HTML bridge in com.example.readerbridge (see app/src/main/java/com/example/readerbridge).
+// This file wires the engine's build against the project toolchain (AGP built-in Kotlin, KSP)
+// while keeping the engine's own dependency versions.
 plugins {
   alias(libs.plugins.android.library)
   alias(libs.plugins.kotlin.compose)
@@ -58,8 +58,8 @@ dependencies {
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.activity.compose)
 
-  // Compose (Emaki's own BOM so its code compiles against the APIs it was written for)
-  implementation(platform(libs.androidx.compose.bom.emaki))
+  // Compose (the engine's own BOM so its code compiles against the APIs it was written for)
+  implementation(platform(libs.androidx.compose.bom.engine))
   implementation(libs.androidx.compose.ui)
   implementation(libs.androidx.compose.ui.graphics)
   implementation(libs.androidx.compose.ui.tooling.preview)
@@ -77,15 +77,15 @@ dependencies {
   ksp(libs.androidx.hilt.compiler)
 
   // Room
-  implementation(libs.room.runtime.emaki)
-  implementation(libs.room.ktx.emaki)
-  ksp(libs.room.compiler.emaki)
+  implementation(libs.room.runtime.engine)
+  implementation(libs.room.ktx.engine)
+  ksp(libs.room.compiler.engine)
 
   // Navigation
-  implementation(libs.navigation.compose.emaki)
+  implementation(libs.navigation.compose.engine)
 
   // Serialization
-  implementation(libs.kotlinx.serialization.json.emaki)
+  implementation(libs.kotlinx.serialization.json.engine)
 
   // Ktor
   implementation(libs.ktor.client.core)

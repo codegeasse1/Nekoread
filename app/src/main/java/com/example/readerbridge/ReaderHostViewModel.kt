@@ -1,4 +1,4 @@
-package com.example.emakibridge
+package com.example.readerbridge
 
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -7,12 +7,12 @@ import io.aatricks.easyreader.data.repository.LibraryRepository
 import javax.inject.Inject
 
 /**
- * Host-scoped ViewModel giving the Emaki reader host access to Emaki's own singletons
+ * Host-scoped ViewModel giving the reader host access to the engine's own singletons
  * (theme preferences + library database) so the reader's settings and Chapters sheet work
- * exactly as they do in the Emaki app.
+ * exactly as they do in a standalone build of the engine.
  */
 @HiltViewModel
-class EmakiHostViewModel @Inject constructor(
+class ReaderHostViewModel @Inject constructor(
     val preferencesManager: PreferencesManager,
     val libraryRepository: LibraryRepository
 ) : ViewModel()

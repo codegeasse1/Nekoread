@@ -77,7 +77,7 @@ googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.W
 // Some unused dependencies are commented out below instead of being removed.
 // This makes it easy to add them back in the future if needed.
 dependencies {
-  implementation(project(":emaki"))
+  implementation(project(":reader"))
   implementation(libs.androidx.hilt.work)
   implementation(libs.hilt.android)
   implementation(libs.hilt.navigation.compose)

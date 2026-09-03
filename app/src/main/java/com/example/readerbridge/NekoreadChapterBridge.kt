@@ -1,4 +1,4 @@
-package com.example.emakibridge
+package com.example.readerbridge
 
 import android.content.Context
 import io.aatricks.easyreader.data.model.ContentType
@@ -10,15 +10,16 @@ import kotlinx.coroutines.withContext
 import com.example.data.local.ChapterEntity
 
 /**
- * Bridges Nekoread's chapter data into Emaki's (EasyReader's) reader without touching Emaki's
+ * Bridges Nekoread's chapter data into the vendored reader engine without touching the engine's
  * code: each chapter is rendered as a local HTML file whose <img> tags list the chapter's page
- * URLs, wrapped in a container class Emaki's HtmlParser recognises (`.container-chapter-reader`).
- * Emaki then loads it via `file://...html` → ContentKind.HTML → its own tiled image pipeline.
+ * URLs, wrapped in a container class the engine's parser recognises (`.container-chapter-reader`).
+ * The engine then loads it via `file://...html` → HTML content → its own tiled image pipeline.
  *
  * File names are `nekoread_chapter_<index>.html` where <index> is the 1-based position of the
- * chapter in Nekoread's chapter list. Emaki's built-in prev/next navigation works by adjusting the
- * number in the URL (`(chapter[-_/])(\d+)`), so neighbouring chapters just need their files to
- * exist — which [ensureWindow] does on every load, keeping the chain warm as the user reads.
+ * chapter in Nekoread's chapter list. The engine's built-in prev/next navigation works by
+ * adjusting the number in the URL (`(chapter[-_/])(\d+)`), so neighbouring chapters just need
+ * their files to exist — which [ensureWindow] does on every load, keeping the chain warm as the
+ * user reads.
  */
 object NekoreadChapterBridge {
 
@@ -83,7 +84,7 @@ object NekoreadChapterBridge {
         }
     }
 
-    /** Warms the window around [index] (prev/next/next-next) so Emaki's prev/next always lands. */
+    /** Warms the window around [index] (prev/next/next-next) so the engine's prev/next always lands. */
     suspend fun ensureWindow(
         context: Context,
         chapters: List<ChapterEntity>,
@@ -113,8 +114,8 @@ object NekoreadChapterBridge {
     }
 
     /**
-     * Seeds Emaki's own library database with one item per Nekoread chapter (url = bridge file
-     * URL, baseTitle = manga title) so Emaki's Chapters sheet lists them. Idempotent.
+     * Seeds the engine's own library database with one item per Nekoread chapter (url = bridge file
+     * URL, baseTitle = manga title) so its Chapters sheet lists them. Idempotent.
      */
     suspend fun seedLibrary(
         libraryRepository: LibraryRepository,
