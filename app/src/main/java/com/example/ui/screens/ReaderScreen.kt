@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
@@ -76,6 +78,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -83,6 +87,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -105,9 +110,14 @@ import com.example.ui.ReaderMode
 import com.example.ui.ReaderOrientation
 import com.example.ui.looksLikeCloudflare
 import com.example.util.sortChapters
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -227,6 +237,15 @@ fun ReaderScreen(
                 pagerState.scrollToPage(target.coerceAtMost(list.lastIndex))
             }
         } catch (_: Exception) {
+        }
+    }
+
+    // Resuming into the middle of a long chapter: warm the window around the resume point so the
+    // first visible strips are already decoded (and their slots pre-sized) instead of all loading
+    // at once.
+    LaunchedEffect(pages, chapter.id, isWebtoon, startAtBeginning) {
+        if (isWebtoon && pages != null && !startAtBeginning && initialPageIndex > 1) {
+            warmWindow(initialPageIndex)
         }
     }
 
@@ -382,6 +401,78 @@ fun ReaderScreen(
     // the decode width so changing the image-quality setting re-prewarms at the new size.
     val displayPrewarmed = remember(displayDecodeWidth) { mutableStateMapOf<String, Boolean>() }
 
+    // Bounds how many webtoon pages may be decoding at once (visible items + prewarm share this
+    // gate). Two concurrent decodes fill the window fast, and hard-cap the decode/memory burst
+    // that used to spike when jumping into the middle of a long chapter — a dozen full-screen
+    // strips decoding at once was what made the reader and the whole app stutter.
+    val loadGate = remember(chapter.id) { Semaphore(2) }
+
+    // Latest in-flight jump warm-up job; cancelling the previous one means a fast slider drag only
+    // ever runs the warm for the most recent target.
+    var warmJob by remember(chapter.id) { mutableStateOf<Job?>(null) }
+
+    // Pre-decode a window around a target page into Coil's memory cache (bounded by [loadGate])
+    // AND pre-size its slots' aspect ratios, so jumping there renders smoothly instead of firing
+    // every destination page's network fetch at once. Falls back to the just-loaded pages while
+    // the stream is still being seeded (the very first thing after a mid-chapter resume).
+    fun warmWindow(targetPage: Int) {
+        val segs = if (streamSegments.isNotEmpty()) streamSegments
+        else if (pages != null) listOf(pages!!)
+        else return
+        val seg = if (isWebtoon) streamPosition.first.coerceIn(0, segs.lastIndex) else 0
+        val segPages = segs[seg]
+        if (segPages.isEmpty()) return
+        val target = targetPage.coerceIn(0, segPages.lastIndex)
+        val from = (target - 2).coerceAtLeast(0)
+        val to = (target + 10).coerceAtMost(segPages.lastIndex)
+        warmJob?.cancel()
+        warmJob = coroutineScope.launch {
+            // 1) Cheap ratio pass first: every slot in the window gets its true height up front,
+            //    so the list never snap-relayouts while the destination pages fill in.
+            for (p in from..to) {
+                if (!isActive) return@launch
+                val m = segPages[p]
+                if (pageAspectRatios.containsKey(m.toString())) continue
+                try {
+                    val ratioReq = ImageRequest.Builder(context)
+                        .data(m)
+                        .size(Size(64, Dimension.Undefined))
+                        .setParameter("reader_retry", 0)
+                        .setParameter("reader_role", "ratio")
+                        .memoryCachePolicy(CachePolicy.DISABLED)
+                        .diskCachePolicy(CachePolicy.ENABLED)
+                        .build()
+                    val rr = imageLoader?.execute(ratioReq)
+                    val rd = rr?.drawable
+                    if (rd != null && rd.intrinsicWidth > 0 && rd.intrinsicHeight > 0) {
+                        pageAspectRatios[m.toString()] = rd.intrinsicWidth.toFloat() / rd.intrinsicHeight
+                    }
+                } catch (_: Throwable) {
+                }
+            }
+            // 2) Display-size decodes into the memory cache, nearest page first, gated.
+            for (p in from..to) {
+                if (!isActive) return@launch
+                val m = segPages[p]
+                if (displayPrewarmed.containsKey(m.toString())) continue
+                try {
+                    val displayReq = ImageRequest.Builder(context)
+                        .data(m)
+                        .size(Size(displayDecodeWidth, Dimension.Undefined))
+                        .setParameter("reader_retry", 0)
+                        .apply { if (useRgb565) allowRgb565(true) }
+                        .diskCachePolicy(CachePolicy.ENABLED)
+                        .build()
+                    loadGate.withPermit {
+                        imageLoader?.execute(displayReq)
+                    }
+                } catch (_: Throwable) {
+                }
+                displayPrewarmed[m.toString()] = true
+            }
+        }
+    }
+
     // Rolling prewarm — ONE persistent loop, keyed only on chapter/segments/quality, NOT on the
     // current page. (The old two-stage effects restarted on every page scroll, cancelling all
     // their in-flight decodes each time — that cancel/restart churn was a major scroll-stutter
@@ -452,7 +543,7 @@ fun ReaderScreen(
                         .apply { if (useRgb565) allowRgb565(true) }
                         .diskCachePolicy(CachePolicy.ENABLED)
                         .build()
-                    val dr = imageLoader.execute(displayReq)
+                    val dr = loadGate.withPermit { imageLoader.execute(displayReq) }
                     val dd = dr.drawable
                     if (dd != null && dd.intrinsicWidth > 0 && dd.intrinsicHeight > 0) {
                         pageAspectRatios[m.toString()] = dd.intrinsicWidth.toFloat() / dd.intrinsicHeight
@@ -652,53 +743,18 @@ fun ReaderScreen(
                                     segPages,
                                     key = { pi, _ -> "${segChapter.id}_$pi" }
                                 ) { pi, pageModel ->
-                                    val ratio = pageAspectRatios[pageModel.toString()]
-                                    if (ratio != null && ratio > 0f) {
-                                        // True height known: size the slot exactly so the list never
-                                        // relayouts when the strip finishes decoding. aspectRatio
-                                        // derives the height from the item's ACTUAL measured width,
-                                        // and the ratio comes from the same display decode that gets
-                                        // rendered, so slot and bitmap always match to the pixel —
-                                        // no hairline seams between consecutive pages.
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .aspectRatio(ratio)
-                                                .clipToBounds()
-                                                .testTag("reader_page_${segIdx}_$pi")
-                                        ) {
-                                            ReaderPageImage(
-                                                model = pageModel,
-                                                contentDescription = "Page ${pi + 1}",
-                                                modifier = Modifier.fillMaxSize(),
-                                                contentScale = ContentScale.FillWidth,
-                                                spinnerColor = contentTextColor,
-                                                decodeWidthPx = webtoonDecodeWidth,
-                                                crossfade = webtoonFade,
-                                                rgb565 = useRgb565
-                                            )
-                                        }
-                                    } else {
-                                        // Ratio not known yet: bounded fallback height so the image
-                                        // can load; it snaps to its true height once the prewarm
-                                        // learns it (one-time resize, pages far ahead are already
-                                        // pre-sized). Clipped so an overshooting guess can't bleed
-                                        // over the next strip.
-                                        ReaderPageImage(
-                                            model = pageModel,
-                                            contentDescription = "Page ${pi + 1}",
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(fallbackPageHeight)
-                                                .clipToBounds()
-                                                .testTag("reader_page_${segIdx}_$pi"),
-                                            contentScale = ContentScale.FillWidth,
-                                            spinnerColor = contentTextColor,
-                                            decodeWidthPx = webtoonDecodeWidth,
-                                            crossfade = webtoonFade,
-                                            rgb565 = useRgb565
-                                        )
-                                    }
+                                    WebtoonPage(
+                                        model = pageModel,
+                                        contentDescription = "Page ${pi + 1}",
+                                        decodeWidthPx = webtoonDecodeWidth,
+                                        rgb565 = useRgb565,
+                                        crossfade = webtoonFade,
+                                        spinnerColor = contentTextColor,
+                                        fallbackHeight = fallbackPageHeight,
+                                        presetRatio = pageAspectRatios[pageModel.toString()],
+                                        loadGate = loadGate,
+                                        testTag = "reader_page_${segIdx}_$pi"
+                                    )
                                 }
                             }
                         }
@@ -968,6 +1024,12 @@ fun ReaderScreen(
                                     pagerState.scrollToPage(targetPage)
                                 }
                             }
+                            // Pre-size and pre-decode the destination window (gated, coalesced) so a
+                            // long jump lands on already-sized, already-cached pages.
+                            if (isWebtoon) warmWindow(targetPage)
+                        },
+                        onValueChangeFinished = {
+                            if (isWebtoon) warmWindow(currentPage - 1)
                         },
                         valueRange = 1f..pageTotal.coerceAtLeast(1).toFloat(),
                         modifier = Modifier
@@ -1313,6 +1375,118 @@ private fun ReaderPageImage(
                 }
             }
         }
+    }
+}
+
+/**
+ * One webtoon strip. Unlike the paged-mode [ReaderPageImage], this does NOT fire an independent
+ * Coil request per visible page — every load here shares [loadGate] with the prewarm loop, so at
+ * most two pages decode at any moment. That bound is what keeps a jump into the middle of a
+ * 100-page chapter smooth: previously the ~10 newly-composed pages all fetched and decoded at
+ * once, spiking memory and dropping frames across the whole app. While loading it shows a static
+ * empty slot (no animated spinner — animating many spinners while scrolling is itself jank), and
+ * the slot is pre-sized via [presetRatio] so nothing shifts when the strip lands. Each strip sizes
+ * itself from its OWN decoded bitmap once loaded, so slot and pixels always match exactly.
+ */
+@Composable
+private fun WebtoonPage(
+    model: Any,
+    contentDescription: String,
+    decodeWidthPx: Int,
+    rgb565: Boolean,
+    crossfade: Boolean,
+    spinnerColor: Color,
+    fallbackHeight: Dp,
+    presetRatio: Float?,
+    loadGate: Semaphore,
+    testTag: String
+) {
+    val context = LocalContext.current
+    val imageLoader = LocalImageLoader.current
+    var imageBitmap by remember(model) { mutableStateOf<ImageBitmap?>(null) }
+    var failed by remember(model) { mutableStateOf(false) }
+
+    val request = remember(model, decodeWidthPx, rgb565) {
+        ImageRequest.Builder(context)
+            .data(model)
+            .size(Size(decodeWidthPx, Dimension.Undefined))
+            .setParameter("reader_retry", 0)
+            .apply { if (rgb565) allowRgb565(true) }
+            .build()
+    }
+
+    LaunchedEffect(model, request) {
+        imageBitmap = null
+        failed = false
+        var attempts = 0
+        while (isActive && attempts < 4) {
+            val result = withContext(Dispatchers.IO) {
+                loadGate.withPermit { imageLoader?.execute(request) }
+            }
+            val bmp = result?.bitmap
+            if (bmp != null && bmp.width > 0 && bmp.height > 0) {
+                imageBitmap = bmp.asImageBitmap()
+                break
+            }
+            attempts++
+            if (attempts < 4) delay(600L * attempts)
+        }
+        if (imageBitmap == null) failed = true
+    }
+
+    // The loaded bitmap's own dimensions are the authoritative ratio; before it arrives, fall back
+    // to the prewarm's cheap ratio pass so the slot is already the right height.
+    val loadedRatio = imageBitmap?.let { it.width.toFloat() / it.height.toFloat() }
+    val ratio = loadedRatio ?: presetRatio?.takeIf { it > 0f }
+    val boxModifier = if (ratio != null) {
+        Modifier
+            .fillMaxWidth()
+            .aspectRatio(ratio)
+            .clipToBounds()
+    } else {
+        Modifier
+            .fillMaxWidth()
+            .height(fallbackHeight)
+            .clipToBounds()
+    }
+
+    Box(
+        modifier = boxModifier.testTag(testTag),
+        contentAlignment = Alignment.Center
+    ) {
+        val bitmap = imageBitmap
+        if (bitmap != null) {
+            if (crossfade) {
+                Crossfade(
+                    targetState = bitmap,
+                    animationSpec = tween(160),
+                    modifier = Modifier.fillMaxSize()
+                ) { bmp ->
+                    Image(
+                        bitmap = bmp,
+                        contentDescription = contentDescription,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.FillWidth
+                    )
+                }
+            } else {
+                Image(
+                    bitmap = bitmap,
+                    contentDescription = contentDescription,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.FillWidth
+                )
+            }
+        } else if (failed) {
+            Text(
+                text = "Couldn't load page",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = spinnerColor.copy(alpha = 0.7f)
+                ),
+                modifier = Modifier.padding(8.dp)
+            )
+        }
+        // Loading: static empty slot (no animated spinner). The item's own gated load fills it in.
     }
 }
 
