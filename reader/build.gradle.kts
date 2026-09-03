@@ -28,11 +28,6 @@ android {
     compose = true
     buildConfig = true
   }
-  sourceSets {
-    getByName("main") {
-      java.srcDir("src/standard/java")
-    }
-  }
   packaging {
     resources {
       excludes += "org/bouncycastle/pqc/crypto/**/*.properties"
