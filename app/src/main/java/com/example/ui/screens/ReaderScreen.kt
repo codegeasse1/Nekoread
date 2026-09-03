@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
+import android.graphics.drawable.BitmapDrawable
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -240,15 +241,6 @@ fun ReaderScreen(
         }
     }
 
-    // Resuming into the middle of a long chapter: warm the window around the resume point so the
-    // first visible strips are already decoded (and their slots pre-sized) instead of all loading
-    // at once.
-    LaunchedEffect(pages, chapter.id, isWebtoon, startAtBeginning) {
-        if (isWebtoon && pages != null && !startAtBeginning && initialPageIndex > 1) {
-            warmWindow(initialPageIndex)
-        }
-    }
-
     // The chapter currently on screen (in webtoon modes this can advance past the starting chapter).
     val streamPosition by remember {
         derivedStateOf {
@@ -470,6 +462,15 @@ fun ReaderScreen(
                 }
                 displayPrewarmed[m.toString()] = true
             }
+        }
+    }
+
+    // Resuming into the middle of a long chapter: warm the window around the resume point so the
+    // first visible strips are already decoded (and their slots pre-sized) instead of all loading
+    // at once.
+    LaunchedEffect(pages, chapter.id, isWebtoon, startAtBeginning) {
+        if (isWebtoon && pages != null && !startAtBeginning && initialPageIndex > 1) {
+            warmWindow(initialPageIndex)
         }
     }
 
@@ -1423,7 +1424,7 @@ private fun WebtoonPage(
             val result = withContext(Dispatchers.IO) {
                 loadGate.withPermit { imageLoader?.execute(request) }
             }
-            val bmp = result?.bitmap
+            val bmp = (result?.drawable as? BitmapDrawable)?.bitmap
             if (bmp != null && bmp.width > 0 && bmp.height > 0) {
                 imageBitmap = bmp.asImageBitmap()
                 break
