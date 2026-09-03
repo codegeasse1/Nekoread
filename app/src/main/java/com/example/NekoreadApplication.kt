@@ -48,8 +48,8 @@ class NekoreadApplication : Application(), SingletonImageLoader.Factory, Configu
     // WorkManager pulls this lazily before its first enqueue, which happens after Hilt
     // injection has populated `workerFactory`. Using on-demand initialization (no manual
     // `WorkManager.initialize`) means the test variant can override via WorkManagerTestInitHelper.
-    override val workManagerConfiguration: Configuration
-        get() = Configuration.Builder()
+    override fun getWorkManagerConfiguration(): Configuration =
+        Configuration.Builder()
             .setWorkerFactory(workerFactory)
             .setMinimumLoggingLevel(Log.INFO)
             .build()
