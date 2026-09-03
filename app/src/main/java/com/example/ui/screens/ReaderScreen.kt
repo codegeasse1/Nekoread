@@ -93,11 +93,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.math.roundToInt
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
+import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.size.Dimension
 import coil.size.Size
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
+import com.example.data.reader.TileBitmapCache
 import com.example.data.reader.WebtoonFileCache
 import com.example.data.reader.WebtoonTile
 import com.example.data.reader.webtoonSliceCount
@@ -117,6 +119,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.limitedParallelism
 import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -206,41 +209,49 @@ fun ReaderScreen(
 
     val contentTextColor = if (readerBg == ReaderBg.CREAM || readerBg == ReaderBg.WHITE) Color.Black else Color.White
 
-    // Initial position: in-reader next/prev chapter navigation starts at the first page
-    // (startAtBeginning), while opening a chapter from the library/detail resumes where the
-    // user left off (lastPageRead).
-    val initialPageIndex = if (startAtBeginning) {
-        0
-    } else {
-        (chapter.lastPageRead - 1).coerceAtLeast(0)
+    // Opening a chapter never "starts reading it": merely opening one used to save whatever page
+    // the reader transiently showed as progress (and mark the chapter read), so a never-read
+    // chapter could come back marked "read at page 5/8/10" and a chapter last left at page 7
+    // could reopen at a random page. Only a chapter the user has actually read resumes where it
+    // was left (lastPageRead); everything else starts at page 1. In-reader prev/next chapter
+    // navigation always starts at the beginning (startAtBeginning).
+    val resumeTargetPage = remember(chapter.id) {
+        if (startAtBeginning || !chapter.read) 1
+        else chapter.lastPageRead.coerceAtLeast(1)
     }
+    val initialPageIndex = resumeTargetPage - 1
 
-    // Webtoon Vertical List State
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialPageIndex)
+    // Webtoon Vertical List State. The list is in TILE units (a page contributes one item as a
+    // placeholder and several slice items once its aspect ratio is known), so it must always be
+    // created at item 0 — seeding it with a PAGE index used to open mid-list on a random slice of
+    // a random page. The effect below scrolls it to the first tile of the resume page once the
+    // geometry above that page is known.
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = 0)
 
-    // Paged Reader State (shared by horizontal + vertical pagers)
+    // Paged Reader State (shared by horizontal + vertical pagers; pager units ARE pages, so the
+    // initial page is a real page here).
     val pagerState = rememberPagerState(
         initialPage = initialPageIndex,
         pageCount = { pages?.size ?: 0 }
     )
 
     // Force the reader to open on the intended starting page once a chapter's content is on
-    // screen. The list/pager are created with the right initial index, but in-reader prev/next
-    // navigation between chapters can otherwise carry a previous chapter's scroll position over —
-    // which is why a next-chapter tap used to land on a random previously-read page instead of
-    // page 1. Keying on the chapter id makes the start page reliable on every navigation path.
+    // screen. Keying on the chapter id makes the start page reliable on every navigation path.
     // In webtoon mode the resume target is a PAGE, but the list is in TILE units, so we wait for
-    // the resume window's aspect ratios (the warm-up resolver is already downloading them) and
-    // land on the first tile of the resume page.
+    // the pages above it to be aspect-resolved (the warm-up resolver is downloading them) and
+    // land on the first tile of the resume page. The landing is then re-checked a few times:
+    // if any strip above the target still had an unknown ratio when the first scroll ran (an
+    // unknown page counts as ONE placeholder item instead of its real slice count), the first
+    // landing sits short, and the re-check corrects it once the ratios have arrived and the
+    // list has rebuilt into pre-sized tiles.
     LaunchedEffect(chapter.id, pages, isWebtoon, startAtBeginning) {
         val list = pages ?: return@LaunchedEffect
         if (list.isEmpty()) return@LaunchedEffect
-        val target = if (startAtBeginning) 0 else (chapter.lastPageRead - 1).coerceAtLeast(0)
+        val targetPage = if (startAtBeginning) 0 else initialPageIndex.coerceIn(0, list.lastIndex)
         try {
             if (isWebtoon) {
-                val targetPage = target.coerceIn(0, list.lastIndex)
                 if (targetPage > 0) {
-                    for (i in 0..40) {
+                    for (i in 0..50) {
                         var allKnown = true
                         for (p in 0..targetPage) {
                             if (readerAspectRatios[pageUrl(list[p])] == null) {
@@ -253,9 +264,19 @@ fun ReaderScreen(
                     }
                 }
                 val index = list.take(targetPage).sumOf { webtoonItemCount(it, screenWidthPx) }
-                listState.scrollToItem(index)
+                listState.scrollToItem(index.coerceAtLeast(0))
+                if (targetPage > 0) {
+                    for (i in 0 until 3) {
+                        delay(350)
+                        val corrected = list.take(targetPage)
+                            .sumOf { webtoonItemCount(it, screenWidthPx) }
+                            .coerceAtLeast(0)
+                        if (listState.firstVisibleItemIndex == corrected) break
+                        listState.scrollToItem(corrected)
+                    }
+                }
             } else {
-                pagerState.scrollToPage(target.coerceAtMost(list.lastIndex))
+                pagerState.scrollToPage(targetPage.coerceAtMost(list.lastIndex))
             }
         } catch (_: Exception) {
         }
@@ -321,10 +342,48 @@ fun ReaderScreen(
         }
     }
 
-    // Save reading progress on page / active-chapter change
+    // Save reading progress on page / active-chapter change. Three rules keep merely OPENING a
+    // chapter from ever corrupting its stored progress — which is what made never-read chapters
+    // reopen at random pages 5/8/10 and made resume positions drift:
+    //  1. The first sighting of a chapter only anchors the current page and never writes, so a
+    //     bare open (or a freshly auto-continued chapter arriving at page 1) can't mark the
+    //     chapter "read at" a transient page.
+    //  2. A page change inside a chapter is persisted only once the page has held still for a
+    //     moment, so pages merely scrolled past never save — the page the reader stops on does.
+    //  3. Crossing into a different chapter flushes the one just left (its anchor is its last
+    //     settled page, so a fast scroll through a chapter's tail still records where it ended).
+    var progressAnchor by remember(chapter.id) { mutableStateOf<Pair<String, Int>?>(null) }
     LaunchedEffect(currentPage, activeChapter.id) {
-        if (currentPage > 0) {
-            viewModel.saveProgress(manga.id, activeChapter.id, activeChapter.name, currentPage)
+        if (currentPage <= 0) return@LaunchedEffect
+        val anchor = progressAnchor
+        if (anchor == null) {
+            progressAnchor = activeChapter.id to currentPage
+            return@LaunchedEffect
+        }
+        if (anchor.first != activeChapter.id) {
+            if (anchor.second > 1) {
+                val name = allChapters.firstOrNull { it.id == anchor.first }?.name ?: ""
+                viewModel.saveProgress(manga.id, anchor.first, name, anchor.second)
+            }
+            progressAnchor = activeChapter.id to currentPage
+            return@LaunchedEffect
+        }
+        if (anchor.second == currentPage) return@LaunchedEffect
+        progressAnchor = activeChapter.id to currentPage
+        delay(300)
+        viewModel.saveProgress(manga.id, activeChapter.id, activeChapter.name, currentPage)
+    }
+
+    // Leaving the reader (back button, prev/next navigation, ...) flushes the last page the
+    // reader actually reached — progressAnchor tracks every page change instantly, so even an
+    // exit mid-scroll records where the user ended up rather than the last paused page.
+    DisposableEffect(Unit) {
+        onDispose {
+            val a = progressAnchor
+            if (a != null && a.second > 1) {
+                val name = allChapters.firstOrNull { it.id == a.first }?.name ?: ""
+                viewModel.saveProgress(manga.id, a.first, name, a.second)
+            }
         }
     }
 
@@ -453,6 +512,56 @@ fun ReaderScreen(
         }
     }
 
+    // Decode-ahead pool: strictly limited to 2 parallel slice decodes, separate from Coil's own
+    // pool, so slices are decoded here in the background and are already in TileBitmapCache when
+    // they scroll into view — the tile fetcher then returns them instantly instead of
+    // region-decoding (and, on a cold file, network-downloading) on the scroll path.
+    val decodeAheadDispatcher = remember { Dispatchers.IO.limitedParallelism(2) }
+    var decodeAheadBusy by remember(chapter.id) { mutableStateOf(false) }
+
+    // Background-decode the next pages' not-yet-decoded slices. One pass runs at a time; each
+    // pass decodes up to 8 slices in scroll order from [fromPage], so a scrolled-into-view tile
+    // is a cache hit rather than a decode. Slices whose page ratio is still unknown are skipped
+    // (they're re-picked by the next pass once the rolling resolver records the ratio).
+    fun decodeAhead(segIdx: Int, fromPage: Int, toPage: Int) {
+        val segs = streamSegments
+        if (segs.isEmpty()) return
+        val src = source ?: return
+        val segPages = segs.getOrNull(segIdx) ?: return
+        if (segPages.isEmpty()) return
+        if (decodeAheadBusy) return
+        val from = fromPage.coerceAtLeast(0)
+        val to = toPage.coerceAtMost(segPages.lastIndex)
+        if (to < from) return
+        val pending = ArrayList<WebtoonTile>()
+        for (p in from..to) {
+            val model = segPages[p]
+            val url = pageUrl(model)
+            val ratio = readerAspectRatios[url]
+            if (ratio == null || ratio <= 0f) continue
+            val count = webtoonSliceCount(screenWidthPx, ratio)
+            if (count <= 1) continue
+            val requestUrl = (model as? ExtensionPageImage)?.pageUrl ?: ""
+            for (i in 0 until count) {
+                val tile = WebtoonTile(url, requestUrl, src, i, count)
+                if (TileBitmapCache.peek(tile, webtoonDecodeWidth) == null) pending += tile
+            }
+        }
+        if (pending.isEmpty()) return
+        decodeAheadBusy = true
+        coroutineScope.launch {
+            try {
+                withContext(decodeAheadDispatcher) {
+                    for (tile in pending.take(8)) {
+                        TileBitmapCache.decode(tile, webtoonCacheDir, webtoonDecodeWidth)
+                    }
+                }
+            } finally {
+                decodeAheadBusy = false
+            }
+        }
+    }
+
     // Latest in-flight jump warm-up job; cancelling the previous one means a fast slider drag only
     // ever runs the warm for the most recent target.
     var warmJob by remember(chapter.id) { mutableStateOf<Job?>(null) }
@@ -475,20 +584,29 @@ fun ReaderScreen(
         }
     }
 
-    // Resuming into the middle of a long chapter: resolve the window around the resume point so
-    // the first visible strips are already sliced (and their files cached) instead of all
-    // resolving at once.
+    // Resuming into the middle of a long chapter: resolve the FULL prefix up to the resume point
+    // (plus a window ahead) so the opening scroll can land on the exact first tile of the resume
+    // page — while any strip above it has an unknown ratio it counts as a single placeholder item,
+    // so an unresolved prefix is exactly what used to make the resume land a page or three short
+    // (5/8/10 instead of the stored page). Those prefix files are on disk from the earlier read,
+    // so this is mostly cheap bounds-decode reads.
     LaunchedEffect(pages, chapter.id, isWebtoon, startAtBeginning) {
-        if (isWebtoon && pages != null && !startAtBeginning && initialPageIndex > 1) {
-            warmWindow(initialPageIndex)
+        if (isWebtoon && pages != null && !startAtBeginning && initialPageIndex > 0) {
+            val list = pages!!
+            if (list.isEmpty()) return@LaunchedEffect
+            val upTo = (initialPageIndex + 6).coerceAtMost(list.lastIndex)
+            coroutineScope.launch {
+                resolvePages(list.subList(0, upTo + 1))
+            }
         }
     }
 
     // Rolling resolver -- ONE persistent loop for webtoon mode, NOT keyed on the current page.
     // Whenever the scroll window slides it downloads (and aspect-resolves) the pages just behind
-    // and well ahead of the current one. The tile views decode from these files on composition,
-    // so continuous scroll past 100-slice chapters never waits at a slice boundary.
-    LaunchedEffect(pages, streamSegments, isWebtoon, source) {
+    // and well ahead of the current one, then background-decodes the slices just ahead of the
+    // current page into TileBitmapCache. Continuous scroll past 100-slice chapters therefore
+    // never waits at a slice boundary for a decode (or, worse, a download) on the scroll path.
+    LaunchedEffect(pages, streamSegments, isWebtoon, source, webtoonDecodeWidth) {
         if (!isWebtoon) return@LaunchedEffect
         var lastWindowKey = ""
         while (isActive) {
@@ -504,6 +622,7 @@ fun ReaderScreen(
             if (key != lastWindowKey) {
                 lastWindowKey = key
                 resolvePages(segPages.subList(from, to + 1))
+                decodeAhead(segIdx, cur, cur + 6)
             }
             delay(150)
         }
@@ -1468,7 +1587,10 @@ private fun WebtoonTileView(
         ImageRequest.Builder(context)
             .data(tile)
             .size(Size(Dimension.Pixels(decodeWidthPx), Dimension.Undefined))
-            .memoryCacheKey("${item.key}_$attempt")
+            // Tile bitmaps are owned by TileBitmapCache (decode-ahead fills it before tiles
+            // scroll in); Coil's own memory cache is disabled so a bitmap is never held twice,
+            // and the fetcher's cache hit makes every (re)request effectively free.
+            .memoryCachePolicy(CachePolicy.DISABLED)
             .apply { if (fade) crossfade(true) }
             .build()
     }

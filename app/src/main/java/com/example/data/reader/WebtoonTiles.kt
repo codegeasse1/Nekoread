@@ -6,6 +6,7 @@ import android.graphics.BitmapRegionDecoder
 import android.graphics.Rect
 import android.graphics.drawable.BitmapDrawable
 import android.os.Build
+import android.util.LruCache
 import coil.ImageLoader
 import coil.decode.DataSource
 import coil.fetch.DrawableResult
@@ -69,8 +70,7 @@ class WebtoonTileFetcherFactory(
     ): Fetcher? {
         return object : Fetcher {
             override suspend fun fetch(): FetchResult? {
-                val file = WebtoonFileCache.resolve(data, cacheDir) ?: return null
-                val bitmap = decodeSlice(file, data, options) ?: return null
+                val bitmap = TileBitmapCache.decode(data, cacheDir, TileBitmapCache.decodeWidthPx(options)) ?: return null
                 return DrawableResult(
                     drawable = BitmapDrawable(options.context.resources, bitmap),
                     isSampled = true,
@@ -78,6 +78,59 @@ class WebtoonTileFetcherFactory(
                 )
             }
         }
+    }
+}
+
+/**
+ * In-memory LRU of decoded webtoon slices shared by the reader's decode-ahead loop and the
+ * Coil fetcher, keyed by URL + slice + decode width. Slices are decoded here (off the scroll
+ * path) and the fetcher turns each cache hit into an instant DrawableResult.
+ *
+ * The cache is the single holder of decoded tile bitmaps: the reader disables Coil's own
+ * memory cache for tiles so bitmaps aren't duplicated. Evicted bitmaps are NOT recycled —
+ * they may still be drawn by composables in flight; letting GC reclaim them is safe.
+ */
+object TileBitmapCache {
+    private val maxBytes = maxOf(
+        (Runtime.getRuntime().maxMemory() / 5).toInt(),
+        48 * 1024 * 1024,
+    )
+    private val cache = object : LruCache<String, Bitmap>(maxBytes) {
+        override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
+    }
+
+    fun keyFor(tile: WebtoonTile, decodeWidthPx: Int): String =
+        "${tile.imageUrl}#${tile.sliceIndex}/${tile.sliceCount}@${decodeWidthPx}px"
+
+    /** Coil request width in px, 0 when the request carries no pixel size. */
+    fun decodeWidthPx(options: Options): Int =
+        (options.size.width as? Dimension.Pixels)?.px ?: 0
+
+    /** Cache hit for this tile at this decode width, or null when it isn't decoded yet. */
+    fun peek(tile: WebtoonTile, decodeWidthPx: Int): Bitmap? =
+        if (decodeWidthPx > 0) cache.get(keyFor(tile, decodeWidthPx)) else null
+
+    /** Returns the decoded slice bitmap, decoding + caching it on first request. Network I/O is
+     *  single-flighted inside [WebtoonFileCache.resolve]; callers may invoke this from any
+     *  dispatcher (Coil's pool or the reader's decode-ahead pool). */
+    suspend fun decode(tile: WebtoonTile, cacheDir: File, decodeWidthPx: Int): Bitmap? {
+        if (decodeWidthPx > 0) {
+            val key = keyFor(tile, decodeWidthPx)
+            cache.get(key)?.let { return it }
+            val bitmap = decodeAndCache(tile, cacheDir, decodeWidthPx)
+            if (bitmap != null) cache.put(key, bitmap)
+            return bitmap
+        }
+        return decodeAndCache(tile, cacheDir, 0)
+    }
+
+    private suspend fun decodeAndCache(
+        tile: WebtoonTile,
+        cacheDir: File,
+        decodeWidthPx: Int,
+    ): Bitmap? {
+        val file = WebtoonFileCache.resolve(tile, cacheDir) ?: return null
+        return decodeSlice(file, tile, decodeWidthPx)
     }
 }
 
@@ -120,12 +173,13 @@ object WebtoonFileCache {
     }
 }
 
-/** Region-decodes [tile] out of [file] at the request's target width and returns a bitmap that is
- *  hardware-backed when the device supports it (so the GPU upload happens off the draw path). */
+/** Region-decodes [tile] out of [file] at [targetWidthPx] (0 = native width) and returns a bitmap
+ *  that is hardware-backed when the device supports it (so the GPU upload happens off the draw
+ *  path). */
 private fun decodeSlice(
     file: File,
     tile: WebtoonTile,
-    options: Options,
+    targetWidthPx: Int,
 ): Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(file.absolutePath, bounds)
@@ -141,7 +195,7 @@ private fun decodeSlice(
     // 1px source overlap between neighbours hides hairline seams at slice edges.
     if (index < count - 1) bottom = (bottom + 1).coerceAtMost(srcH)
 
-    val targetW = (options.size.width as? Dimension.Pixels)?.px ?: srcW
+    val targetW = if (targetWidthPx > 0) targetWidthPx else srcW
     val sample = if (targetW <= 0 || srcW <= targetW) 1 else {
         var s = 1
         while (srcW / (s * 2) >= targetW) s *= 2
