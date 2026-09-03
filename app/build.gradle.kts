@@ -15,7 +15,7 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.nekoread.manga"
+    applicationId = "com.nekoread.manga"
     minSdk = 24
     targetSdk = 36
     versionCode = project.providers.gradleProperty("versionCode").map { it.toInt() }.getOrElse(1)
