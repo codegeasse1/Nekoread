@@ -11,6 +11,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -72,7 +73,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -165,6 +168,8 @@ fun ReaderScreen(
     val autoScrollSpeedDp: Float by viewModel.autoScrollSpeedDp.collectAsStateWithLifecycle()
     val readerQuality: Int by viewModel.readerQuality.collectAsStateWithLifecycle()
     val cropBorders: Boolean by viewModel.cropBorders.collectAsStateWithLifecycle()
+    val doubleTapZoom: Boolean by viewModel.doubleTapZoom.collectAsStateWithLifecycle()
+    val tapToChangePages: Boolean by viewModel.tapToChangePages.collectAsStateWithLifecycle()
 
     // Both long-strip modes render as one continuous vertical list; only the gap differs.
     val isWebtoon = readerMode == ReaderMode.WEBTOON || readerMode == ReaderMode.WEBTOON_GAPS
@@ -669,20 +674,9 @@ fun ReaderScreen(
         modifier = modifier
             .fillMaxSize()
             .background(bgColor)
-            .then(
-                if (isWebtoon) {
-                    // In webtoon mode the yomi viewer owns taps (middle = toggle HUD, sides =
-                    // scroll), so the Compose-level tap-to-toggle must be disabled here or every
-                    // tap would double-toggle the HUD.
-                    Modifier
-                } else {
-                    Modifier.pointerInput(Unit) {
-                        detectTapGestures(
-                            onTap = { showHud = !showHud }
-                        )
-                    }
-                }
-            )
+            // Taps are handled per-page: in webtoon mode the yomi viewer owns them (middle =
+            // toggle HUD, sides = scroll), and in paged mode each page handles its own tap zones
+            // (prev/next/menu) and double-tap zoom, so nothing is wired at the container level.
             .testTag("reader_container")
     ) {
         // Reader Content (error / pages). No full-screen blocking loading screen: while the first
@@ -742,6 +736,8 @@ fun ReaderScreen(
                         textColor = contentTextColor,
                         gaps = readerMode == ReaderMode.WEBTOON_GAPS,
                         cropBorders = cropBorders,
+                        doubleTapZoom = doubleTapZoom,
+                        tapToChangePages = tapToChangePages,
                         autoScroll = autoScroll,
                         autoScrollSpeedDp = autoScrollSpeedDp,
                         initialPageIndex = initialPageIndex,
@@ -785,19 +781,27 @@ fun ReaderScreen(
                             state = pagerState,
                             modifier = Modifier.fillMaxSize()
                         ) { pageIndex ->
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                ReaderPageImage(
-                                    model = pageList[pageIndex],
-                                    contentDescription = "Page ${pageIndex + 1}",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = fitScale,
-                                    spinnerColor = contentTextColor,
-                                    placeholderModifier = Modifier.fillMaxSize()
-                                )
-                            }
+                            PagedPage(
+                                model = pageList[pageIndex],
+                                pageNumber = pageIndex + 1,
+                                contentScale = fitScale,
+                                spinnerColor = contentTextColor,
+                                doubleTapZoom = doubleTapZoom,
+                                tapToChangePages = tapToChangePages,
+                                isReversed = false,
+                                isVertical = true,
+                                onToggleHud = { showHud = !showHud },
+                                onPrevPage = {
+                                    coroutineScope.launch {
+                                        pagerState.animateScrollToPage((pagerState.currentPage - 1).coerceAtLeast(0))
+                                    }
+                                },
+                                onNextPage = {
+                                    coroutineScope.launch {
+                                        pagerState.animateScrollToPage((pagerState.currentPage + 1).coerceAtMost((pages?.size ?: 1) - 1))
+                                    }
+                                },
+                            )
                         }
                     } else {
                         HorizontalPager(
@@ -805,19 +809,27 @@ fun ReaderScreen(
                             reverseLayout = readerMode == ReaderMode.RIGHT_TO_LEFT,
                             modifier = Modifier.fillMaxSize()
                         ) { pageIndex ->
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                ReaderPageImage(
-                                    model = pageList[pageIndex],
-                                    contentDescription = "Page ${pageIndex + 1}",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = fitScale,
-                                    spinnerColor = contentTextColor,
-                                    placeholderModifier = Modifier.fillMaxSize()
-                                )
-                            }
+                            PagedPage(
+                                model = pageList[pageIndex],
+                                pageNumber = pageIndex + 1,
+                                contentScale = fitScale,
+                                spinnerColor = contentTextColor,
+                                doubleTapZoom = doubleTapZoom,
+                                tapToChangePages = tapToChangePages,
+                                isReversed = readerMode == ReaderMode.RIGHT_TO_LEFT,
+                                isVertical = false,
+                                onToggleHud = { showHud = !showHud },
+                                onPrevPage = {
+                                    coroutineScope.launch {
+                                        pagerState.animateScrollToPage((pagerState.currentPage - 1).coerceAtLeast(0))
+                                    }
+                                },
+                                onNextPage = {
+                                    coroutineScope.launch {
+                                        pagerState.animateScrollToPage((pagerState.currentPage + 1).coerceAtMost((pages?.size ?: 1) - 1))
+                                    }
+                                },
+                            )
                         }
                     }
                 }
@@ -883,6 +895,10 @@ fun ReaderScreen(
             onSelectReaderOrientation = { viewModel.setReaderOrientation(it) },
             cropBorders = cropBorders,
             onToggleCropBorders = { viewModel.setCropBorders(!cropBorders) },
+            doubleTapZoom = doubleTapZoom,
+            onToggleDoubleTapZoom = { viewModel.setDoubleTapZoom(!doubleTapZoom) },
+            tapToChangePages = tapToChangePages,
+            onToggleTapToChangePages = { viewModel.setTapToChangePages(!tapToChangePages) },
             readerBg = readerBg,
             onSelectReaderBg = { viewModel.setReaderBg(it) },
             showPageNumber = showPageNumber,
@@ -902,6 +918,8 @@ fun ReaderScreen(
                 viewModel.setAutoScrollSpeedDp(80f)
                 viewModel.setReaderQuality(75)
                 viewModel.setCropBorders(false)
+                viewModel.setDoubleTapZoom(true)
+                viewModel.setTapToChangePages(true)
             },
             seriesOverrideEnabled = seriesOverrideEnabled[manga.id] == true,
             onToggleSeriesOverride = {
@@ -928,6 +946,88 @@ fun ReaderScreen(
                 retryKey++
             }
         )
+    }
+}
+
+@Composable
+private fun PagedPage(
+    model: Any?,
+    pageNumber: Int,
+    contentScale: ContentScale,
+    spinnerColor: Color,
+    doubleTapZoom: Boolean,
+    tapToChangePages: Boolean,
+    isReversed: Boolean,
+    isVertical: Boolean,
+    onToggleHud: () -> Unit,
+    onPrevPage: () -> Unit,
+    onNextPage: () -> Unit,
+) {
+    var zoomed by remember { mutableStateOf(false) }
+    var pan by remember { mutableStateOf(Offset.Zero) }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(doubleTapZoom, tapToChangePages, isReversed, isVertical) {
+                detectTapGestures(
+                    onTap = { pos ->
+                        if (!tapToChangePages) {
+                            onToggleHud()
+                        } else {
+                            val w = size.width.coerceAtLeast(1)
+                            val h = size.height.coerceAtLeast(1)
+                            var prev = if (isVertical) pos.y / h < 0.34f else pos.x / w < 0.34f
+                            var next = if (isVertical) pos.y / h > 0.66f else pos.x / w > 0.66f
+                            if (isReversed) {
+                                val t = prev; prev = next; next = t
+                            }
+                            when {
+                                prev -> onPrevPage()
+                                next -> onNextPage()
+                                else -> onToggleHud()
+                            }
+                        }
+                    },
+                    onDoubleTap = if (doubleTapZoom) {
+                        {
+                            zoomed = !zoomed
+                            pan = Offset.Zero
+                        }
+                    } else {
+                        null
+                    },
+                )
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = if (zoomed) 2f else 1f
+                    scaleY = if (zoomed) 2f else 1f
+                    translationX = pan.x.coerceIn(-size.width / 2f, size.width / 2f)
+                    translationY = pan.y.coerceIn(-size.height / 2f, size.height / 2f)
+                }
+                .pointerInput(zoomed) {
+                    if (zoomed) {
+                        detectDragGestures { change, dragAmount ->
+                            change.consume()
+                            pan += dragAmount
+                        }
+                    }
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            ReaderPageImage(
+                model = model,
+                contentDescription = "Page $pageNumber",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = contentScale,
+                spinnerColor = spinnerColor,
+                placeholderModifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 

@@ -139,6 +139,10 @@ fun YomiReaderChrome(
     onSelectReaderOrientation: (ReaderOrientation) -> Unit,
     cropBorders: Boolean,
     onToggleCropBorders: () -> Unit,
+    doubleTapZoom: Boolean,
+    onToggleDoubleTapZoom: () -> Unit,
+    tapToChangePages: Boolean,
+    onToggleTapToChangePages: () -> Unit,
     readerBg: ReaderBg,
     onSelectReaderBg: (ReaderBg) -> Unit,
     showPageNumber: Boolean,
@@ -247,6 +251,10 @@ fun YomiReaderChrome(
                 onSelectReaderQuality = onSelectReaderQuality,
                 cropBorders = cropBorders,
                 onToggleCropBorders = onToggleCropBorders,
+                doubleTapZoom = doubleTapZoom,
+                onToggleDoubleTapZoom = onToggleDoubleTapZoom,
+                tapToChangePages = tapToChangePages,
+                onToggleTapToChangePages = onToggleTapToChangePages,
                 autoScroll = autoScroll,
                 autoScrollSpeedDp = autoScrollSpeedDp,
                 onToggleAutoScroll = onToggleAutoScroll,
@@ -622,6 +630,10 @@ private fun ReaderSettingsSheet(
     onSelectReaderQuality: (Int) -> Unit,
     cropBorders: Boolean,
     onToggleCropBorders: () -> Unit,
+    doubleTapZoom: Boolean,
+    onToggleDoubleTapZoom: () -> Unit,
+    tapToChangePages: Boolean,
+    onToggleTapToChangePages: () -> Unit,
     autoScroll: Boolean,
     autoScrollSpeedDp: Float,
     onToggleAutoScroll: () -> Unit,
@@ -681,6 +693,10 @@ private fun ReaderSettingsSheet(
                     onSelectReaderQuality = onSelectReaderQuality,
                     cropBorders = cropBorders,
                     onToggleCropBorders = onToggleCropBorders,
+                    doubleTapZoom = doubleTapZoom,
+                    onToggleDoubleTapZoom = onToggleDoubleTapZoom,
+                    tapToChangePages = tapToChangePages,
+                    onToggleTapToChangePages = onToggleTapToChangePages,
                     autoScroll = autoScroll,
                     autoScrollSpeedDp = autoScrollSpeedDp,
                     onToggleAutoScroll = onToggleAutoScroll,
@@ -794,6 +810,10 @@ private fun ColumnScope.SettingsGeneralTab(
     onSelectReaderQuality: (Int) -> Unit,
     cropBorders: Boolean,
     onToggleCropBorders: () -> Unit,
+    doubleTapZoom: Boolean,
+    onToggleDoubleTapZoom: () -> Unit,
+    tapToChangePages: Boolean,
+    onToggleTapToChangePages: () -> Unit,
     autoScroll: Boolean,
     autoScrollSpeedDp: Float,
     onToggleAutoScroll: () -> Unit,
@@ -859,6 +879,18 @@ private fun ColumnScope.SettingsGeneralTab(
             QualityChip("Medium", readerQuality == 75) { onSelectReaderQuality(75) }
             QualityChip("High (sharp)", readerQuality == 100) { onSelectReaderQuality(100) }
         }
+    }
+    SectionCard("Gestures") {
+        ToggleRow(
+            label = "Double tap to zoom",
+            checked = doubleTapZoom,
+            onCheckedChange = { onToggleDoubleTapZoom() },
+        )
+        ToggleRow(
+            label = "Tap to change pages",
+            checked = tapToChangePages,
+            onCheckedChange = { onToggleTapToChangePages() },
+        )
     }
 }
 

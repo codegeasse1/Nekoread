@@ -57,6 +57,16 @@ class WebtoonViewer(context: Context) {
             pageConfig = pageConfig.copy(cropBorders = value)
         }
 
+    /** Whether double-tapping a page zooms it in/out (yomi's "Double tap to zoom"). */
+    var doubleTapZoom: Boolean = true
+        set(value) {
+            field = value
+            frame.doubleTapZoom = value
+        }
+
+    /** Whether tapping the left/right side of the screen scrolls (yomi's tap zones). */
+    var tapToChangePages: Boolean = true
+
     /** Rendering config for each page (fit-width, pinch-to-zoom, ...). */
     var pageConfig: ReaderPageImageView.Config = ReaderPageImageView.Config(
         zoomDuration = 200,
@@ -119,7 +129,7 @@ class WebtoonViewer(context: Context) {
             },
         )
         recycler.tapListener = { event -> handleTap(event) }
-        frame.doubleTapZoom = true
+        frame.doubleTapZoom = doubleTapZoom
         frame.zoomOutDisabled = false
         frame.enablePinchToZoom = true
         frame.layoutParams = ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)
@@ -181,6 +191,7 @@ class WebtoonViewer(context: Context) {
         val width = recycler.width.coerceAtLeast(1)
         val x = event.x / width
         when {
+            !tapToChangePages && (x < 0.34f || x > 0.66f) -> Unit
             x < 0.34f -> scrollBy(-scrollDistance)
             x > 0.66f -> scrollBy(scrollDistance)
             else -> onMenuTap?.invoke()

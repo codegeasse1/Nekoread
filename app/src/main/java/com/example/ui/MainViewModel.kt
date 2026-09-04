@@ -109,6 +109,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _cropBorders = MutableStateFlow(false)
     val cropBorders: StateFlow<Boolean> = _cropBorders.asStateFlow()
 
+    private val _doubleTapZoom = MutableStateFlow(true)
+    val doubleTapZoom: StateFlow<Boolean> = _doubleTapZoom.asStateFlow()
+
+    private val _tapToChangePages = MutableStateFlow(true)
+    val tapToChangePages: StateFlow<Boolean> = _tapToChangePages.asStateFlow()
+
     // Per-series reader overrides: a manga can pin its own reading mode (the global mode still
     // applies everywhere else). Enabled state and mode are stored per manga id in prefs.
     private val _seriesOverrideEnabled = MutableStateFlow<Map<String, Boolean>>(emptyMap())
@@ -123,6 +129,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _readerBg.value = ReaderBg.valueOf(prefs.getString("reader_bg", ReaderBg.PURE_BLACK.name)!!)
         _showPageNumber.value = prefs.getBoolean("show_page_number", true)
         _cropBorders.value = prefs.getBoolean("reader_crop_borders", false)
+        _doubleTapZoom.value = prefs.getBoolean("reader_double_tap_zoom", true)
+        _tapToChangePages.value = prefs.getBoolean("reader_tap_change_pages", true)
         _seriesOverrideEnabled.value = prefs.all.mapNotNull { (k, v) ->
             if (k.startsWith("series_override_") && v is Boolean) k.removePrefix("series_override_") to v else null
         }.toMap()
@@ -441,6 +449,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setCropBorders(enabled: Boolean) {
         _cropBorders.value = enabled
         prefs.edit().putBoolean("reader_crop_borders", enabled).apply()
+    }
+
+    fun setDoubleTapZoom(enabled: Boolean) {
+        _doubleTapZoom.value = enabled
+        prefs.edit().putBoolean("reader_double_tap_zoom", enabled).apply()
+    }
+
+    fun setTapToChangePages(enabled: Boolean) {
+        _tapToChangePages.value = enabled
+        prefs.edit().putBoolean("reader_tap_change_pages", enabled).apply()
     }
 
     fun setSeriesOverrideEnabled(mangaId: String, enabled: Boolean) {
