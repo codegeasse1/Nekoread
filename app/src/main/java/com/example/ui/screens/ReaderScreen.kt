@@ -451,7 +451,9 @@ fun ReaderScreen(
     // Rolling prewarm — ONE persistent loop, keyed only on chapter/segments/quality, NOT on the
     // current page. (The old two-stage effects restarted on every page scroll, cancelling all
     // their in-flight decodes each time — that cancel/restart churn was a major scroll-stutter
-    // source.) The loop walks a window around the current page, nearest page first:
+    // source.) The loop walks outward from the current page, nearest page first, keeping 8 pages
+    // ahead and 8 behind display-ready, and pre-learning the whole chapter's aspect ratios in the
+    // background so a skip to any page is instant:
     //   - WEBTOON mode is HYBRID. Each page's true aspect ratio is learned first (from the cache
     //     file if already downloaded, else a cheap 64px Coil decode that also primes Coil's disk
     //     cache). TALL strips (display height > ~2.5 screens) get their bytes downloaded to a cache
@@ -478,42 +480,67 @@ fun ReaderScreen(
             val segIdx = if (isWebtoon) streamPosition.first.coerceIn(0, segs.lastIndex) else 0
             val segSize = segs[segIdx].size
             val globCur = (starts[segIdx] + (currentPage - 1).coerceIn(0, segSize - 1)).coerceIn(0, total - 1)
-            val from = (globCur - 2).coerceAtLeast(0)
-            val to = (globCur + prewarmAfter).coerceAtMost(total - 1)
+            // Preload window: 8 pages behind and 8 pages ahead of the current page are made
+            // display-ready (Coil memory-cache warm for short pages, cache-file download for tall
+            // strips) so that scrolling — and jumping straight to any page — shows the 8 neighbours
+            // instantly instead of decoding them on first scroll-in.
+            val warmFrom = (globCur - 8).coerceAtLeast(0)
+            val warmTo = (globCur + 8).coerceAtMost(total - 1)
 
-            // Pick the nearest not-yet-processed page in the window.
+            // Pick the nearest not-yet-processed page, walking outward from the current page
+            // (current, +1, -1, +2, -2, ...). After a scroll or a skip, the pages closest to the
+            // viewport are handled first, so the very next image is ready before it scrolls in.
+            // In webtoon mode the walk covers the whole chapter, pre-learning every page's aspect
+            // ratio in the background — so a skip to any page is instant: the slot is already
+            // pre-sized, the tall/short decision is already made, only the display decode remains.
             var candidate: Triple<Int, Int, Any>? = null
-            for (g in from..to) {
-                var seg = 0
-                while (seg < segs.size && g >= starts[seg] + segs[seg].size) seg++
-                if (seg >= segs.size) continue
-                val m = segs[seg][g - starts[seg]]
-                val inDisplay = g >= globCur - 2
-                if (isWebtoon) {
-                    val key = pageKey(m)
-                    // Only descriptor pages are pre-processed in webtoon mode (anything else renders
-                    // via the item's Coil fallback).
-                    if (m !is MangaSource.PageDescriptor) continue
-                    // Skip pages that just failed — the visible item retries on its own; this loop
-                    // would otherwise hot-spin on the same failure every 120ms.
-                    if (downloadFailed.containsKey(key) && now - downloadFailed[key]!! < 8000) continue
-                    val ratio = pageAspectRatios[key]
-                    val isTall = ratio != null && ratio > 0f && screenWidthPx / ratio > subsampleTallPx
-                    val needRatio = ratio == null
-                    // Tall strips are rendered by the subsampling view (needs the cache file);
-                    // short pages render with Coil (needs the display-size decode warmed).
-                    val needFile = isTall && !webtoonDownloaded.containsKey(key)
-                    val needWarm = inDisplay && !displayPrewarmed.containsKey(key) && !isTall
-                    if (needRatio || needFile || needWarm) { candidate = Triple(seg, g, m); break }
-                } else {
+            if (isWebtoon) {
+                val maxDist = maxOf(globCur, total - 1 - globCur)
+                walk@ for (d in 0..maxDist) {
+                    val gs = if (d == 0) intArrayOf(globCur) else intArrayOf(globCur + d, globCur - d)
+                    for (g in gs) {
+                        if (g < 0 || g >= total) continue
+                        var seg = 0
+                        while (seg < segs.size && g >= starts[seg] + segs[seg].size) seg++
+                        if (seg >= segs.size) continue
+                        val m = segs[seg][g - starts[seg]]
+                        val inWindow = g >= warmFrom && g <= warmTo
+                        val key = pageKey(m)
+                        // Only descriptor pages are pre-processed in webtoon mode (anything else
+                        // renders via the item's Coil fallback).
+                        if (m !is MangaSource.PageDescriptor) continue
+                        // Skip pages that just failed — the visible item retries on its own; this
+                        // loop would otherwise hot-spin on the same failure every 120ms.
+                        if (downloadFailed.containsKey(key) && now - downloadFailed[key]!! < 8000) continue
+                        val ratio = pageAspectRatios[key]
+                        val isTall = ratio != null && ratio > 0f && screenWidthPx / ratio > subsampleTallPx
+                        // Ratio is learned for ANY page (whole chapter, so skips are instant);
+                        // tall-strip downloads and short-page display warms are ±8-window only.
+                        val needRatio = ratio == null
+                        val needFile = inWindow && isTall && !webtoonDownloaded.containsKey(key)
+                        val needWarm = inWindow && !displayPrewarmed.containsKey(key) && !isTall
+                        if (needRatio || needFile || needWarm) { candidate = Triple(seg, g, m); break@walk }
+                    }
+                }
+            } else {
+                val from = (globCur - 2).coerceAtLeast(0)
+                val to = (globCur + prewarmAfter).coerceAtMost(total - 1)
+                for (g in from..to) {
+                    var seg = 0
+                    while (seg < segs.size && g >= starts[seg] + segs[seg].size) seg++
+                    if (seg >= segs.size) continue
+                    val m = segs[seg][g - starts[seg]]
                     val needRatio = !pageAspectRatios.containsKey(m.toString())
-                    val needDisplay = inDisplay && !displayPrewarmed.containsKey(m.toString())
+                    val needDisplay = (g >= globCur - 2) && !displayPrewarmed.containsKey(m.toString())
                     if (needRatio || needDisplay) { candidate = Triple(seg, g, m); break }
                 }
             }
             if (candidate == null) { delay(120); continue }
             val (seg, g, m) = candidate
-            val inDisplay = g >= globCur - 2
+            // In webtoon mode only pages inside the ±8 preload window get their display decode
+            // warmed (the visible Coil item then pops straight from memory); paged mode keeps its
+            // original near-page window.
+            val inDisplay = if (isWebtoon) g >= warmFrom && g <= warmTo else g >= globCur - 2
             try {
                 if (isWebtoon) {
                     val key = pageKey(m)
