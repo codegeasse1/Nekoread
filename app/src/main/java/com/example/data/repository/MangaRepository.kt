@@ -219,6 +219,14 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         SourceRegistry.source(ch.mangaId.substringBefore(":")).getPageImageModels(ch.fetchUrl)
     }
 
+    /** Live page descriptors (page URL + image URL) for a chapter. Used by the webtoon reader to
+     *  download each page to a cache file and render it with the subsampling (region-decode) view,
+     *  so tall strips never sit in memory as a giant bitmap (see MangaSource.getPageDescriptors). */
+    suspend fun getChapterPageDescriptors(chapterId: String): List<MangaSource.PageDescriptor> = withContext(Dispatchers.IO) {
+        val ch = db.chapterDao().getChapterById(chapterId) ?: return@withContext emptyList()
+        SourceRegistry.source(ch.mangaId.substringBefore(":")).getPageDescriptors(ch.fetchUrl)
+    }
+
     suspend fun toggleLibraryStatus(mangaId: String, category: String = "Reading") = withContext(Dispatchers.IO) {
         val manga = db.mangaDao().getMangaById(mangaId) ?: return@withContext
         val newInLibrary = !manga.inLibrary

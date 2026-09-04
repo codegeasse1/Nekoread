@@ -98,6 +98,8 @@ import coil.size.Dimension
 import coil.size.Size
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
+import com.example.data.reader.WebtoonPageCache
+import com.example.data.source.MangaSource
 import com.example.ui.MainViewModel
 import com.example.ui.ReaderBg
 import com.example.ui.ReaderFit
@@ -105,6 +107,7 @@ import com.example.ui.ReaderMode
 import com.example.ui.ReaderOrientation
 import com.example.ui.looksLikeCloudflare
 import com.example.util.sortChapters
+import java.io.File
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -158,11 +161,17 @@ fun ReaderScreen(
     var webtoonLoadingNext by remember(chapter.id) { mutableStateOf(false) }
     var webtoonError by remember(chapter.id) { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(chapter.id, retryKey) {
+    LaunchedEffect(chapter.id, retryKey, isWebtoon) {
         pageLoading = true
         pageError = null
         try {
-            pages = viewModel.repository.getChapterPageImageModels(chapter.id)
+            // Webtoon modes fetch page DESCRIPTORS (URLs) and download each page's bytes to a cache
+            // file for the subsampling renderer; paged modes keep Coil page-image models.
+            pages = if (isWebtoon) {
+                viewModel.repository.getChapterPageDescriptors(chapter.id)
+            } else {
+                viewModel.repository.getChapterPageImageModels(chapter.id)
+            }
         } catch (e: Throwable) {
             pageError = e.message ?: "Failed to load chapter pages"
             pages = null
@@ -310,7 +319,11 @@ fun ReaderScreen(
             webtoonLoadingNext = true
             webtoonError = null
             try {
-                val p = viewModel.repository.getChapterPageImageModels(next.id)
+                val p = if (isWebtoon) {
+                    viewModel.repository.getChapterPageDescriptors(next.id)
+                } else {
+                    viewModel.repository.getChapterPageImageModels(next.id)
+                }
                 streamQueue = streamQueue + next
                 streamSegments = streamSegments + listOf(p)
             } catch (e: Throwable) {
@@ -382,25 +395,42 @@ fun ReaderScreen(
     // the decode width so changing the image-quality setting re-prewarms at the new size.
     val displayPrewarmed = remember(displayDecodeWidth) { mutableStateMapOf<String, Boolean>() }
 
+    // Webtoon pages whose cache file is ready (or is being fetched) — the prewarm loop and the
+    // visible page items share one download per image URL instead of racing each other.
+    val webtoonDownloaded = remember { mutableStateMapOf<String, Boolean>() }
+    // imageUrl -> time of last failed download. The prewarm backs off on these for a few seconds so
+    // a transient failure doesn't spin in a hot loop; the visible item has its own retry + button.
+    val downloadFailed = remember { mutableStateMapOf<String, Long>() }
+    // The chapter's source — used to download webtoon pages through the source's own client
+    // (Referer/Origin etc., exactly like yomi's HttpPageLoader), and the on-device cache dir that
+    // stores the downloaded page image files for the subsampling view to region-decode.
+    val source = remember(manga) {
+        if (manga == null) null else runCatching { viewModel.repository.sourceForManga(manga.id) }.getOrNull()
+    }
+    val webtoonCacheDir = remember { File(context, "webtoon_pages") }
+
+    // Stable per-page cache key: the image URL for descriptor pages (unique per page, shared by the
+    // prewarm and the visible item), the model's string otherwise.
+    fun pageKey(m: Any): String = if (m is MangaSource.PageDescriptor) m.imageUrl else m.toString()
+
     // Rolling prewarm — ONE persistent loop, keyed only on chapter/segments/quality, NOT on the
     // current page. (The old two-stage effects restarted on every page scroll, cancelling all
     // their in-flight decodes each time — that cancel/restart churn was a major scroll-stutter
     // source.) The loop walks a window around the current page, nearest page first:
-    //   - RATIO step (webtoon only, pages far ahead): a 64px-wide decode just to learn the strip's
-    //     aspect ratio so the list can reserve its exact height up front (tiny bitmaps, memory
-    //     cache disabled, distinct reader_role parameter; the fetched bytes land in the disk cache
-    //     for the display step to reuse).
-    //   - DISPLAY step (pages near the current one): a full display-size decode that warms Coil's
-    //     memory cache so scrolling/jumping there renders instantly. Its actual decoded dimensions
-    //     are stored as the AUTHORITATIVE aspect ratio — the strip slot and the rendered bitmap
-    //     then come from the SAME decode, so a strip can never sit a few pixels off its slot. (The
-    //     tiny ratio decode and the display decode sample the source at different sizes, so their
-    //     ratios can differ slightly due to BitmapFactory rounding; using the tiny ratio for the
-    //     slot is exactly what made consecutive pages appear "joined from another page" — a
-    //     hairline gap or clip at every strip seam.)
-    LaunchedEffect(pages, streamSegments, imageLoader, displayDecodeWidth, useRgb565) {
+    //   - WEBTOON mode: the "prewarm" for each page is making sure its bytes are on disk
+    //     (single-flighted via WebtoonPageCache, so the visible item never re-fetches) and learning
+    //     its true aspect ratio from the file, so the list reserves the exact slot height up front.
+    //     The subsampling view then region-decodes straight from the cache file — no giant
+    //     full-height bitmap is ever held in memory (this is what keeps long-strip scrolling
+    //     smooth, yomi's approach).
+    //   - PAGED mode: the old Coil two-step — RATIO (a 64px decode for far-ahead pages) and DISPLAY
+    //     (a display-size decode that warms Coil's memory cache for near pages). The display decode
+    //     is the AUTHORITATIVE aspect ratio, so slot and bitmap match to the pixel (no hairline
+    //     seams between consecutive pages).
+    LaunchedEffect(pages, streamSegments, imageLoader, displayDecodeWidth, useRgb565, source, webtoonCacheDir) {
         if (imageLoader == null) return@LaunchedEffect
         while (isActive) {
+            val now = System.currentTimeMillis()
             val segs = streamSegments
             if (segs.isEmpty() || segs.any { it.isEmpty() }) { delay(120); continue }
             val starts = IntArray(segs.size)
@@ -421,47 +451,85 @@ fun ReaderScreen(
                 if (seg >= segs.size) continue
                 val m = segs[seg][g - starts[seg]]
                 val inDisplay = g >= globCur - 2
-                val needRatio = isWebtoon && !pageAspectRatios.containsKey(m.toString())
-                val needDisplay = inDisplay && !displayPrewarmed.containsKey(m.toString())
-                if (needRatio || needDisplay) { candidate = Triple(seg, g, m); break }
+                if (isWebtoon) {
+                    val key = pageKey(m)
+                    // Skip pages that just failed — the visible item retries on its own; this loop
+                    // would otherwise hot-spin on the same failure every 120ms.
+                    if (downloadFailed.containsKey(key) && now - downloadFailed[key]!! < 8000) continue
+                    val needRatio = !pageAspectRatios.containsKey(key)
+                    val needDownload = inDisplay && !webtoonDownloaded.containsKey(key)
+                    if (needRatio || needDownload) { candidate = Triple(seg, g, m); break }
+                } else {
+                    val needRatio = !pageAspectRatios.containsKey(m.toString())
+                    val needDisplay = inDisplay && !displayPrewarmed.containsKey(m.toString())
+                    if (needRatio || needDisplay) { candidate = Triple(seg, g, m); break }
+                }
             }
             if (candidate == null) { delay(120); continue }
             val (_, g, m) = candidate
             val inDisplay = g >= globCur - 2
             try {
-                if (isWebtoon && !pageAspectRatios.containsKey(m.toString())) {
-                    val ratioReq = ImageRequest.Builder(context)
-                        .data(m)
-                        .size(Size(64, Dimension.Undefined))
-                        .setParameter("reader_retry", 0)
-                        .setParameter("reader_role", "ratio")
-                        .memoryCachePolicy(CachePolicy.DISABLED)
-                        .diskCachePolicy(CachePolicy.ENABLED)
-                        .build()
-                    val rr = imageLoader.execute(ratioReq)
-                    val rd = rr.drawable
-                    if (rd != null && rd.intrinsicWidth > 0 && rd.intrinsicHeight > 0) {
-                        pageAspectRatios[m.toString()] = rd.intrinsicWidth.toFloat() / rd.intrinsicHeight
+                if (isWebtoon) {
+                    // Webtoon prewarm = make sure the page's bytes are on disk (single-flighted) and
+                    // learn its true aspect ratio from the file. The visible item then just points the
+                    // subsampling view at the local file — no giant full-height bitmap, no re-fetch.
+                    val key = pageKey(m)
+                    if (!webtoonDownloaded.containsKey(key) || !pageAspectRatios.containsKey(key)) {
+                        val desc = m as? MangaSource.PageDescriptor
+                        if (desc != null && source != null) {
+                            WebtoonPageCache.fileFor(desc, source, webtoonCacheDir)
+                            webtoonDownloaded[key] = true
+                            val d = WebtoonPageCache.dimensions(desc, webtoonCacheDir)
+                            if (d != null && d.first > 0 && d.second > 0) {
+                                pageAspectRatios[key] = d.first.toFloat() / d.second
+                            }
+                        } else {
+                            // Not a descriptor / no source — nothing to pre-download; mark done so the
+                            // loop moves on (the item falls back to its Coil path).
+                            webtoonDownloaded[key] = true
+                        }
+                    }
+                } else {
+                    if (!pageAspectRatios.containsKey(m.toString())) {
+                        val ratioReq = ImageRequest.Builder(context)
+                            .data(m)
+                            .size(Size(64, Dimension.Undefined))
+                            .setParameter("reader_retry", 0)
+                            .setParameter("reader_role", "ratio")
+                            .memoryCachePolicy(CachePolicy.DISABLED)
+                            .diskCachePolicy(CachePolicy.ENABLED)
+                            .build()
+                        val rr = imageLoader.execute(ratioReq)
+                        val rd = rr.drawable
+                        if (rd != null && rd.intrinsicWidth > 0 && rd.intrinsicHeight > 0) {
+                            pageAspectRatios[m.toString()] = rd.intrinsicWidth.toFloat() / rd.intrinsicHeight
+                        }
+                    }
+                    if (inDisplay && !displayPrewarmed.containsKey(m.toString())) {
+                        val displayReq = ImageRequest.Builder(context)
+                            .data(m)
+                            .size(Size(displayDecodeWidth, Dimension.Undefined))
+                            .setParameter("reader_retry", 0)
+                            .apply { if (useRgb565) allowRgb565(true) }
+                            .diskCachePolicy(CachePolicy.ENABLED)
+                            .build()
+                        val dr = imageLoader.execute(displayReq)
+                        val dd = dr.drawable
+                        if (dd != null && dd.intrinsicWidth > 0 && dd.intrinsicHeight > 0) {
+                            pageAspectRatios[m.toString()] = dd.intrinsicWidth.toFloat() / dd.intrinsicHeight
+                        }
+                        displayPrewarmed[m.toString()] = true
                     }
                 }
-                if (inDisplay && !displayPrewarmed.containsKey(m.toString())) {
-                    val displayReq = ImageRequest.Builder(context)
-                        .data(m)
-                        .size(Size(displayDecodeWidth, Dimension.Undefined))
-                        .setParameter("reader_retry", 0)
-                        .apply { if (useRgb565) allowRgb565(true) }
-                        .diskCachePolicy(CachePolicy.ENABLED)
-                        .build()
-                    val dr = imageLoader.execute(displayReq)
-                    val dd = dr.drawable
-                    if (dd != null && dd.intrinsicWidth > 0 && dd.intrinsicHeight > 0) {
-                        pageAspectRatios[m.toString()] = dd.intrinsicWidth.toFloat() / dd.intrinsicHeight
-                    }
+            } catch (e: Throwable) {
+                // A failed page shouldn't wedge the loop on the same entry forever.
+                if (isWebtoon) {
+                    val key = pageKey(m)
+                    downloadFailed[key] = System.currentTimeMillis()
+                    if (looksLikeCloudflare(e)) pendingCfVerify = true
+                } else {
                     displayPrewarmed[m.toString()] = true
                 }
-            } catch (_: Throwable) {
-                // A failed decode shouldn't wedge the loop on the same page forever.
-                displayPrewarmed[m.toString()] = true
             }
         }
     }
@@ -652,25 +720,78 @@ fun ReaderScreen(
                                     segPages,
                                     key = { pi, _ -> "${segChapter.id}_$pi" }
                                 ) { pi, pageModel ->
-                                    val ratio = pageAspectRatios[pageModel.toString()]
-                                    if (ratio != null && ratio > 0f) {
-                                        // True height known: size the slot exactly so the list never
-                                        // relayouts when the strip finishes decoding. aspectRatio
-                                        // derives the height from the item's ACTUAL measured width,
-                                        // and the ratio comes from the same display decode that gets
-                                        // rendered, so slot and bitmap always match to the pixel —
-                                        // no hairline seams between consecutive pages.
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .aspectRatio(ratio)
-                                                .clipToBounds()
-                                                .testTag("reader_page_${segIdx}_$pi")
-                                        ) {
+                                    // Webtoon pages render with the subsampling view: download the
+                                    // page's bytes once to a cache file (through the source's own
+                                    // client), then region-decode only the visible slice from disk —
+                                    // never a giant full-height bitmap, which is what made long-strip
+                                    // scrolling stutter. Paged modes (and the defensive fallback for a
+                                    // non-descriptor page) keep the Coil path.
+                                    if (isWebtoon && pageModel is MangaSource.PageDescriptor && source != null) {
+                                        val key = pageKey(pageModel)
+                                        val ratio = pageAspectRatios[key]
+                                        val boxModifier = Modifier
+                                            .fillMaxWidth()
+                                            .then(
+                                                if (ratio != null && ratio > 0f) Modifier.aspectRatio(ratio)
+                                                else Modifier.height(fallbackPageHeight)
+                                            )
+                                            .clipToBounds()
+                                            .testTag("reader_page_${segIdx}_$pi")
+                                        WebtoonSubsamplingItem(
+                                            desc = pageModel,
+                                            source = source,
+                                            cacheDir = webtoonCacheDir,
+                                            modifier = boxModifier,
+                                            spinnerColor = contentTextColor,
+                                            onRatioKnown = { r ->
+                                                // The item learns the page's true ratio as soon as its
+                                                // own download finishes (nearest pages are usually
+                                                // downloaded by the prewarm first, but this covers the
+                                                // case where the item wins the race).
+                                                if (r > 0f && r.isFinite()) pageAspectRatios[key] = r
+                                            }
+                                        )
+                                    } else {
+                                        val ratio = pageAspectRatios[pageModel.toString()]
+                                        if (ratio != null && ratio > 0f) {
+                                            // True height known: size the slot exactly so the list never
+                                            // relayouts when the strip finishes decoding. aspectRatio
+                                            // derives the height from the item's ACTUAL measured width,
+                                            // and the ratio comes from the same display decode that gets
+                                            // rendered, so slot and bitmap always match to the pixel —
+                                            // no hairline seams between consecutive pages.
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .aspectRatio(ratio)
+                                                    .clipToBounds()
+                                                    .testTag("reader_page_${segIdx}_$pi")
+                                            ) {
+                                                ReaderPageImage(
+                                                    model = pageModel,
+                                                    contentDescription = "Page ${pi + 1}",
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    contentScale = ContentScale.FillWidth,
+                                                    spinnerColor = contentTextColor,
+                                                    decodeWidthPx = webtoonDecodeWidth,
+                                                    crossfade = webtoonFade,
+                                                    rgb565 = useRgb565
+                                                )
+                                            }
+                                        } else {
+                                            // Ratio not known yet: bounded fallback height so the image
+                                            // can load; it snaps to its true height once the prewarm
+                                            // learns it (one-time resize, pages far ahead are already
+                                            // pre-sized). Clipped so an overshooting guess can't bleed
+                                            // over the next strip.
                                             ReaderPageImage(
                                                 model = pageModel,
                                                 contentDescription = "Page ${pi + 1}",
-                                                modifier = Modifier.fillMaxSize(),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(fallbackPageHeight)
+                                                    .clipToBounds()
+                                                    .testTag("reader_page_${segIdx}_$pi"),
                                                 contentScale = ContentScale.FillWidth,
                                                 spinnerColor = contentTextColor,
                                                 decodeWidthPx = webtoonDecodeWidth,
@@ -678,26 +799,6 @@ fun ReaderScreen(
                                                 rgb565 = useRgb565
                                             )
                                         }
-                                    } else {
-                                        // Ratio not known yet: bounded fallback height so the image
-                                        // can load; it snaps to its true height once the prewarm
-                                        // learns it (one-time resize, pages far ahead are already
-                                        // pre-sized). Clipped so an overshooting guess can't bleed
-                                        // over the next strip.
-                                        ReaderPageImage(
-                                            model = pageModel,
-                                            contentDescription = "Page ${pi + 1}",
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(fallbackPageHeight)
-                                                .clipToBounds()
-                                                .testTag("reader_page_${segIdx}_$pi"),
-                                            contentScale = ContentScale.FillWidth,
-                                            spinnerColor = contentTextColor,
-                                            decodeWidthPx = webtoonDecodeWidth,
-                                            crossfade = webtoonFade,
-                                            rgb565 = useRgb565
-                                        )
                                     }
                                 }
                             }
