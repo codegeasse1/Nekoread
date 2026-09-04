@@ -6,6 +6,7 @@ import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +32,14 @@ object WebtoonPageCache {
     // Downloads run in this shared scope so no single caller's cancellation (e.g. a page item
     // scrolling off-screen mid-download) can kill a fetch that other callers are awaiting.
     private val downloadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    // The on-device page cache now holds EVERY webtoon page the reader touches (short pages render
+    // straight from these files too), so it's capped: when it exceeds MAX_CACHE_BYTES the oldest
+    // files (by mtime) are deleted until it's back under half. The scan only runs occasionally —
+    // the sort is wasteful every download.
+    private const val MAX_CACHE_BYTES = 400L * 1024 * 1024
+    private const val EVICT_EVERY_N_WRITES = 25
+    private val writesSinceEvict = AtomicInteger(0)
 
     fun keyFor(imageUrl: String): String {
         val digest = MessageDigest.getInstance("SHA-256")
@@ -75,6 +84,7 @@ object WebtoonPageCache {
                     tmp.renameTo(target)
                     target
                 }
+                maybeEvict(dir)
                 deferred.complete(downloaded)
             } catch (e: Throwable) {
                 // Never happens in practice (the scope's jobs are never cancelled), but don't
@@ -105,6 +115,23 @@ object WebtoonPageCache {
             }
             if (d != null) dims[key] = d
             d
+        }
+    }
+
+    /** Deletes the oldest cache files when the directory exceeds the size cap (runs rarely). */
+    private fun maybeEvict(dir: File) {
+        if (writesSinceEvict.incrementAndGet() < EVICT_EVERY_N_WRITES) return
+        writesSinceEvict.set(0)
+        val files = dir.listFiles()?.filter { it.name.endsWith(".img") } ?: return
+        val total = files.sumOf { it.length() }
+        if (total <= MAX_CACHE_BYTES) return
+        // Delete oldest-first until the cache is back under half its cap.
+        val sorted = files.sortedBy { it.lastModified() }
+        var toFree = total - (MAX_CACHE_BYTES / 2)
+        for (f in sorted) {
+            if (toFree <= 0) break
+            toFree -= f.length()
+            f.delete()
         }
     }
 }
