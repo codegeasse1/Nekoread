@@ -407,7 +407,7 @@ fun ReaderScreen(
     val source = remember(manga) {
         if (manga == null) null else runCatching { viewModel.repository.sourceForManga(manga.id) }.getOrNull()
     }
-    val webtoonCacheDir = remember { File(context, "webtoon_pages") }
+    val webtoonCacheDir = remember { File(context.cacheDir, "webtoon_pages") }
 
     // Stable per-page cache key: the image URL for descriptor pages (unique per page, shared by the
     // prewarm and the visible item), the model's string otherwise.
