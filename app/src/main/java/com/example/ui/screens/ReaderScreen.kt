@@ -11,10 +11,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,9 +26,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -109,6 +104,10 @@ import com.example.ui.ReaderMode
 import com.example.ui.ReaderOrientation
 import com.example.ui.looksLikeCloudflare
 import com.example.util.sortChapters
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.viewinterop.AndroidView
+import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonTrailer
+import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonViewer
 import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -169,17 +168,11 @@ fun ReaderScreen(
     // Continuous-reading stream (webtoon modes): chapters in reading order + their loaded pages.
     var streamQueue by remember(chapter.id) { mutableStateOf(listOf(chapter)) }
     var streamSegments by remember(chapter.id) { mutableStateOf<List<List<Any>>>(emptyList()) }
-    // Coil page-image models for SHORT webtoon pages are gone — webtoon pages now render from
-    // on-device cache files (see webtoonFiles below), so no separate source-aware model fetch is
-    // needed (it doubled the chapter-open cost: getPageList ran twice per chapter).
+    // Coil page-image models for webtoon pages are gone — webtoon pages now render from on-device
+    // cache files (WebtoonPageCache), so no separate source-aware model fetch is needed (it
+    // doubled the chapter-open cost: getPageList ran twice per chapter).
     var webtoonLoadingNext by remember(chapter.id) { mutableStateOf(false) }
     var webtoonError by remember(chapter.id) { mutableStateOf<String?>(null) }
-    // Downloaded cache files for webtoon pages, keyed by page key. Each page's bytes are fetched +
-    // descrambled ONCE through the source's own client into WebtoonPageCache's on-device cache dir;
-    // this map lets the visible short-page items render straight from those local files (and
-    // recompose the moment a file lands) instead of Coil re-fetching + re-descrambling the page on
-    // every scroll-in — the repeat network work that made slow sources like comix stutter.
-    val webtoonFiles = remember(chapter.id) { mutableStateMapOf<String, File>() }
 
     LaunchedEffect(chapter.id, retryKey, isWebtoon) {
         pageLoading = true
@@ -234,8 +227,13 @@ fun ReaderScreen(
         (chapter.lastPageRead - 1).coerceAtLeast(0)
     }
 
-    // Webtoon Vertical List State
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialPageIndex)
+    // Webtoon reader state (yomi-style RecyclerView viewer): the current (segment, page, pageTotal)
+    // reported by the viewer, whether the user is near the end of the stream (drives the
+    // auto-continue load of the next chapter), and a handle on the viewer itself (used by the page
+    // slider to jump to a page). The viewer replaces the Compose LazyColumn for webtoon modes.
+    var viewerPos by remember(chapter.id) { mutableStateOf(Triple(0, 1, pages?.size ?: 1)) }
+    var viewerNearEnd by remember(chapter.id) { mutableStateOf(false) }
+    val viewerRef = remember(chapter.id) { mutableStateOf<WebtoonViewer?>(null) }
 
     // Paged Reader State (shared by horizontal + vertical pagers)
     val pagerState = rememberPagerState(
@@ -254,7 +252,9 @@ fun ReaderScreen(
         val target = if (startAtBeginning) 0 else (chapter.lastPageRead - 1).coerceAtLeast(0)
         try {
             if (isWebtoon) {
-                listState.scrollToItem(target)
+                // The yomi viewer positions itself on first layout (setItems with initialPageIndex);
+                // seed the page state so the HUD reads correctly until the viewer reports in.
+                viewerPos = Triple(0, (target + 1).coerceIn(1, list.size), list.size)
             } else {
                 pagerState.scrollToPage(target.coerceAtMost(list.lastIndex))
             }
@@ -263,24 +263,10 @@ fun ReaderScreen(
     }
 
     // The chapter currently on screen (in webtoon modes this can advance past the starting chapter).
+    // In webtoon mode the position comes from the yomi viewer's page-change reports.
     val streamPosition by remember {
         derivedStateOf {
-            if (isWebtoon && streamSegments.isNotEmpty()) {
-                val sizes = streamSegments.map { it.size }
-                val g = listState.firstVisibleItemIndex
-                var seg = 0
-                var page = 1
-                for (i in sizes.indices) {
-                    val start = sizes.take(i).sum() + i
-                    if (g >= start - 1) {
-                        seg = i
-                        page = (g - start + 1).coerceIn(1, sizes[i].coerceAtLeast(1))
-                    } else break
-                }
-                Triple(seg, page, sizes.getOrElse(seg) { pages?.size ?: 1 })
-            } else {
-                Triple(0, 1, pages?.size ?: 1)
-            }
+            if (isWebtoon) viewerPos else Triple(0, 1, pages?.size ?: 1)
         }
     }
 
@@ -359,18 +345,10 @@ fun ReaderScreen(
         }
     }
 
-    // When the user nears the bottom of the stream, fetch the next chapter and append it.
-    val nearStreamEnd by remember {
-        derivedStateOf {
-            val info = listState.layoutInfo
-            val total = info.totalItemsCount
-            if (total == 0) false
-            else {
-                val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: 0
-                lastVisible >= total - 4
-            }
-        }
-    }
+    // When the user nears the bottom of the stream, fetch the next chapter and append it. The yomi
+    // viewer reports this: true while the last few pages of the last streamed chapter are on screen,
+    // false once the user scrolls back up.
+    val nearStreamEnd = viewerNearEnd
 
     LaunchedEffect(nearStreamEnd, streamQueue.size, webtoonLoadingNext, webtoonError, isWebtoon) {
         if (!isWebtoon) return@LaunchedEffect
@@ -402,19 +380,6 @@ fun ReaderScreen(
     // Low-quality webtoon pages decode as RGB_565: half the memory per strip for nearly identical
     // appearance (webtoon art is flat colors). Paged modes stay full ARGB_8888.
     val useRgb565 = isWebtoon && readerQuality == 50
-    // Fallback height for a webtoon strip whose true aspect ratio isn't known yet. Bounded so the
-    // page can start loading (Coil won't decode a page in an unbounded-height list item); the slot
-    // snaps to the real height as soon as the prewarm below learns the page's dimensions. Sized
-    // for a typical ~0.7 page ratio so the snap is small.
-    val fallbackPageHeight = with(LocalConfiguration.current) { (screenWidthDp / 0.7f).dp }
-
-    // Hybrid webtoon renderer split: pages whose displayed height is taller than this many screens
-    // use the subsampling (region-decode) renderer — it never holds a giant full-height bitmap, so
-    // long strips stay smooth. Shorter pages (the common "100 images per chapter" case) render with
-    // Coil instead: it decodes at the reader-quality width, memory-caches so scrolling back is
-    // instant, and doesn't create one heavy per-page subsampling view (which is what made many-item
-    // chapters stutter).
-    val subsampleTallPx = (screenHeightPx * 2.5f).roundToInt()
 
     // Known page aspect ratios, filled in as nearby pages decode (prewarm below). Webtoon list
     // items use them to size their slot to the page's real height up front, so the list doesn't
@@ -518,19 +483,11 @@ fun ReaderScreen(
                         // Skip pages that just failed — the visible item retries on its own; this
                         // loop would otherwise hot-spin on the same failure every 120ms.
                         if (downloadFailed.containsKey(key) && now - downloadFailed[key]!! < 8000) continue
-                        val fileReady = webtoonDownloaded.containsKey(key)
-                        val ratio = pageAspectRatios[key]
-                        val isTall = ratio != null && ratio > 0f && screenWidthPx / ratio > subsampleTallPx
-                        // Every in-window page first gets its bytes fetched ONCE to a cache file;
-                        // then its ratio is learned from that file (cheap), and a SHORT page's
-                        // display decode is warmed from it. No work is done outside the window —
-                        // the old whole-chapter walk fetched + descrambled every page in the
-                        // chapter just to learn ratios, which is exactly what made comix chapters
-                        // stutter while scrolling.
-                        val needsFile = !fileReady
-                        val needsRatio = fileReady && ratio == null
-                        val needsWarm = fileReady && !isTall && !displayPrewarmed.containsKey(key)
-                        if (needsFile || needsRatio || needsWarm) {
+                        // The viewer's page holder downloads a page the moment it scrolls into view;
+                        // this loop just fills the ±8 page window AHEAD of the scroll so pages are
+                        // already on disk (single-flighted via WebtoonPageCache) when the holder
+                        // asks — the yomi trick that keeps long strips smooth on slow sources.
+                        if (!webtoonDownloaded.containsKey(key)) {
                             collected.add(Triple(seg, g, m))
                         }
                     }
@@ -552,64 +509,20 @@ fun ReaderScreen(
 
             if (isWebtoon) {
                 if (batch.isEmpty()) { delay(120); continue }
-                // Process the batch CONCURRENTLY: each page's file download (through the source's
-                // own client, single-flighted via WebtoonPageCache) and display warm run in
-                // parallel, so the preload window fills ~3x faster than one-at-a-time on slow
-                // sources. State writes all happen on the main dispatcher (async inherits it; the
-                // downloads themselves run on WebtoonPageCache's IO scope), so the maps stay safe.
+                // Process the batch CONCURRENTLY: each page's file download runs through the
+                // source's own client (single-flighted via WebtoonPageCache), so the preload
+                // window fills ~3x faster than one-at-a-time on slow sources. State writes all
+                // happen on the main dispatcher (async inherits it; the downloads themselves run
+                // on WebtoonPageCache's IO scope), so the maps stay safe.
                 coroutineScope {
                     batch.map { (seg, g, m) ->
                         async {
                             try {
                                 val key = pageKey(m)
-                                // 1) Fetch this page's bytes ONCE (download + descramble through
-                                // the source's own client) into the on-device cache file — every
-                                // later render (SSIV region-decode, Coil display warm, the visible
-                                // item) reads those local bytes instead of re-fetching +
-                                // re-descrambling from the source, which is the repeat work that
-                                // made comix scrolls lag.
-                                var downloaded: File? = null
-                                if (!webtoonDownloaded.containsKey(key)) {
-                                    if (source != null) {
-                                        downloaded = WebtoonPageCache.fileFor(m, source, webtoonCacheDir)
-                                    }
-                                    webtoonDownloaded[key] = true
+                                if (!webtoonDownloaded.containsKey(key) && source != null) {
+                                    WebtoonPageCache.fileFor(m, source, webtoonCacheDir)
                                 }
-                                // 2) Learn the page's true aspect ratio from the file (bounds-only
-                                // decode, cached, no network) so the list slot is pre-sized and the
-                                // tall/short decision is made before the page scrolls in.
-                                if (!pageAspectRatios.containsKey(key) && source != null) {
-                                    val d = WebtoonPageCache.dimensions(m, webtoonCacheDir)
-                                    if (d != null && d.first > 0 && d.second > 0) {
-                                        pageAspectRatios[key] = d.first.toFloat() / d.second
-                                    }
-                                }
-                                val ratio = pageAspectRatios[key]
-                                val isTall = ratio != null && ratio > 0f &&
-                                    screenWidthPx / ratio > subsampleTallPx
-                                if (!isTall && !displayPrewarmed.containsKey(key)) {
-                                    // 3) SHORT page → warm Coil's memory cache with a display-size
-                                    // decode FROM THE FILE. Same .data(file) + size as the visible
-                                    // item, so the item pops straight from memory — no network.
-                                    val f = downloaded ?: WebtoonPageCache.targetFile(
-                                        WebtoonPageCache.keyFor(m.imageUrl), webtoonCacheDir
-                                    )
-                                    val displayReq = ImageRequest.Builder(context)
-                                        .data(f)
-                                        .size(Size(webtoonDecodeWidth, Dimension.Undefined))
-                                        .setParameter("reader_retry", 0)
-                                        .apply { if (useRgb565) allowRgb565(true) }
-                                        .diskCachePolicy(CachePolicy.ENABLED)
-                                        .build()
-                                    imageLoader.execute(displayReq)
-                                    displayPrewarmed[key] = true
-                                }
-                                // Publish the file so any visible short-page item renders from it
-                                // (and recomposes the instant it lands).
-                                val readyFile = downloaded ?: WebtoonPageCache.targetFile(
-                                    WebtoonPageCache.keyFor(m.imageUrl), webtoonCacheDir
-                                )
-                                webtoonFiles[key] = readyFile
+                                webtoonDownloaded[key] = true
                             } catch (e: Throwable) {
                                 // Effect restarts (scroll/key change) cancel in-flight work — don't
                                 // treat a cancellation as a page failure.
@@ -738,26 +651,27 @@ fun ReaderScreen(
         }
     }
 
-    // Auto-scroll (Yomi-style): smoothly scrolls the webtoon list at the chosen speed while
-    // enabled. Any touch on the list stops it (see the pointerInput on the LazyColumn).
-    LaunchedEffect(isWebtoon, autoScroll, autoScrollSpeedDp, listState) {
-        if (!isWebtoon || !autoScroll) return@LaunchedEffect
-        val pxPerMs = with(density) { autoScrollSpeedDp.dp.toPx() } / 1000f
-        while (isActive) {
-            listState.scroll { scrollBy(pxPerMs * 16f) }
-            delay(16)
-        }
-    }
+    // Auto-scroll now lives inside the yomi viewer wrapper (it drives the native RecyclerView
+    // directly, and any touch on the reader stops it).
 
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(bgColor)
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = { showHud = !showHud }
-                )
-            }
+            .then(
+                if (isWebtoon) {
+                    // In webtoon mode the yomi viewer owns taps (middle = toggle HUD, sides =
+                    // scroll), so the Compose-level tap-to-toggle must be disabled here or every
+                    // tap would double-toggle the HUD.
+                    Modifier
+                } else {
+                    Modifier.pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = { showHud = !showHud }
+                        )
+                    }
+                }
+            )
             .testTag("reader_container")
     ) {
         // Reader Content (error / pages). No full-screen blocking loading screen: while the first
@@ -807,293 +721,40 @@ fun ReaderScreen(
             else -> {
                 val pageList = pages ?: emptyList()
                 if (isWebtoon) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                    LazyColumn(
-                        state = listState,
-                        verticalArrangement = if (readerMode == ReaderMode.WEBTOON_GAPS) {
-                            Arrangement.spacedBy(10.dp)
-                        } else {
-                            Arrangement.Top
+                    YomiWebtoonReader(
+                        source = source,
+                        cacheDir = webtoonCacheDir,
+                        streamQueue = streamQueue,
+                        streamSegments = streamSegments,
+                        segSizes = streamSegments.map { it.size },
+                        bgColor = bgColor,
+                        textColor = contentTextColor,
+                        gaps = readerMode == ReaderMode.WEBTOON_GAPS,
+                        autoScroll = autoScroll,
+                        autoScrollSpeedDp = autoScrollSpeedDp,
+                        initialPageIndex = initialPageIndex,
+                        trailer = when {
+                            webtoonLoadingNext -> WebtoonTrailer.Loading
+                            webtoonError != null && streamNextChapter != null ->
+                                WebtoonTrailer.Error(webtoonError ?: "Failed to load the next chapter")
+                            streamNextChapter != null -> WebtoonTrailer.Idle
+                            else -> WebtoonTrailer.End(activeChapter.name)
                         },
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .pointerInput(autoScroll) {
-                                awaitPointerEventScope {
-                                    while (true) {
-                                        awaitFirstDown(requireUnconsumed = false)
-                                        if (autoScroll) viewModel.setAutoScroll(false)
-                                    }
-                                }
-                            }
-                    ) {
-                        // While the chapter's pages are still loading, fill the viewport with a
-                        // centered spinner (no separate full-screen loading screen).
-                        if (pageList.isEmpty()) {
-                            item(key = "initial_loading") {
-                                Box(
-                                    modifier = Modifier.fillParentMaxHeight(1f),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator(color = contentTextColor)
-                                }
-                            }
-                        }
-                        // Each streamed chapter: a small divider, then its pages.
-                        streamQueue.forEachIndexed { segIdx, segChapter ->
-                            val segPages = streamSegments.getOrNull(segIdx)
-                            if (segPages != null) {
-                                if (segIdx > 0) {
-                                    item(key = "divider_${segChapter.id}") {
-                                        ChapterDivider(
-                                            title = segChapter.name,
-                                            textColor = contentTextColor
-                                        )
-                                    }
-                                }
-                                itemsIndexed(
-                                    segPages,
-                                    key = { pi, _ -> "${segChapter.id}_$pi" }
-                                ) { pi, pageModel ->
-                                    // Webtoon pages render HYBRID. TALL pages (display height > ~2.5
-                                    // screens) use the subsampling view: download the bytes once to a
-                                    // cache file (through the source's own client), then region-decode
-                                    // only the visible slice from disk — never a giant full-height
-                                    // bitmap, which is what made long-strip scrolling stutter. SHORT
-                                    // pages render with Coil instead (decoded at the reader-quality
-                                    // width, memory-cached, no heavy per-page view) so many-per-chapter
-                                    // pages scroll smoothly. Paged modes (and the defensive fallback for
-                                    // a non-descriptor page) keep the plain Coil path.
-                                    if (isWebtoon && pageModel is MangaSource.PageDescriptor && source != null) {
-                                        val key = pageKey(pageModel)
-                                        val ratio = pageAspectRatios[key]
-                                        val isTall = ratio != null && ratio > 0f &&
-                                            screenWidthPx / ratio > subsampleTallPx
-                                        if (isTall) {
-                                            val boxModifier = Modifier
-                                                .fillMaxWidth()
-                                                .then(
-                                                    if (ratio != null && ratio > 0f) Modifier.aspectRatio(ratio)
-                                                    else Modifier.height(fallbackPageHeight)
-                                                )
-                                                .clipToBounds()
-                                                .testTag("reader_page_${segIdx}_$pi")
-                                            WebtoonSubsamplingItem(
-                                                desc = pageModel,
-                                                source = source,
-                                                cacheDir = webtoonCacheDir,
-                                                modifier = boxModifier,
-                                                spinnerColor = contentTextColor,
-                                                onRatioKnown = { r ->
-                                                    // The item learns the page's true ratio as soon as its
-                                                    // own download finishes (nearest pages are usually
-                                                    // downloaded by the prewarm first, but this covers the
-                                                    // case where the item wins the race).
-                                                    if (r > 0f && r.isFinite()) pageAspectRatios[key] = r
-                                                }
-                                            )
-                                        } else {
-                                            // Short/unknown page → Coil, rendered FROM the on-device
-                                            // cache file. The prewarm (or this item) downloads each
-                                            // page's bytes once via WebtoonPageCache; every render and
-                                            // re-scroll then reads the local file instead of re-fetching
-                                            // + re-descrambling from the source, which is what made slow
-                                            // sources like comix lag. If the file isn't ready yet (user
-                                            // scrolled past the preload), this item downloads it itself
-                                            // (single-flighted — it shares the prewarm's in-flight fetch).
-                                            var failed by remember(key) { mutableStateOf(false) }
-                                            var attempt by remember(key) { mutableIntStateOf(0) }
-                                            LaunchedEffect(key, attempt) {
-                                                // A file that exists on disk means the prewarm (or a
-                                                // previous attempt) already fetched this page — nothing
-                                                // to do. (Also check the file is really there: the cache
-                                                // can evict old files to stay under its size cap.)
-                                                val haveFile = webtoonFiles[key]
-                                                if (haveFile != null && haveFile.exists() && haveFile.length() > 0L) {
-                                                    return@LaunchedEffect
-                                                }
-                                                failed = false
-                                                var tries = 0
-                                                while (isActive) {
-                                                    try {
-                                                        val f = WebtoonPageCache.fileFor(pageModel, source, webtoonCacheDir)
-                                                        webtoonFiles[key] = f
-                                                        WebtoonPageCache.dimensions(pageModel, webtoonCacheDir)?.let { (w, h) ->
-                                                            if (w > 0 && h > 0) pageAspectRatios[key] = w.toFloat() / h
-                                                        }
-                                                        return@LaunchedEffect
-                                                    } catch (e: Throwable) {
-                                                        failed = true
-                                                        tries++
-                                                        if (tries >= 8) return@LaunchedEffect
-                                                        delay(3000)
-                                                    }
-                                                }
-                                            }
-                                            val slotModifier = Modifier
-                                                .fillMaxWidth()
-                                                .then(
-                                                    if (ratio != null && ratio > 0f) Modifier.aspectRatio(ratio)
-                                                    else Modifier.height(fallbackPageHeight)
-                                                )
-                                                .clipToBounds()
-                                                .testTag("reader_page_${segIdx}_$pi")
-                                            Box(modifier = slotModifier, contentAlignment = Alignment.Center) {
-                                                val f = webtoonFiles[key]
-                                                if (f != null) {
-                                                    ReaderPageImage(
-                                                        model = f,
-                                                        contentDescription = "Page ${pi + 1}",
-                                                        modifier = Modifier.fillMaxSize(),
-                                                        contentScale = ContentScale.FillWidth,
-                                                        spinnerColor = contentTextColor,
-                                                        decodeWidthPx = webtoonDecodeWidth,
-                                                        crossfade = webtoonFade,
-                                                        rgb565 = useRgb565
-                                                    )
-                                                } else {
-                                                    when {
-                                                        failed -> {
-                                                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                                Text(
-                                                                    text = "Couldn't load page",
-                                                                    style = MaterialTheme.typography.bodySmall.copy(
-                                                                        color = contentTextColor.copy(alpha = 0.7f)
-                                                                    )
-                                                                )
-                                                                TextButton(onClick = { attempt++ }) { Text("Retry") }
-                                                            }
-                                                        }
-                                                        else -> {
-                                                            CircularProgressIndicator(color = contentTextColor.copy(alpha = 0.6f))
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        val ratio = pageAspectRatios[pageKey(pageModel)]
-                                        if (ratio != null && ratio > 0f) {
-                                            // True height known: size the slot exactly so the list never
-                                            // relayouts when the strip finishes decoding. aspectRatio
-                                            // derives the height from the item's ACTUAL measured width,
-                                            // and the ratio comes from the same display decode that gets
-                                            // rendered, so slot and bitmap always match to the pixel —
-                                            // no hairline seams between consecutive pages.
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .aspectRatio(ratio)
-                                                    .clipToBounds()
-                                                    .testTag("reader_page_${segIdx}_$pi")
-                                            ) {
-                                                ReaderPageImage(
-                                                    model = pageModel,
-                                                    contentDescription = "Page ${pi + 1}",
-                                                    modifier = Modifier.fillMaxSize(),
-                                                    contentScale = ContentScale.FillWidth,
-                                                    spinnerColor = contentTextColor,
-                                                    decodeWidthPx = webtoonDecodeWidth,
-                                                    crossfade = webtoonFade,
-                                                    rgb565 = useRgb565
-                                                )
-                                            }
-                                        } else {
-                                            // Ratio not known yet: bounded fallback height so the image
-                                            // can load; it snaps to its true height once the prewarm
-                                            // learns it (one-time resize, pages far ahead are already
-                                            // pre-sized). Clipped so an overshooting guess can't bleed
-                                            // over the next strip.
-                                            ReaderPageImage(
-                                                model = pageModel,
-                                                contentDescription = "Page ${pi + 1}",
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .height(fallbackPageHeight)
-                                                    .clipToBounds()
-                                                    .testTag("reader_page_${segIdx}_$pi"),
-                                                contentScale = ContentScale.FillWidth,
-                                                spinnerColor = contentTextColor,
-                                                decodeWidthPx = webtoonDecodeWidth,
-                                                crossfade = webtoonFade,
-                                                rgb565 = useRgb565
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Trailing item: spinner / retry / end-of-stream.
-                        item(key = "stream_trailer") {
-                            when {
-                                webtoonLoadingNext -> {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(32.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        CircularProgressIndicator(color = contentTextColor.copy(alpha = 0.7f))
-                                        Text(
-                                            text = "Loading next chapter...",
-                                            style = MaterialTheme.typography.bodySmall.copy(
-                                                color = contentTextColor.copy(alpha = 0.7f)
-                                            )
-                                        )
-                                    }
-                                }
-
-                                webtoonError != null && streamNextChapter != null -> {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(32.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        Text(
-                                            text = "Couldn't load the next chapter",
-                                            style = MaterialTheme.typography.bodySmall.copy(
-                                                color = contentTextColor.copy(alpha = 0.7f)
-                                            )
-                                        )
-                                        Button(onClick = { webtoonError = null; loadNextIntoStream(streamNextChapter) }) {
-                                            Text("Retry")
-                                        }
-                                    }
-                                }
-
-                                streamNextChapter != null -> {
-                                    // Auto-continue trigger zone; loads as the user nears the bottom.
-                                    Spacer(modifier = Modifier.height(48.dp))
-                                }
-
-                                else -> {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(32.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Text(
-                                            text = "End of ${activeChapter.name}",
-                                            style = MaterialTheme.typography.titleMedium.copy(
-                                                fontWeight = FontWeight.Bold,
-                                                color = contentTextColor
-                                            )
-                                        )
-                                        Spacer(modifier = Modifier.height(16.dp))
-                                        Text(
-                                            text = "You have caught up with the latest released chapter!",
-                                            style = MaterialTheme.typography.bodySmall.copy(color = contentTextColor.copy(alpha = 0.7f))
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    }
+                        viewerRef = viewerRef,
+                        onPageChanged = { seg, page, total ->
+                            viewerPos = Triple(seg, page, total)
+                        },
+                        onNearEndChanged = { near ->
+                            viewerNearEnd = near
+                        },
+                        onMenuTap = { showHud = !showHud },
+                        onUserScroll = { viewModel.setAutoScroll(false) },
+                        onTrailerRetry = {
+                            webtoonError = null
+                            streamNextChapter?.let { loadNextIntoStream(it) }
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
                 } else {
                     val fitScale = when (readerFit) {
                         ReaderFit.FIT -> ContentScale.Fit
@@ -1283,7 +944,7 @@ fun ReaderScreen(
                                 if (isWebtoon) {
                                     val seg = streamPosition.first
                                     val start = streamSegments.take(seg).sumOf { it.size } + seg
-                                    listState.scrollToItem(start + targetPage)
+                                    viewerRef.value?.moveToPage(start + targetPage)
                                 } else {
                                     pagerState.scrollToPage(targetPage)
                                 }
@@ -1494,25 +1155,6 @@ fun ReaderScreen(
                 webviewTarget = null
                 retryKey++
             }
-        )
-    }
-}
-
-@Composable
-private fun ChapterDivider(title: String, textColor: Color) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 20.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = "— $title —",
-            style = MaterialTheme.typography.labelLarge.copy(
-                fontWeight = FontWeight.Bold,
-                color = textColor.copy(alpha = 0.7f)
-            ),
-            maxLines = 1
         )
     }
 }

@@ -101,6 +101,7 @@ dependencies {
   implementation(libs.androidx.webkit)
   implementation(libs.coil.compose)
   implementation(libs.subsampling.scale.image.view)
+  implementation(libs.androidx.recyclerview)
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
   // Uncomment to use Firestore:
