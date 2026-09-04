@@ -1222,6 +1222,7 @@ private fun QualityChip(
     )
 }
 
+@Composable
 private fun sliderAccentColors() = SliderDefaults.colors(
     thumbColor = Accent,
     activeTrackColor = Accent,
