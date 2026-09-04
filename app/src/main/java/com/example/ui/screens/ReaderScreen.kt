@@ -123,7 +123,7 @@ import kotlinx.coroutines.launch
 // How many in-window webtoon pages the prewarm fetches/decodes at once. A small concurrent batch
 // keeps the ±8 page window filled ahead of the scroll even when every page costs a full download +
 // descramble (e.g. comix) — a sequential one-at-a-time loop can't keep up on slow sources.
-private const val WEBTOON_BATCH = 3
+private const val WEBTOON_BATCH = 6
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -738,6 +738,7 @@ fun ReaderScreen(
                         cropBorders = cropBorders,
                         doubleTapZoom = doubleTapZoom,
                         tapToChangePages = tapToChangePages,
+                        decodeWidth = displayDecodeWidth,
                         autoScroll = autoScroll,
                         autoScrollSpeedDp = autoScrollSpeedDp,
                         initialPageIndex = initialPageIndex,
@@ -919,7 +920,7 @@ fun ReaderScreen(
                 viewModel.setReaderQuality(75)
                 viewModel.setCropBorders(false)
                 viewModel.setDoubleTapZoom(true)
-                viewModel.setTapToChangePages(true)
+                viewModel.setTapToChangePages(false)
             },
             seriesOverrideEnabled = seriesOverrideEnabled[manga.id] == true,
             onToggleSeriesOverride = {

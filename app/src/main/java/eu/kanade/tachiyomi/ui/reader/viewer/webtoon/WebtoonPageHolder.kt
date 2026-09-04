@@ -69,7 +69,15 @@ class WebtoonPageHolder(
         loadJob = scope.launch {
             try {
                 val file = viewer.loadPage(item)
-                frame.setImage(file, frame.isAnimatedFile(file), viewer.pageConfig)
+                // Sniff the strip's height ratio off the UI thread so the viewer can pick the fast
+                // Coil path for short pages (like yomi) and reserve region-decoding for tall strips.
+                val tall = viewer.isTallPage(file)
+                frame.decodeWidthPx = viewer.decodeWidth
+                frame.setImage(
+                    file,
+                    frame.isAnimatedFile(file),
+                    viewer.pageConfig.copy(isTallImage = tall),
+                )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {

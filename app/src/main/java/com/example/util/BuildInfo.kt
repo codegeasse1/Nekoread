@@ -6,5 +6,5 @@ package com.example.util
  * misled us). Shown in the Settings screen header.
  */
 object BuildInfo {
-    const val VERSION = "2026-09-05-yomichrome-3"
+    const val VERSION = "2026-09-05-yomichrome-4"
 }

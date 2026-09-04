@@ -112,7 +112,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _doubleTapZoom = MutableStateFlow(true)
     val doubleTapZoom: StateFlow<Boolean> = _doubleTapZoom.asStateFlow()
 
-    private val _tapToChangePages = MutableStateFlow(true)
+    private val _tapToChangePages = MutableStateFlow(false)
     val tapToChangePages: StateFlow<Boolean> = _tapToChangePages.asStateFlow()
 
     // Per-series reader overrides: a manga can pin its own reading mode (the global mode still
@@ -130,7 +130,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _showPageNumber.value = prefs.getBoolean("show_page_number", true)
         _cropBorders.value = prefs.getBoolean("reader_crop_borders", false)
         _doubleTapZoom.value = prefs.getBoolean("reader_double_tap_zoom", true)
-        _tapToChangePages.value = prefs.getBoolean("reader_tap_change_pages", true)
+        _tapToChangePages.value = prefs.getBoolean("reader_tap_change_pages", false)
         _seriesOverrideEnabled.value = prefs.all.mapNotNull { (k, v) ->
             if (k.startsWith("series_override_") && v is Boolean) k.removePrefix("series_override_") to v else null
         }.toMap()

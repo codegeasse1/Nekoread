@@ -45,6 +45,7 @@ fun YomiWebtoonReader(
     cropBorders: Boolean,
     doubleTapZoom: Boolean,
     tapToChangePages: Boolean,
+    decodeWidth: Int,
     autoScroll: Boolean,
     autoScrollSpeedDp: Float,
     initialPageIndex: Int,
@@ -101,6 +102,7 @@ fun YomiWebtoonReader(
             v.cropBorders = cropBorders
             v.doubleTapZoom = doubleTapZoom
             v.tapToChangePages = tapToChangePages
+            v.decodeWidth = decodeWidth
             v.onPageChanged = { seg, page, total -> onPageChanged(seg, page, total) }
             v.onNearEndChanged = { near -> onNearEndChanged(near) }
             v.onMenuTap = { onMenuTap() }
@@ -118,6 +120,7 @@ fun YomiWebtoonReader(
             v.cropBorders = cropBorders
             v.doubleTapZoom = doubleTapZoom
             v.tapToChangePages = tapToChangePages
+            v.decodeWidth = decodeWidth
             v.setTheme(bgColor.toArgb(), textColor.toArgb())
             if (lastSignature != itemsSignature) {
                 lastSignature = itemsSignature

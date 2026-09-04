@@ -19,6 +19,8 @@ import coil.dispose
 import coil.imageLoader
 import coil.request.CachePolicy
 import coil.request.ImageRequest
+import coil.size.Dimension
+import coil.size.Size
 import com.davemorrissey.labs.subscaleview.ImageSource
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonBorderDetector
@@ -35,8 +37,11 @@ import java.io.File
 import java.io.FileInputStream
 
 /**
- * The webtoon page view ported verbatim from yomi's reader: every non-animated page is drawn by a
- * [SubsamplingScaleImageView] that region-decodes only the visible slice from the page's on-device
+ * The webtoon page view ported from yomi's reader: every non-animated page is drawn by a
+ * [SubsamplingScaleImageView]. Exactly like yomi, SHORT webtoon pages (height ≤ 1.5x width) are
+ * decoded ONCE by Coil at the strip's display width and handed to the subsampling view as a bitmap
+ * base layer — a fast, memory-bounded decode with no per-bind region-decode pipeline. TALL strips
+ * (long webtoon pages) are region-decoded by the subsampling view straight from the page's on-device
  * cache file (never a giant full-height bitmap in memory — that is what keeps long-strip scrolling
  * smooth on slow sources like comix). Animated images (gif / animated webp) fall back to a plain
  * [ImageView] fed by Coil. Touches are ignored on the image itself — the reader's scroll container
@@ -79,6 +84,10 @@ open class ReaderPageImageView @JvmOverloads constructor(
 
     /** Automatic background: set as this view's background once the image loads. */
     var pageBackground: Drawable? = null
+
+    /** Target decode width (px) for short webtoon pages decoded by Coil (yomi's fast path). Set by
+     *  the page holder from the viewer's quality-scaled width; 0 means the screen width. */
+    var decodeWidthPx: Int = 0
 
     @CallSuper
     open fun onImageLoaded() {
@@ -182,26 +191,73 @@ open class ReaderPageImageView @JvmOverloads constructor(
             },
         )
 
+        val imageView = this
+        val isTall = config.isTallImage ?: isTallImageFile(file)
         val canUseHardware = config.canUseHardwareBitmap ?: (android.os.Build.VERSION.SDK_INT >= 26)
-        setHardwareConfig(canUseHardware)
 
-        if (config.webtoonSmartFit && scope != null) {
-            smartFitJob = scope?.launch {
-                val bounds = withContext(Dispatchers.IO) {
-                    runCatching {
-                        WebtoonBorderDetector.detectContentBounds(FileInputStream(file))
-                    }.getOrNull()
+        // yomi's fast path: SHORT webtoon pages (on devices that support hardware bitmaps) are
+        // decoded ONCE by Coil at the strip's display width, then handed to the subsampling view as
+        // a bitmap base layer — one fast decode instead of the per-bind region-decode pipeline.
+        // Border cropping needs the region decoder, so cropped pages stay on the file path.
+        if (isWebtoon && !isTall && canUseHardware && !config.cropBorders) {
+            val decodeW = if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels
+            val request = ImageRequest.Builder(context)
+                .data(file)
+                .size(Size(decodeW, Dimension.Undefined))
+                .memoryCachePolicy(CachePolicy.DISABLED)
+                .diskCachePolicy(CachePolicy.DISABLED)
+                .target(
+                    onSuccess = { drawable ->
+                        val bmp = (drawable as? BitmapDrawable)?.bitmap
+                        if (bmp != null) {
+                            imageView.setImage(ImageSource.bitmap(bmp))
+                        } else {
+                            imageView.setImage(ImageSource.provider { FileInputStream(file) })
+                        }
+                        imageView.isVisible = true
+                    },
+                    onError = {
+                        imageView.setImage(ImageSource.provider { FileInputStream(file) })
+                        imageView.isVisible = true
+                    },
+                )
+                .build()
+            context.imageLoader.enqueue(request)
+        } else {
+            setHardwareConfig(canUseHardware)
+            if (config.webtoonSmartFit && scope != null) {
+                smartFitJob = scope?.launch {
+                    val bounds = withContext(Dispatchers.IO) {
+                        runCatching {
+                            WebtoonBorderDetector.detectContentBounds(FileInputStream(file))
+                        }.getOrNull()
+                    }
+                    if (bounds != null) {
+                        setImage(ImageSource.provider { FileInputStream(file) }.region(bounds))
+                    } else {
+                        setImage(ImageSource.provider { FileInputStream(file) })
+                    }
+                    isVisible = true
                 }
-                if (bounds != null) {
-                    setImage(ImageSource.provider { FileInputStream(file) }.region(bounds))
-                } else {
-                    setImage(ImageSource.provider { FileInputStream(file) })
-                }
+            } else {
+                setImage(ImageSource.provider { FileInputStream(file) })
                 isVisible = true
             }
-        } else {
-            setImage(ImageSource.provider { FileInputStream(file) })
-            isVisible = true
+        }
+    }
+
+    /** True if [file] is a tall webtoon strip (height > 1.5x width) — region-decoded by the
+     *  subsampling view instead of decoded whole via Coil. Bounds-only decode; falls back to tall. */
+    private fun isTallImageFile(file: File): Boolean {
+        return try {
+            val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            android.graphics.BitmapFactory.decodeFile(file.absolutePath, opts)
+            val w = opts.outWidth
+            val h = opts.outHeight
+            if (w <= 0 || h <= 0) true
+            else h.toFloat() > w.toFloat() * 1.5f
+        } catch (e: Throwable) {
+            true
         }
     }
 
@@ -241,8 +297,9 @@ open class ReaderPageImageView @JvmOverloads constructor(
 
     fun getImageView(): View? = pageView
 
-    /** Configuration for a single page render. Only [minimumScaleType]/[cropBorders]/
-     *  [webtoonSmartFit] are used for the non-animated (SSIV) path; the rest mirror yomi's config. */
+    /** Configuration for a single page render. [isTallImage] picks yomi's fast Coil path vs the
+     *  SSIV region-decode path for webtoon pages; [minimumScaleType]/[cropBorders]/[webtoonSmartFit]
+     *  configure the non-animated (SSIV) render; the rest mirror yomi's config. */
     data class Config(
         val zoomDuration: Int = 200,
         val minimumScaleType: Int = SubsamplingScaleImageView.SCALE_TYPE_CENTER_INSIDE,

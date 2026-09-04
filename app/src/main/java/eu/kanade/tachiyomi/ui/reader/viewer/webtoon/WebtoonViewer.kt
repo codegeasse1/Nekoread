@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.ui.reader.viewer.webtoon
 
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.graphics.Color as AndroidColor
 import android.view.MotionEvent
 import android.view.View
@@ -65,7 +66,11 @@ class WebtoonViewer(context: Context) {
         }
 
     /** Whether tapping the left/right side of the screen scrolls (yomi's tap zones). */
-    var tapToChangePages: Boolean = true
+    var tapToChangePages: Boolean = false
+
+    /** Target decode width (px) for short webtoon pages that render via Coil (yomi's fast path).
+     *  Set by the reader from the quality-scaled display width; 0 means the screen width. */
+    var decodeWidth: Int = 0
 
     /** Rendering config for each page (fit-width, pinch-to-zoom, ...). */
     var pageConfig: ReaderPageImageView.Config = ReaderPageImageView.Config(
@@ -185,16 +190,35 @@ class WebtoonViewer(context: Context) {
         return WebtoonPageCache.fileFor(item.desc, src, cacheDir)
     }
 
-    /** Yomi tap zones: left third scrolls up, right third scrolls down, middle toggles the menu. */
+    /** Yomi tap zones: with "tap to change pages" ON, left third scrolls up, right third scrolls
+     *  down, middle toggles the menu. With it OFF (the default) ANY tap anywhere toggles the menu. */
     private fun handleTap(event: MotionEvent) {
         onUserScroll?.invoke()
+        if (!tapToChangePages) {
+            onMenuTap?.invoke()
+            return
+        }
         val width = recycler.width.coerceAtLeast(1)
         val x = event.x / width
         when {
-            !tapToChangePages && (x < 0.34f || x > 0.66f) -> Unit
             x < 0.34f -> scrollBy(-scrollDistance)
             x > 0.66f -> scrollBy(scrollDistance)
             else -> onMenuTap?.invoke()
+        }
+    }
+
+    /** True if [file] is a tall webtoon strip (height > 1.5x width) — the ones SSIV region-decodes
+     *  from disk instead of decoding whole via Coil. Bounds-only decode; falls back to tall on error. */
+    fun isTallPage(file: File): Boolean {
+        return try {
+            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(file.absolutePath, opts)
+            val w = opts.outWidth
+            val h = opts.outHeight
+            if (w <= 0 || h <= 0) true
+            else h.toFloat() > w.toFloat() * 1.5f
+        } catch (e: Throwable) {
+            true
         }
     }
 
