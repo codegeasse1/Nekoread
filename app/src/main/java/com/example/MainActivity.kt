@@ -77,8 +77,6 @@ import com.example.data.source.ExtensionCoverImageFetcherFactory
 import com.example.data.source.ExtensionPageImageFetcherFactory
 import com.example.data.source.ExtensionPageImageKeyer
 import com.example.data.source.ExtensionCoverImageKeyer
-import com.example.data.reader.WebtoonTileFetcherFactory
-import com.example.data.reader.WebtoonTileKeyer
 import com.example.ui.MainViewModel
 import com.example.BuildConfig
 import com.example.ui.screens.BrowseScreen
@@ -147,8 +145,6 @@ class MainActivity : ComponentActivity() {
                     add(ExtensionPageImageKeyer())
                     add(ExtensionCoverImageFetcherFactory())
                     add(ExtensionCoverImageKeyer())
-                    add(WebtoonTileFetcherFactory(cacheDir.resolve("webtoon_tiles")))
-                    add(WebtoonTileKeyer())
                 }
                 // No global crossfade: the reader's long pages pop in with a draw-animation on every
                 // first display while scrolling, which reads as jank. Cards that want a fade request
