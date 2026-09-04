@@ -50,6 +50,13 @@ class WebtoonViewer(context: Context) {
     /** Whether a small gap is added between pages (the "vertical with gaps" mode). */
     var gaps: Boolean = false
 
+    /** Whether the page image viewer crops the (often white/black) borders off each strip. */
+    var cropBorders: Boolean = false
+        set(value) {
+            field = value
+            pageConfig = pageConfig.copy(cropBorders = value)
+        }
+
     /** Rendering config for each page (fit-width, pinch-to-zoom, ...). */
     var pageConfig: ReaderPageImageView.Config = ReaderPageImageView.Config(
         zoomDuration = 200,

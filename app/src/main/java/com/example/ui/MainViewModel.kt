@@ -106,11 +106,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _readerQuality = MutableStateFlow(75)
     val readerQuality: StateFlow<Int> = _readerQuality.asStateFlow()
 
+    private val _cropBorders = MutableStateFlow(false)
+    val cropBorders: StateFlow<Boolean> = _cropBorders.asStateFlow()
+
+    // Per-series reader overrides: a manga can pin its own reading mode (the global mode still
+    // applies everywhere else). Enabled state and mode are stored per manga id in prefs.
+    private val _seriesOverrideEnabled = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    val seriesOverrideEnabled: StateFlow<Map<String, Boolean>> = _seriesOverrideEnabled.asStateFlow()
+
+    private val _seriesReaderMode = MutableStateFlow<Map<String, ReaderMode>>(emptyMap())
+    val seriesReaderMode: StateFlow<Map<String, ReaderMode>> = _seriesReaderMode.asStateFlow()
+
     init {
         // Load persisted reader settings (stored in SharedPreferences, survives app restarts).
         _readerMode.value = ReaderMode.valueOf(prefs.getString("reader_mode", ReaderMode.WEBTOON.name)!!)
         _readerBg.value = ReaderBg.valueOf(prefs.getString("reader_bg", ReaderBg.PURE_BLACK.name)!!)
         _showPageNumber.value = prefs.getBoolean("show_page_number", true)
+        _cropBorders.value = prefs.getBoolean("reader_crop_borders", false)
+        _seriesOverrideEnabled.value = prefs.all.mapNotNull { (k, v) ->
+            if (k.startsWith("series_override_") && v is Boolean) k.removePrefix("series_override_") to v else null
+        }.toMap()
+        _seriesReaderMode.value = prefs.all.mapNotNull { (k, v) ->
+            if (k.startsWith("series_mode_") && v is String) {
+                runCatching { k.removePrefix("series_mode_") to ReaderMode.valueOf(v) }.getOrNull()
+            } else null
+        }.toMap()
         // One-time migration: the OLD default fit was Fit Screen; the new default is Fit Width.
         // Devices that still hold the old default value get switched to Fit Width exactly once —
         // any choice made after that is always respected.
@@ -417,6 +437,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _readerMode.value = mode
         prefs.edit().putString("reader_mode", mode.name).apply()
     }
+
+    fun setCropBorders(enabled: Boolean) {
+        _cropBorders.value = enabled
+        prefs.edit().putBoolean("reader_crop_borders", enabled).apply()
+    }
+
+    fun setSeriesOverrideEnabled(mangaId: String, enabled: Boolean) {
+        _seriesOverrideEnabled.update { it + (mangaId to enabled) }
+        prefs.edit().putBoolean("series_override_$mangaId", enabled).apply()
+    }
+
+    fun setSeriesReaderMode(mangaId: String, mode: ReaderMode) {
+        _seriesReaderMode.update { it + (mangaId to mode) }
+        prefs.edit().putString("series_mode_$mangaId", mode.name).apply()
+    }
+
+    /** The mode that should actually be used to render [mangaId]: its per-series override when
+     *  enabled, otherwise the global reader mode. */
+    fun resolvedReaderMode(mangaId: String): ReaderMode =
+        if (_seriesOverrideEnabled.value[mangaId] == true) {
+            _seriesReaderMode.value[mangaId] ?: _readerMode.value
+        } else {
+            _readerMode.value
+        }
 
     fun setReaderBg(bg: ReaderBg) {
         _readerBg.value = bg

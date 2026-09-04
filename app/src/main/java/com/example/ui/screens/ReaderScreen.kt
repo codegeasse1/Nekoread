@@ -142,9 +142,19 @@ fun ReaderScreen(
     }
 
     var showHud by remember { mutableStateOf(true) }
-    var showSettingsDialog by remember { mutableStateOf(false) }
 
-    val readerMode: ReaderMode by viewModel.readerMode.collectAsStateWithLifecycle()
+    val globalReaderMode: ReaderMode by viewModel.readerMode.collectAsStateWithLifecycle()
+    val seriesOverrideEnabled by viewModel.seriesOverrideEnabled.collectAsStateWithLifecycle()
+    val seriesReaderMode by viewModel.seriesReaderMode.collectAsStateWithLifecycle()
+    // Effective reading mode: the per-series override when the user enabled one for this manga,
+    // otherwise the global reader mode (yomi-style "for this series" scope).
+    val readerMode: ReaderMode = remember(manga.id, globalReaderMode, seriesOverrideEnabled, seriesReaderMode) {
+        if (seriesOverrideEnabled[manga.id] == true) {
+            seriesReaderMode[manga.id] ?: globalReaderMode
+        } else {
+            globalReaderMode
+        }
+    }
     val readerBg: ReaderBg by viewModel.readerBg.collectAsStateWithLifecycle()
     val readerFit: ReaderFit by viewModel.readerFit.collectAsStateWithLifecycle()
     val readerOrientation: ReaderOrientation by viewModel.readerOrientation.collectAsStateWithLifecycle()
@@ -154,6 +164,7 @@ fun ReaderScreen(
     val autoScroll: Boolean by viewModel.autoScroll.collectAsStateWithLifecycle()
     val autoScrollSpeedDp: Float by viewModel.autoScrollSpeedDp.collectAsStateWithLifecycle()
     val readerQuality: Int by viewModel.readerQuality.collectAsStateWithLifecycle()
+    val cropBorders: Boolean by viewModel.cropBorders.collectAsStateWithLifecycle()
 
     // Both long-strip modes render as one continuous vertical list; only the gap differs.
     val isWebtoon = readerMode == ReaderMode.WEBTOON || readerMode == ReaderMode.WEBTOON_GAPS
@@ -730,6 +741,7 @@ fun ReaderScreen(
                         bgColor = bgColor,
                         textColor = contentTextColor,
                         gaps = readerMode == ReaderMode.WEBTOON_GAPS,
+                        cropBorders = cropBorders,
                         autoScroll = autoScroll,
                         autoScrollSpeedDp = autoScrollSpeedDp,
                         initialPageIndex = initialPageIndex,
@@ -812,338 +824,98 @@ fun ReaderScreen(
             }
         }
 
-        // Top HUD Bar
-        AnimatedVisibility(
+    // Bookmark state is tracked locally: activeChapter is a snapshot that won't update when
+    // the DB row flips under it, so we mirror the toggle here and reset whenever the chapter
+    // changes.
+    var chapterBookmarked by remember(activeChapter.id) { mutableStateOf(activeChapter.bookmarked) }
+
+        // Yomi-style reader chrome: top bar (bookmark / overflow / auto-scroll), chapter
+        // navigator pill, bottom toolbar and the settings sheets/dialogs live in YomiReaderChrome.
+        YomiReaderChrome(
             visible = showHud,
-            enter = slideInVertically(initialOffsetY = { -it }),
-            exit = slideOutVertically(targetOffsetY = { -it }),
-            modifier = Modifier.align(Alignment.TopCenter)
-        ) {
-            Surface(
-                color = Color(0xD9161926),
-                contentColor = Color.White
-            ) {
-                TopAppBar(
-                    windowInsets = WindowInsets(0),
-                    title = {
-                        Column {
-                            Text(
-                                text = manga.title,
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                ),
-                                maxLines = 1
-                            )
-                            Text(
-                                text = activeChapter.name,
-                                style = MaterialTheme.typography.bodySmall.copy(color = Color.LightGray),
-                                maxLines = 1
-                            )
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(
-                            onClick = onBackClick,
-                            modifier = Modifier.testTag("reader_back_button")
-                        ) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
-                        }
-                    },
-                    actions = {
-                        IconButton(
-                            onClick = { showSettingsDialog = true },
-                            modifier = Modifier.testTag("reader_settings_button")
-                        ) {
-                            Icon(Icons.Default.Settings, contentDescription = "Reader Settings", tint = Color.White)
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-                )
-            }
-        }
-
-        // Bottom HUD Bar
-        AnimatedVisibility(
-            visible = showHud,
-            enter = slideInVertically(initialOffsetY = { it }),
-            exit = slideOutVertically(targetOffsetY = { it }),
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-            Surface(
-                color = Color(0xD9161926),
-                contentColor = Color.White
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        IconButton(
-                            onClick = { prevChapter?.let { onChapterChange(it.id) } },
-                            enabled = prevChapter != null
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.NavigateBefore,
-                                contentDescription = "Previous Chapter",
-                                tint = if (prevChapter != null) Color.White else Color.Gray
-                            )
-                        }
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            if (isWebtoon) {
-                                IconButton(
-                                    onClick = { viewModel.setAutoScroll(!autoScroll) },
-                                    modifier = Modifier.testTag("reader_autoscroll_button")
-                                ) {
-                                    Icon(
-                                        imageVector = if (autoScroll) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                        contentDescription = if (autoScroll) "Pause auto-scroll" else "Start auto-scroll",
-                                        tint = Color.White
-                                    )
-                                }
-                            }
-
-                            if (pages != null && showPageNumber) {
-                                Text(
-                                    text = "Page $currentPage / $pageTotal",
-                                    style = MaterialTheme.typography.labelLarge.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    ),
-                                    modifier = Modifier.testTag("page_indicator_text")
-                                )
-                            }
-                        }
-
-                        IconButton(
-                            onClick = { nextChapter?.let { onChapterChange(it.id) } },
-                            enabled = nextChapter != null
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.NavigateNext,
-                                contentDescription = "Next Chapter",
-                                tint = if (nextChapter != null) Color.White else Color.Gray
-                            )
-                        }
-                    }
-
-                    Slider(
-                        value = currentPage.toFloat(),
-                        onValueChange = { pageVal ->
-                            val targetPage = pageVal.toInt() - 1
-                            coroutineScope.launch {
-                                if (isWebtoon) {
-                                    val seg = streamPosition.first
-                                    val start = streamSegments.take(seg).sumOf { it.size } + seg
-                                    viewerRef.value?.moveToPage(start + targetPage)
-                                } else {
-                                    pagerState.scrollToPage(targetPage)
-                                }
-                            }
-                        },
-                        valueRange = 1f..pageTotal.coerceAtLeast(1).toFloat(),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("reader_page_slider")
-                    )
-                }
-            }
-        }
-    }
-
-    if (showSettingsDialog) {
-        AlertDialog(
-            onDismissRequest = { showSettingsDialog = false },
-            title = {
-                Text(
-                    text = "Reader Settings",
-                    fontWeight = FontWeight.Bold
-                )
+            mangaTitle = manga.title,
+            chapterTitle = activeChapter.name,
+            bookmarked = chapterBookmarked,
+            onToggleBookmarked = {
+                viewModel.toggleChapterBookmark(activeChapter.id)
+                chapterBookmarked = !chapterBookmarked
             },
-            text = {
-                Column(
-                    modifier = Modifier
-                        .heightIn(max = 460.dp)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    ReaderSettingsSectionTitle("Reading Mode")
-
-                    ReaderModeOption(
-                        label = "Webtoon (Long Strip)",
-                        selected = readerMode == ReaderMode.WEBTOON,
-                        onClick = { viewModel.setReaderMode(ReaderMode.WEBTOON) }
-                    )
-                    ReaderModeOption(
-                        label = "Vertical With Gaps",
-                        selected = readerMode == ReaderMode.WEBTOON_GAPS,
-                        onClick = { viewModel.setReaderMode(ReaderMode.WEBTOON_GAPS) }
-                    )
-                    ReaderModeOption(
-                        label = "Vertical Paged",
-                        selected = readerMode == ReaderMode.VERTICAL,
-                        onClick = { viewModel.setReaderMode(ReaderMode.VERTICAL) }
-                    )
-                    ReaderModeOption(
-                        label = "Manga Left-to-Right",
-                        selected = readerMode == ReaderMode.LEFT_TO_RIGHT,
-                        onClick = { viewModel.setReaderMode(ReaderMode.LEFT_TO_RIGHT) }
-                    )
-                    ReaderModeOption(
-                        label = "Manga Right-to-Left (Traditional)",
-                        selected = readerMode == ReaderMode.RIGHT_TO_LEFT,
-                        onClick = { viewModel.setReaderMode(ReaderMode.RIGHT_TO_LEFT) }
-                    )
-
-                    ReaderSettingsSectionTitle("Page Fit (paged modes)")
-
-                    ReaderModeOption(
-                        label = "Fit Screen",
-                        selected = readerFit == ReaderFit.FIT,
-                        onClick = { viewModel.setReaderFit(ReaderFit.FIT) }
-                    )
-                    ReaderModeOption(
-                        label = "Fit Width",
-                        selected = readerFit == ReaderFit.FIT_WIDTH,
-                        onClick = { viewModel.setReaderFit(ReaderFit.FIT_WIDTH) }
-                    )
-                    ReaderModeOption(
-                        label = "Fit Height",
-                        selected = readerFit == ReaderFit.FIT_HEIGHT,
-                        onClick = { viewModel.setReaderFit(ReaderFit.FIT_HEIGHT) }
-                    )
-
-                    ReaderSettingsSectionTitle("Reader Background")
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        ReaderBgChip(
-                            label = "OLED Black",
-                            color = Color.Black,
-                            isSelected = readerBg == ReaderBg.PURE_BLACK,
-                            onClick = { viewModel.setReaderBg(ReaderBg.PURE_BLACK) }
-                        )
-                        ReaderBgChip(
-                            label = "Dark",
-                            color = Color(0xFF181A24),
-                            isSelected = readerBg == ReaderBg.DARK_GRAY,
-                            onClick = { viewModel.setReaderBg(ReaderBg.DARK_GRAY) }
-                        )
-                        ReaderBgChip(
-                            label = "Cream",
-                            color = Color(0xFFFBF0D9),
-                            isSelected = readerBg == ReaderBg.CREAM,
-                            onClick = { viewModel.setReaderBg(ReaderBg.CREAM) }
-                        )
-                        ReaderBgChip(
-                            label = "White",
-                            color = Color.White,
-                            isSelected = readerBg == ReaderBg.WHITE,
-                            onClick = { viewModel.setReaderBg(ReaderBg.WHITE) }
-                        )
-                    }
-
-                    ReaderSettingsSectionTitle("Display")
-
-                    ReaderModeOption(
-                        label = "Auto (follow system)",
-                        selected = readerOrientation == ReaderOrientation.AUTO,
-                        onClick = { viewModel.setReaderOrientation(ReaderOrientation.AUTO) }
-                    )
-                    ReaderModeOption(
-                        label = "Portrait",
-                        selected = readerOrientation == ReaderOrientation.PORTRAIT,
-                        onClick = { viewModel.setReaderOrientation(ReaderOrientation.PORTRAIT) }
-                    )
-                    ReaderModeOption(
-                        label = "Landscape",
-                        selected = readerOrientation == ReaderOrientation.LANDSCAPE,
-                        onClick = { viewModel.setReaderOrientation(ReaderOrientation.LANDSCAPE) }
-                    )
-                    ReaderSettingsSwitchRow(
-                        label = "Show page number",
-                        checked = showPageNumber,
-                        onCheckedChange = { viewModel.setShowPageNumber(it) }
-                    )
-                    ReaderSettingsSwitchRow(
-                        label = "Keep screen on",
-                        checked = keepScreenOn,
-                        onCheckedChange = { viewModel.setKeepScreenOn(it) }
-                    )
-
-                    ReaderSettingsSectionTitle("Webtoon")
-
-                    Text(
-                        text = "Image quality",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(start = 16.dp, bottom = 4.dp)
-                    )
-                    Row(
-                        modifier = Modifier.padding(start = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        ReaderQualityChip("Low (fast)", readerQuality == 50) { viewModel.setReaderQuality(50) }
-                        ReaderQualityChip("Medium", readerQuality == 75) { viewModel.setReaderQuality(75) }
-                        ReaderQualityChip("High (sharp)", readerQuality == 100) { viewModel.setReaderQuality(100) }
-                    }
-
-                    ReaderSettingsSwitchRow(
-                        label = "Fade pages in",
-                        checked = webtoonFade,
-                        onCheckedChange = { viewModel.setWebtoonFade(it) }
-                    )
-                    ReaderSettingsSwitchRow(
-                        label = "Auto-scroll",
-                        checked = autoScroll,
-                        onCheckedChange = { viewModel.setAutoScroll(it) }
-                    )
-                    if (autoScroll) {
-                        Text(
-                            text = "Auto-scroll speed: ${autoScrollSpeedDp.toInt()} dp/s",
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(start = 16.dp, top = 8.dp)
-                        )
-                        Slider(
-                            value = autoScrollSpeedDp,
-                            onValueChange = { viewModel.setAutoScrollSpeedDp(it) },
-                            valueRange = 20f..200f,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+            onOpenInWebView = if (sourceBaseUrl.isNotBlank()) {
+                { webviewTarget = sourceBaseUrl to sourceUserAgent }
+            } else {
+                null
+            },
+            onReloadChapter = { retryKey++ },
+            onBack = onBackClick,
+            isWebtoon = isWebtoon,
+            autoScroll = autoScroll,
+            autoScrollSpeedDp = autoScrollSpeedDp,
+            onToggleAutoScroll = { viewModel.setAutoScroll(!autoScroll) },
+            onAutoScrollSpeedChange = { viewModel.setAutoScrollSpeedDp(it) },
+            prevEnabled = prevChapter != null,
+            onPrevChapter = { prevChapter?.let { onChapterChange(it.id) } },
+            nextEnabled = nextChapter != null,
+            onNextChapter = { nextChapter?.let { onChapterChange(it.id) } },
+            currentPage = currentPage,
+            totalPages = pageTotal,
+            onSeekPage = { targetPage ->
+                coroutineScope.launch {
+                    if (isWebtoon) {
+                        val seg = streamPosition.first
+                        val start = streamSegments.take(seg).sumOf { it.size } + seg
+                        viewerRef.value?.moveToPage(start + targetPage)
+                    } else {
+                        pagerState.scrollToPage(targetPage)
                     }
                 }
             },
-            confirmButton = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = {
-                            viewModel.setReaderOrientation(ReaderOrientation.AUTO)
-                            viewModel.setKeepScreenOn(true)
-                            viewModel.setShowPageNumber(true)
-                            viewModel.setWebtoonFade(false)
-                            viewModel.setAutoScroll(false)
-                            viewModel.setAutoScrollSpeedDp(80f)
-                            viewModel.setReaderQuality(75)
-                        }
-                    ) {
-                        Text("Reset")
-                    }
-                    Button(onClick = { showSettingsDialog = false }) {
-                        Text("Done")
-                    }
+            readerMode = readerMode,
+            onSelectReaderMode = { mode ->
+                if (seriesOverrideEnabled[manga.id] == true) {
+                    viewModel.setSeriesReaderMode(manga.id, mode)
+                } else {
+                    viewModel.setReaderMode(mode)
                 }
-            }
+            },
+            readerFit = readerFit,
+            onSelectReaderFit = { viewModel.setReaderFit(it) },
+            readerOrientation = readerOrientation,
+            onSelectReaderOrientation = { viewModel.setReaderOrientation(it) },
+            cropBorders = cropBorders,
+            onToggleCropBorders = { viewModel.setCropBorders(!cropBorders) },
+            readerBg = readerBg,
+            onSelectReaderBg = { viewModel.setReaderBg(it) },
+            showPageNumber = showPageNumber,
+            onToggleShowPageNumber = { viewModel.setShowPageNumber(!showPageNumber) },
+            keepScreenOn = keepScreenOn,
+            onToggleKeepScreenOn = { viewModel.setKeepScreenOn(!keepScreenOn) },
+            webtoonFade = webtoonFade,
+            onToggleWebtoonFade = { viewModel.setWebtoonFade(!webtoonFade) },
+            readerQuality = readerQuality,
+            onSelectReaderQuality = { viewModel.setReaderQuality(it) },
+            onResetSettings = {
+                viewModel.setReaderOrientation(ReaderOrientation.AUTO)
+                viewModel.setKeepScreenOn(true)
+                viewModel.setShowPageNumber(true)
+                viewModel.setWebtoonFade(false)
+                viewModel.setAutoScroll(false)
+                viewModel.setAutoScrollSpeedDp(80f)
+                viewModel.setReaderQuality(75)
+                viewModel.setCropBorders(false)
+            },
+            seriesOverrideEnabled = seriesOverrideEnabled[manga.id] == true,
+            onToggleSeriesOverride = {
+                val enabling = seriesOverrideEnabled[manga.id] != true
+                if (enabling) {
+                    // Seed the series mode with the current effective mode so toggling on pins
+                    // whatever is on screen.
+                    viewModel.setSeriesReaderMode(manga.id, readerMode)
+                }
+                viewModel.setSeriesOverrideEnabled(manga.id, enabling)
+            },
+            chapters = sortedChapters,
+            activeChapterId = activeChapter.id,
+            onSelectChapter = { onChapterChange(it) }
         )
     }
 
@@ -1274,120 +1046,6 @@ private fun ReaderPageImage(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun ReaderSettingsSectionTitle(text: String) {
-    Spacer(modifier = Modifier.height(16.dp))
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleSmall.copy(
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
-    )
-    Spacer(modifier = Modifier.height(4.dp))
-}
-
-@Composable
-private fun ReaderSettingsSwitchRow(
-    label: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.weight(1f)
-        )
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange
-        )
-    }
-}
-
-@Composable
-private fun ReaderQualityChip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-        border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-        )
-    }
-}
-
-@Composable
-private fun ReaderModeOption(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-    ) {
-        RadioButton(
-            selected = selected,
-            onClick = onClick
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(label)
-    }
-}
-
-@Composable
-private fun ReaderBgChip(
-    label: String,
-    color: Color,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
-        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-        border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(16.dp)
-                    .clip(CircleShape)
-                    .background(color)
-                    .border(1.dp, Color.Gray, CircleShape)
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-            )
         }
     }
 }
