@@ -90,21 +90,22 @@ fun YomiWebtoonReader(
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
-            WebtoonViewer(ctx).also { v ->
-                viewerRef.value = v
-                v.source = source
-                v.cacheDir = cacheDir
-                v.gaps = gaps
-                v.onPageChanged = { seg, page, total -> onPageChanged(seg, page, total) }
-                v.onNearEndChanged = { near -> onNearEndChanged(near) }
-                v.onMenuTap = { onMenuTap() }
-                v.onUserScroll = { onUserScroll() }
-                v.onTrailerRetry = { onTrailerRetry() }
-                v.setTheme(bgColor.toArgb(), textColor.toArgb())
-                v.setItems(items, segSizes, trailer, initialPageIndex)
-            }
+            val v = WebtoonViewer(ctx)
+            viewerRef.value = v
+            v.source = source
+            v.cacheDir = cacheDir
+            v.gaps = gaps
+            v.onPageChanged = { seg, page, total -> onPageChanged(seg, page, total) }
+            v.onNearEndChanged = { near -> onNearEndChanged(near) }
+            v.onMenuTap = { onMenuTap() }
+            v.onUserScroll = { onUserScroll() }
+            v.onTrailerRetry = { onTrailerRetry() }
+            v.setTheme(bgColor.toArgb(), textColor.toArgb())
+            v.setItems(items, segSizes, trailer, initialPageIndex)
+            v.view
         },
-        update = { v ->
+        update = { _ ->
+            val v = viewerRef.value ?: return@AndroidView
             v.source = source ?: v.source
             v.cacheDir = cacheDir
             v.gaps = gaps

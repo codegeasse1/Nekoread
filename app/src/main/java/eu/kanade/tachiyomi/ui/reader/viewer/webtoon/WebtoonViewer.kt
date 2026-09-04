@@ -8,7 +8,9 @@ import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.WebtoonLayoutManager
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
+import com.example.data.reader.WebtoonPageCache
 import com.example.data.source.MangaSource
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
 import java.io.File
