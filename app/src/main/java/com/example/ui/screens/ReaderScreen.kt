@@ -99,6 +99,7 @@ import coil.size.Size
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
 import com.example.data.reader.WebtoonPageCache
+import com.example.data.source.MangaDexSource
 import com.example.data.source.MangaSource
 import com.example.ui.MainViewModel
 import com.example.ui.ReaderBg
@@ -158,19 +159,34 @@ fun ReaderScreen(
     // Continuous-reading stream (webtoon modes): chapters in reading order + their loaded pages.
     var streamQueue by remember(chapter.id) { mutableStateOf(listOf(chapter)) }
     var streamSegments by remember(chapter.id) { mutableStateOf<List<List<Any>>>(emptyList()) }
+    // Coil page-image models parallel to each stream segment's descriptors (null entry = the
+    // descriptor's raw imageUrl is a fine Coil model). Used to render SHORT webtoon pages with Coil
+    // through the source-aware model (extension client + headers), matching paged mode.
+    var streamModelSegments by remember(chapter.id) { mutableStateOf<List<List<Any>?>>(emptyList()) }
     var webtoonLoadingNext by remember(chapter.id) { mutableStateOf(false) }
     var webtoonError by remember(chapter.id) { mutableStateOf<String?>(null) }
+    // Coil models for the FIRST stream segment (the chapter being opened); seeded into
+    // streamModelSegments once its pages are known.
+    var webtoonCoilModels by remember(chapter.id) { mutableStateOf<List<Any>?>(null) }
 
     LaunchedEffect(chapter.id, retryKey, isWebtoon) {
         pageLoading = true
         pageError = null
         try {
-            // Webtoon modes fetch page DESCRIPTORS (URLs) and download each page's bytes to a cache
-            // file for the subsampling renderer; paged modes keep Coil page-image models.
-            pages = if (isWebtoon) {
-                viewModel.repository.getChapterPageDescriptors(chapter.id)
+            if (isWebtoon) {
+                // Webtoon modes fetch page DESCRIPTORS (URLs) for the subsampling (region-decode)
+                // renderer, plus the Coil models used to render SHORT pages with Coil. MangaDex
+                // models are just the plain image URLs (no headers needed); extension sources
+                // return source-aware models loaded through the extension's client.
+                val descs = viewModel.repository.getChapterPageDescriptors(chapter.id)
+                webtoonCoilModels = if (manga.id.substringBefore(":") == MangaDexSource.id) {
+                    descs.map { it.imageUrl }
+                } else {
+                    viewModel.repository.getChapterPageImageModels(chapter.id)
+                }
+                pages = descs
             } else {
-                viewModel.repository.getChapterPageImageModels(chapter.id)
+                pages = viewModel.repository.getChapterPageImageModels(chapter.id)
             }
         } catch (e: Throwable) {
             pageError = e.message ?: "Failed to load chapter pages"
@@ -187,6 +203,7 @@ fun ReaderScreen(
     LaunchedEffect(pages, chapter.id, isWebtoon) {
         if (isWebtoon && pages != null && (streamSegments.isEmpty() || streamSegments.firstOrNull() != pages)) {
             streamSegments = listOf(pages!!)
+            streamModelSegments = listOf(webtoonCoilModels)
         }
     }
 
@@ -319,13 +336,21 @@ fun ReaderScreen(
             webtoonLoadingNext = true
             webtoonError = null
             try {
-                val p = if (isWebtoon) {
-                    viewModel.repository.getChapterPageDescriptors(next.id)
+                if (isWebtoon) {
+                    val descs = viewModel.repository.getChapterPageDescriptors(next.id)
+                    val models = if (next.mangaId.substringBefore(":") == MangaDexSource.id) {
+                        descs.map { it.imageUrl }
+                    } else {
+                        viewModel.repository.getChapterPageImageModels(next.id)
+                    }
+                    streamQueue = streamQueue + next
+                    streamSegments = streamSegments + listOf(descs)
+                    streamModelSegments = streamModelSegments + listOf(models)
                 } else {
-                    viewModel.repository.getChapterPageImageModels(next.id)
+                    val p = viewModel.repository.getChapterPageImageModels(next.id)
+                    streamQueue = streamQueue + next
+                    streamSegments = streamSegments + listOf(p)
                 }
-                streamQueue = streamQueue + next
-                streamSegments = streamSegments + listOf(p)
             } catch (e: Throwable) {
                 webtoonError = e.message ?: "Failed to load next chapter"
             } finally {
@@ -366,6 +391,7 @@ fun ReaderScreen(
     val imageLoader = LocalImageLoader.current
     val context = LocalContext.current
     val screenWidthPx = context.resources.displayMetrics.widthPixels
+    val screenHeightPx = context.resources.displayMetrics.heightPixels
     val density = LocalDensity.current
     // Webtoon strips are always displayed at fill-width (never zoomed), so decoding them below the
     // full screen width costs a little sharpness but makes decodes and memory much cheaper — the
@@ -382,6 +408,14 @@ fun ReaderScreen(
     // for a typical ~0.7 page ratio so the snap is small.
     val fallbackPageHeight = with(LocalConfiguration.current) { (screenWidthDp / 0.7f).dp }
 
+    // Hybrid webtoon renderer split: pages whose displayed height is taller than this many screens
+    // use the subsampling (region-decode) renderer — it never holds a giant full-height bitmap, so
+    // long strips stay smooth. Shorter pages (the common "100 images per chapter" case) render with
+    // Coil instead: it decodes at the reader-quality width, memory-caches so scrolling back is
+    // instant, and doesn't create one heavy per-page subsampling view (which is what made many-item
+    // chapters stutter).
+    val subsampleTallPx = (screenHeightPx * 2.5f).roundToInt()
+
     // Known page aspect ratios, filled in as nearby pages decode (prewarm below). Webtoon list
     // items use them to size their slot to the page's real height up front, so the list doesn't
     // relayout every strip as it finishes loading — that relayout is what made scrolling feel
@@ -395,8 +429,9 @@ fun ReaderScreen(
     // the decode width so changing the image-quality setting re-prewarms at the new size.
     val displayPrewarmed = remember(displayDecodeWidth) { mutableStateMapOf<String, Boolean>() }
 
-    // Webtoon pages whose cache file is ready (or is being fetched) — the prewarm loop and the
-    // visible page items share one download per image URL instead of racing each other.
+    // TALL webtoon pages whose cache file is ready (or is being fetched) for the subsampling view —
+    // the prewarm loop and the visible page item share one download per image URL instead of racing
+    // each other. Short pages don't need a cache file (Coil renders them).
     val webtoonDownloaded = remember { mutableStateMapOf<String, Boolean>() }
     // imageUrl -> time of last failed download. The prewarm backs off on these for a few seconds so
     // a transient failure doesn't spin in a hot loop; the visible item has its own retry + button.
@@ -417,13 +452,16 @@ fun ReaderScreen(
     // current page. (The old two-stage effects restarted on every page scroll, cancelling all
     // their in-flight decodes each time — that cancel/restart churn was a major scroll-stutter
     // source.) The loop walks a window around the current page, nearest page first:
-    //   - WEBTOON mode: the "prewarm" for each page is making sure its bytes are on disk
-    //     (single-flighted via WebtoonPageCache, so the visible item never re-fetches) and learning
-    //     its true aspect ratio from the file, so the list reserves the exact slot height up front.
-    //     The subsampling view then region-decodes straight from the cache file — no giant
-    //     full-height bitmap is ever held in memory (this is what keeps long-strip scrolling
-    //     smooth, yomi's approach).
-    //   - PAGED mode: the old Coil two-step — RATIO (a 64px decode for far-ahead pages) and DISPLAY
+    //   - WEBTOON mode is HYBRID. Each page's true aspect ratio is learned first (from the cache
+    //     file if already downloaded, else a cheap 64px Coil decode that also primes Coil's disk
+    //     cache). TALL strips (display height > ~2.5 screens) get their bytes downloaded to a cache
+    //     file via WebtoonPageCache (single-flighted) so the subsampling view can region-decode
+    //     straight from disk — never a giant full-height bitmap, which is what keeps long strips
+    //     smooth. SHORT pages render with Coil (like paged mode): the display-size decode is warmed
+    //     into Coil's memory cache so the visible item pops instantly, and no per-page subsampling
+    //     view is ever created — many-per-chapter pages scroll smoothly instead of churning heavy
+    //     views.
+    //   - PAGED mode: the Coil two-step — RATIO (a 64px decode for far-ahead pages) and DISPLAY
     //     (a display-size decode that warms Coil's memory cache for near pages). The display decode
     //     is the AUTHORITATIVE aspect ratio, so slot and bitmap match to the pixel (no hairline
     //     seams between consecutive pages).
@@ -453,12 +491,20 @@ fun ReaderScreen(
                 val inDisplay = g >= globCur - 2
                 if (isWebtoon) {
                     val key = pageKey(m)
+                    // Only descriptor pages are pre-processed in webtoon mode (anything else renders
+                    // via the item's Coil fallback).
+                    if (m !is MangaSource.PageDescriptor) continue
                     // Skip pages that just failed — the visible item retries on its own; this loop
                     // would otherwise hot-spin on the same failure every 120ms.
                     if (downloadFailed.containsKey(key) && now - downloadFailed[key]!! < 8000) continue
-                    val needRatio = !pageAspectRatios.containsKey(key)
-                    val needDownload = inDisplay && !webtoonDownloaded.containsKey(key)
-                    if (needRatio || needDownload) { candidate = Triple(seg, g, m); break }
+                    val ratio = pageAspectRatios[key]
+                    val isTall = ratio != null && ratio > 0f && screenWidthPx / ratio > subsampleTallPx
+                    val needRatio = ratio == null
+                    // Tall strips are rendered by the subsampling view (needs the cache file);
+                    // short pages render with Coil (needs the display-size decode warmed).
+                    val needFile = isTall && !webtoonDownloaded.containsKey(key)
+                    val needWarm = inDisplay && !displayPrewarmed.containsKey(key) && !isTall
+                    if (needRatio || needFile || needWarm) { candidate = Triple(seg, g, m); break }
                 } else {
                     val needRatio = !pageAspectRatios.containsKey(m.toString())
                     val needDisplay = inDisplay && !displayPrewarmed.containsKey(m.toString())
@@ -466,27 +512,77 @@ fun ReaderScreen(
                 }
             }
             if (candidate == null) { delay(120); continue }
-            val (_, g, m) = candidate
+            val (seg, g, m) = candidate
             val inDisplay = g >= globCur - 2
             try {
                 if (isWebtoon) {
-                    // Webtoon prewarm = make sure the page's bytes are on disk (single-flighted) and
-                    // learn its true aspect ratio from the file. The visible item then just points the
-                    // subsampling view at the local file — no giant full-height bitmap, no re-fetch.
                     val key = pageKey(m)
-                    if (!webtoonDownloaded.containsKey(key) || !pageAspectRatios.containsKey(key)) {
-                        val desc = m as? MangaSource.PageDescriptor
-                        if (desc != null && source != null) {
-                            WebtoonPageCache.fileFor(desc, source, webtoonCacheDir)
-                            webtoonDownloaded[key] = true
-                            val d = WebtoonPageCache.dimensions(desc, webtoonCacheDir)
-                            if (d != null && d.first > 0 && d.second > 0) {
-                                pageAspectRatios[key] = d.first.toFloat() / d.second
+                    val desc = m as? MangaSource.PageDescriptor
+                    // 1) Learn the page's true aspect ratio: from the cache file's intrinsic size if
+                    // already downloaded (cheap, no network), else a 64px Coil decode — which also
+                    // primes Coil's disk cache for the Coil renderer of short pages.
+                    if (!pageAspectRatios.containsKey(key)) {
+                        val d = if (desc != null && source != null) {
+                            WebtoonPageCache.dimensions(desc, webtoonCacheDir)
+                        } else null
+                        if (d != null && d.first > 0 && d.second > 0) {
+                            pageAspectRatios[key] = d.first.toFloat() / d.second
+                        } else if (desc != null) {
+                            val pi = g - starts[seg]
+                            val model = streamModelSegments.getOrNull(seg)?.getOrNull(pi) ?: desc.imageUrl
+                            val ratioReq = ImageRequest.Builder(context)
+                                .data(model)
+                                .size(Size(64, Dimension.Undefined))
+                                .setParameter("reader_retry", 0)
+                                .setParameter("reader_role", "ratio")
+                                .memoryCachePolicy(CachePolicy.DISABLED)
+                                .diskCachePolicy(CachePolicy.ENABLED)
+                                .build()
+                            val rr = imageLoader.execute(ratioReq)
+                            val rd = rr.drawable
+                            if (rd != null && rd.intrinsicWidth > 0 && rd.intrinsicHeight > 0) {
+                                pageAspectRatios[key] = rd.intrinsicWidth.toFloat() / rd.intrinsicHeight
                             }
-                        } else {
-                            // Not a descriptor / no source — nothing to pre-download; mark done so the
-                            // loop moves on (the item falls back to its Coil path).
-                            webtoonDownloaded[key] = true
+                        }
+                    }
+                    val ratio = pageAspectRatios[key]
+                    val isTall = ratio != null && ratio > 0f && screenWidthPx / ratio > subsampleTallPx
+                    if (isTall) {
+                        // 2a) TALL strip → the subsampling view region-decodes from a cache file:
+                        // download the bytes through the source's own client (single-flighted) so the
+                        // visible item never waits on the network or holds a giant full-height bitmap.
+                        if (!webtoonDownloaded.containsKey(key)) {
+                            if (desc != null && source != null) {
+                                WebtoonPageCache.fileFor(desc, source, webtoonCacheDir)
+                                webtoonDownloaded[key] = true
+                            } else {
+                                // Not a descriptor / no source — nothing to pre-download; mark done
+                                // so the loop moves on.
+                                webtoonDownloaded[key] = true
+                            }
+                        }
+                    } else {
+                        // 2b) SHORT page → Coil renders it. Warm the display-size decode (same
+                        // request the visible item makes, so it hits Coil's memory cache) instead of
+                        // decoding on first scroll-in.
+                        if (inDisplay && !displayPrewarmed.containsKey(key) && desc != null) {
+                            val pi = g - starts[seg]
+                            val model = streamModelSegments.getOrNull(seg)?.getOrNull(pi) ?: desc.imageUrl
+                            val displayReq = ImageRequest.Builder(context)
+                                .data(model)
+                                .size(Size(webtoonDecodeWidth, Dimension.Undefined))
+                                .setParameter("reader_retry", 0)
+                                .apply { if (useRgb565) allowRgb565(true) }
+                                .diskCachePolicy(CachePolicy.ENABLED)
+                                .build()
+                            val dr = imageLoader.execute(displayReq)
+                            val dd = dr.drawable
+                            if (dd != null && dd.intrinsicWidth > 0 && dd.intrinsicHeight > 0 &&
+                                !pageAspectRatios.containsKey(key)
+                            ) {
+                                pageAspectRatios[key] = dd.intrinsicWidth.toFloat() / dd.intrinsicHeight
+                            }
+                            displayPrewarmed[key] = true
                         }
                     }
                 } else {
@@ -720,39 +816,99 @@ fun ReaderScreen(
                                     segPages,
                                     key = { pi, _ -> "${segChapter.id}_$pi" }
                                 ) { pi, pageModel ->
-                                    // Webtoon pages render with the subsampling view: download the
-                                    // page's bytes once to a cache file (through the source's own
-                                    // client), then region-decode only the visible slice from disk —
-                                    // never a giant full-height bitmap, which is what made long-strip
-                                    // scrolling stutter. Paged modes (and the defensive fallback for a
-                                    // non-descriptor page) keep the Coil path.
+                                    // Webtoon pages render HYBRID. TALL pages (display height > ~2.5
+                                    // screens) use the subsampling view: download the bytes once to a
+                                    // cache file (through the source's own client), then region-decode
+                                    // only the visible slice from disk — never a giant full-height
+                                    // bitmap, which is what made long-strip scrolling stutter. SHORT
+                                    // pages render with Coil instead (decoded at the reader-quality
+                                    // width, memory-cached, no heavy per-page view) so many-per-chapter
+                                    // pages scroll smoothly. Paged modes (and the defensive fallback for
+                                    // a non-descriptor page) keep the plain Coil path.
                                     if (isWebtoon && pageModel is MangaSource.PageDescriptor && source != null) {
                                         val key = pageKey(pageModel)
                                         val ratio = pageAspectRatios[key]
-                                        val boxModifier = Modifier
-                                            .fillMaxWidth()
-                                            .then(
-                                                if (ratio != null && ratio > 0f) Modifier.aspectRatio(ratio)
-                                                else Modifier.height(fallbackPageHeight)
+                                        val isTall = ratio != null && ratio > 0f &&
+                                            screenWidthPx / ratio > subsampleTallPx
+                                        if (isTall) {
+                                            val boxModifier = Modifier
+                                                .fillMaxWidth()
+                                                .then(
+                                                    if (ratio != null && ratio > 0f) Modifier.aspectRatio(ratio)
+                                                    else Modifier.height(fallbackPageHeight)
+                                                )
+                                                .clipToBounds()
+                                                .testTag("reader_page_${segIdx}_$pi")
+                                            WebtoonSubsamplingItem(
+                                                desc = pageModel,
+                                                source = source,
+                                                cacheDir = webtoonCacheDir,
+                                                modifier = boxModifier,
+                                                spinnerColor = contentTextColor,
+                                                onRatioKnown = { r ->
+                                                    // The item learns the page's true ratio as soon as its
+                                                    // own download finishes (nearest pages are usually
+                                                    // downloaded by the prewarm first, but this covers the
+                                                    // case where the item wins the race).
+                                                    if (r > 0f && r.isFinite()) pageAspectRatios[key] = r
+                                                }
                                             )
-                                            .clipToBounds()
-                                            .testTag("reader_page_${segIdx}_$pi")
-                                        WebtoonSubsamplingItem(
-                                            desc = pageModel,
-                                            source = source,
-                                            cacheDir = webtoonCacheDir,
-                                            modifier = boxModifier,
-                                            spinnerColor = contentTextColor,
-                                            onRatioKnown = { r ->
-                                                // The item learns the page's true ratio as soon as its
-                                                // own download finishes (nearest pages are usually
-                                                // downloaded by the prewarm first, but this covers the
-                                                // case where the item wins the race).
-                                                if (r > 0f && r.isFinite()) pageAspectRatios[key] = r
+                                        } else {
+                                            // Short/unknown page → Coil. For MangaDex the model is the
+                                            // plain image URL; extension sources use their source-aware
+                                            // model so the request goes through the extension's client
+                                            // + headers.
+                                            val coilModel = streamModelSegments
+                                                .getOrNull(segIdx)?.getOrNull(pi) ?: pageModel.imageUrl
+                                            if (ratio != null && ratio > 0f) {
+                                                // True height known: size the slot exactly so the list never
+                                                // relayouts when the page finishes decoding. aspectRatio
+                                                // derives the height from the item's ACTUAL measured width,
+                                                // and the ratio comes from the same decode that gets
+                                                // rendered, so slot and bitmap always match to the pixel —
+                                                // no hairline seams between consecutive pages.
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .aspectRatio(ratio)
+                                                        .clipToBounds()
+                                                        .testTag("reader_page_${segIdx}_$pi")
+                                                ) {
+                                                    ReaderPageImage(
+                                                        model = coilModel,
+                                                        contentDescription = "Page ${pi + 1}",
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        contentScale = ContentScale.FillWidth,
+                                                        spinnerColor = contentTextColor,
+                                                        decodeWidthPx = webtoonDecodeWidth,
+                                                        crossfade = webtoonFade,
+                                                        rgb565 = useRgb565
+                                                    )
+                                                }
+                                            } else {
+                                                // Ratio not known yet: bounded fallback height so the
+                                                // image can load; it snaps to its true height once the
+                                                // prewarm learns it (one-time resize, pages far ahead are
+                                                // already pre-sized). Clipped so an overshooting guess
+                                                // can't bleed over the next page.
+                                                ReaderPageImage(
+                                                    model = coilModel,
+                                                    contentDescription = "Page ${pi + 1}",
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .height(fallbackPageHeight)
+                                                        .clipToBounds()
+                                                        .testTag("reader_page_${segIdx}_$pi"),
+                                                    contentScale = ContentScale.FillWidth,
+                                                    spinnerColor = contentTextColor,
+                                                    decodeWidthPx = webtoonDecodeWidth,
+                                                    crossfade = webtoonFade,
+                                                    rgb565 = useRgb565
+                                                )
                                             }
-                                        )
+                                        }
                                     } else {
-                                        val ratio = pageAspectRatios[pageModel.toString()]
+                                        val ratio = pageAspectRatios[pageKey(pageModel)]
                                         if (ratio != null && ratio > 0f) {
                                             // True height known: size the slot exactly so the list never
                                             // relayouts when the strip finishes decoding. aspectRatio
