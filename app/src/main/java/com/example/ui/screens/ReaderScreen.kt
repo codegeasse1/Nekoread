@@ -440,9 +440,10 @@ fun ReaderScreen(
     //     (through the source's own client + Descrambler, single-flighted via WebtoonPageCache)
     //     to an on-device cache file, then its true aspect ratio is read from that file
     //     (bounds-only decode — no network) so slots are pre-sized and the tall/short decision is
-    //     made before the page scrolls in. TALL strips (display height > ~2.5 screens) are
-    //     rendered by the subsampling view region-decoding straight from the file — never a giant
-    //     full-height bitmap, which is what keeps long strips smooth. SHORT pages render with Coil
+    //     made before the page scrolls in. TALL strips (height > 3x width — yomi/mihon's
+    //     ImageUtil.isTallImage rule) are rendered by the subsampling view region-decoding
+    //     straight from the file — never a giant full-height bitmap, which is what keeps long
+    //     strips smooth. Everything else (the vast majority of manhwa pages) renders with Coil
     //     FROM THE FILE: the display-size decode is warmed into Coil's memory cache so the visible
     //     item pops instantly, and every re-scroll is a local disk read instead of a repeat
     //     network fetch + descramble (the thing that made slow sources like comix stutter). Pages
@@ -549,7 +550,7 @@ fun ReaderScreen(
                                     // (and every re-scroll is free). Tall strips are left to the
                                     // subsampling view's region-decode from the file.
                                     val d = WebtoonPageCache.dimensions(m, webtoonCacheDir)
-                                    val tall = d == null || d.second.toFloat() > d.first.toFloat() * 1.5f
+                                    val tall = d == null || WebtoonPageCache.isTallPage(d.first, d.second)
                                     if (!tall) {
                                         runCatching {
                                             imageLoader.execute(

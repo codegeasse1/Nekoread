@@ -12,11 +12,9 @@ import androidx.core.view.isVisible
 import com.example.data.reader.WebtoonPageCache
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /**
  * Holder of the yomi webtoon reader for a single page of a chapter (ported from yomi's
@@ -71,15 +69,16 @@ class WebtoonPageHolder(
         refreshPlaceholderHeight()
         loadJob = scope.launch {
             try {
-                // Pre-size the holder to the page's REAL height (when its cache file is already on
-                // disk — the prewarm downloads pages well ahead, so nearly every page is known) so
-                // loading the image never relayouts the list. That per-image relayout (viewport ->
-                // image height) is a major scroll-stutter source. Unknown pages keep the
-                // viewport-height placeholder and settle once the image lands.
-                val d = WebtoonPageCache.dimensions(item.desc, viewer.cacheDir)
+                // Pre-size the holder to the page's REAL height from cached metadata (the prewarm
+                // downloads pages well ahead, and meta() is cached after the first read, so nearly
+                // every page is known) — loading the image then never relayouts the list. That
+                // per-image relayout (viewport -> image height) is a major scroll-stutter source.
+                // Unknown pages keep the viewport-height placeholder and settle once the image
+                // lands.
+                var meta = WebtoonPageCache.meta(item.desc, viewer.cacheDir)
                 val rw = viewer.recycler.width.takeIf { it > 0 } ?: frame.context.resources.displayMetrics.widthPixels
-                val targetH = if (d != null) {
-                    (rw.toFloat() * d.second / d.first).toInt().coerceAtLeast(1)
+                val targetH = if (meta != null) {
+                    (rw.toFloat() * meta.height / meta.width).toInt().coerceAtLeast(1)
                 } else {
                     WRAP_CONTENT
                 }
@@ -87,14 +86,14 @@ class WebtoonPageHolder(
                 if (lp != null && lp.height != targetH) lp.height = targetH
 
                 val file = viewer.loadPage(item)
-                // Sniff the strip's height ratio off the UI thread so the viewer can pick the fast
-                // Coil path for short pages (like yomi) and reserve region-decoding for tall strips.
-                val tall = withContext(Dispatchers.IO) { viewer.isTallPage(file) }
+                // Everything the render needs (dims, animated, tall) comes from cached metadata —
+                // no bounds decode, no header read, no isTallPage sniff during the bind.
+                if (meta == null) meta = WebtoonPageCache.meta(item.desc, viewer.cacheDir)
                 frame.decodeWidthPx = viewer.decodeWidth
                 frame.setImage(
                     file,
-                    frame.isAnimatedFile(file),
-                    viewer.pageConfig.copy(isTallImage = tall),
+                    meta?.isAnimated == true,
+                    viewer.pageConfig.copy(isTallImage = meta?.isTall),
                 )
             } catch (e: CancellationException) {
                 throw e

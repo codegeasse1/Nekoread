@@ -26,8 +26,24 @@ import kotlinx.coroutines.withContext
  */
 object WebtoonPageCache {
 
+    /**
+     * A strip is "tall" only when its height is more than 3x its width — exactly yomi/mihon's
+     * ImageUtil.isTallImage rule. (Our earlier 1.5x threshold sent every ordinary manhwa page
+     * through the heavy region-decoding subsampling view; yomi decodes those whole at display
+     * width instead, which is far cheaper to scroll.) Everything with h ≤ 3w decodes once at the
+     * strip's display width via Coil; only genuine long strips region-decode from disk. Because
+     * Coil scales to the display width (~1080px), a ≤3x page is at most ~3240px tall, safely under
+     * the 4096px hardware-texture limit.
+     */
+    const val TALL_RATIO = 3f
+
+    fun isTallPage(width: Int, height: Int): Boolean =
+        if (width <= 0 || height <= 0) true
+        else height.toFloat() > width.toFloat() * TALL_RATIO
+
     private val inFlight = ConcurrentHashMap<String, CompletableDeferred<File>>()
     private val dims = ConcurrentHashMap<String, Pair<Int, Int>>()
+    private val animated = ConcurrentHashMap<String, Boolean>()
 
     // Downloads run in this shared scope so no single caller's cancellation (e.g. a page item
     // scrolling off-screen mid-download) can kill a fetch that other callers are awaiting.
@@ -118,6 +134,66 @@ object WebtoonPageCache {
         }
     }
 
+    /**
+     * Everything the page holder needs to render [desc] without touching the file: intrinsic size,
+     * whether it is animated (gif/webp) and whether it is a tall strip (h > 3w). Computed once on
+     * IO from the on-disk file and cached, so a bind during scrolling is a couple of map lookups —
+     * no bounds decode, no header read on the main thread.
+     *
+     * Returns null when the page's bytes are not on disk yet (the holder then shows its viewport
+     * placeholder and re-queries after the download lands).
+     */
+    suspend fun meta(desc: MangaSource.PageDescriptor, dir: File): PageMeta? {
+        val key = keyFor(desc.imageUrl)
+        dims[key]?.let { d ->
+            val anim = animated[key] ?: return@let null
+            return PageMeta(d.first, d.second, anim, isTallPage(d.first, d.second))
+        }
+        val f = targetFile(key, dir)
+        if (!f.exists() || f.length() == 0L) return null
+        return withContext(Dispatchers.IO) {
+            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(f.absolutePath, opts)
+            val d = if (opts.outWidth > 0 && opts.outHeight > 0) {
+                Pair(opts.outWidth, opts.outHeight)
+            } else {
+                null
+            }
+            if (d == null) {
+                null
+            } else {
+                dims[key] = d
+                val anim = isAnimatedFile(f)
+                animated[key] = anim
+                PageMeta(d.first, d.second, anim, isTallPage(d.first, d.second))
+            }
+        }
+    }
+
+    /** True if [file] looks like an animated GIF or animated WebP (cheap 32-byte header read). */
+    private fun isAnimatedFile(file: File): Boolean {
+        return try {
+            val bytes = ByteArray(32)
+            val raf = java.io.RandomAccessFile(file, "r")
+            try {
+                val n = raf.read(bytes)
+                if (n < 12) return false
+                val head = String(bytes, 0, n.coerceAtMost(12), Charsets.US_ASCII)
+                if (head.startsWith("GIF8")) return true
+                if (head.startsWith("RIFF") && n >= 12 && head.substring(8, 12) == "WEBP") {
+                    if (n >= 24 && head.substring(12, 16) == "VP8X") {
+                        return (bytes[20].toInt() and 0x02) != 0
+                    }
+                }
+                false
+            } finally {
+                raf.close()
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     /** Deletes the oldest cache files when the directory exceeds the size cap (runs rarely). */
     private fun maybeEvict(dir: File) {
         if (writesSinceEvict.incrementAndGet() < EVICT_EVERY_N_WRITES) return
@@ -135,3 +211,11 @@ object WebtoonPageCache {
         }
     }
 }
+
+/** Everything a page holder needs to render a page once its bytes are on disk. */
+data class PageMeta(
+    val width: Int,
+    val height: Int,
+    val isAnimated: Boolean,
+    val isTall: Boolean,
+)

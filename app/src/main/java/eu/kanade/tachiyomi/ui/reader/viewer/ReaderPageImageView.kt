@@ -23,6 +23,7 @@ import coil.size.Dimension
 import coil.size.Size
 import com.davemorrissey.labs.subscaleview.ImageSource
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
+import com.example.data.reader.WebtoonPageCache
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonBorderDetector
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonSubsamplingImageView
 import kotlinx.coroutines.CoroutineScope
@@ -37,15 +38,16 @@ import java.io.File
 import java.io.FileInputStream
 
 /**
- * The webtoon page view ported from yomi's reader. Exactly like yomi, SHORT webtoon pages
- * (height ≤ 1.5x width) are decoded ONCE by Coil at the strip's display width and shown in a plain
- * [ImageView] — a single, memory-cached decode (warmed by the reader's preload loop) instead of a
- * per-bind region-decode pipeline, which is what keeps scrolling smooth. TALL strips (long webtoon
- * pages) are region-decoded by a [SubsamplingScaleImageView] straight from the page's on-device
- * cache file (never a giant full-height bitmap in memory — that is what keeps long-strip scrolling
- * smooth on slow sources like comix). Animated images (gif / animated webp) fall back to a plain
- * [ImageView] fed by Coil. Touches are ignored on the image itself — the reader's scroll container
- * (or the whole-strip zoom handled by the viewer frame) owns all gestures, exactly like yomi.
+ * The webtoon page view ported from yomi's reader. Exactly like yomi, non-tall webtoon pages
+ * (height ≤ 3x width — mihon's ImageUtil.isTallImage rule) are decoded ONCE by Coil at the strip's
+ * display width and shown in a plain [ImageView] — a single, memory-cached decode (warmed by the
+ * reader's preload loop) instead of a per-bind region-decode pipeline, which is what keeps
+ * scrolling smooth. TALL strips (long webtoon pages, h > 3w) are region-decoded by a
+ * [SubsamplingScaleImageView] straight from the page's on-device cache file (never a giant
+ * full-height bitmap in memory — that is what keeps long-strip scrolling smooth on slow sources
+ * like comix). Animated images (gif / animated webp) fall back to a plain [ImageView] fed by Coil.
+ * Touches are ignored on the image itself — the reader's scroll container (or the whole-strip zoom
+ * handled by the viewer frame) owns all gestures, exactly like yomi.
  */
 open class ReaderPageImageView @JvmOverloads constructor(
     context: Context,
@@ -118,7 +120,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
             prepareAnimatedImageView()
             setAnimatedImage(file, config)
         } else {
-            // yomi's fast path: SHORT webtoon pages (on hardware-capable devices, without border
+            // yomi's fast path: non-tall webtoon pages (on hardware-capable devices, without border
             // cropping) are decoded by Coil into a plain ImageView — a single, memory-cached decode
             // (warmed by the reader's preload loop). TALL strips and cropped pages use the
             // subsampling view's region-decode from the cache file.
@@ -225,16 +227,14 @@ open class ReaderPageImageView @JvmOverloads constructor(
         }
     }
 
-    /** True if [file] is a tall webtoon strip (height > 1.5x width) — region-decoded by the
-     *  subsampling view instead of decoded whole via Coil. Bounds-only decode; falls back to tall. */
+    /** True if [file] is a tall webtoon strip (height > 3x width — yomi/mihon's rule) — region-
+     *  decoded by the subsampling view instead of decoded whole via Coil. Bounds-only decode; falls
+     *  back to tall. */
     private fun isTallImageFile(file: File): Boolean {
         return try {
             val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
             android.graphics.BitmapFactory.decodeFile(file.absolutePath, opts)
-            val w = opts.outWidth
-            val h = opts.outHeight
-            if (w <= 0 || h <= 0) true
-            else h.toFloat() > w.toFloat() * 1.5f
+            WebtoonPageCache.isTallPage(opts.outWidth, opts.outHeight)
         } catch (e: Throwable) {
             true
         }

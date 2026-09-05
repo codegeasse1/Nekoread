@@ -36,8 +36,14 @@ class WebtoonViewer(context: Context) {
     /** Distance to scroll when the user taps on one side of the recycler view. */
     private val scrollDistance = context.resources.displayMetrics.heightPixels * 3 / 4
 
+    /** How far beyond the viewport the layout manager creates/binds pages, so pages attach (from
+     *  the warmed Coil memory cache / cached metadata) well before they scroll into view. Larger
+     *  than yomi's tap distance on purpose: pages are cheap to attach now (mostly memory-cache
+     *  hits), and the extra runway removes blank-then-pop while flinging. */
+    private val extraLayoutSpace = context.resources.displayMetrics.heightPixels * 2
+
     /** Layout manager of the recycler view. */
-    private val layoutManager = WebtoonLayoutManager(context, scrollDistance)
+    private val layoutManager = WebtoonLayoutManager(context, extraLayoutSpace)
 
     /** Adapter of the recycler view. */
     private val adapter = WebtoonAdapter(this)
@@ -207,16 +213,14 @@ class WebtoonViewer(context: Context) {
         }
     }
 
-    /** True if [file] is a tall webtoon strip (height > 1.5x width) — the ones SSIV region-decodes
-     *  from disk instead of decoding whole via Coil. Bounds-only decode; falls back to tall on error. */
+    /** True if [file] is a tall webtoon strip (height > 3x width — yomi/mihon's rule) — the ones
+     *  SSIV region-decodes from disk instead of decoding whole via Coil. Bounds-only decode; falls
+     *  back to tall on error. */
     fun isTallPage(file: File): Boolean {
         return try {
             val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(file.absolutePath, opts)
-            val w = opts.outWidth
-            val h = opts.outHeight
-            if (w <= 0 || h <= 0) true
-            else h.toFloat() > w.toFloat() * 1.5f
+            WebtoonPageCache.isTallPage(opts.outWidth, opts.outHeight)
         } catch (e: Throwable) {
             true
         }
