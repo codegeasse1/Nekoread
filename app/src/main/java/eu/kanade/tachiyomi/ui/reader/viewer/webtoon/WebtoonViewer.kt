@@ -62,8 +62,10 @@ class WebtoonViewer(context: Context) {
     /** Whether the page image viewer crops the (often white/black) borders off each strip. */
     var cropBorders: Boolean = false
         set(value) {
+            if (field == value) return
             field = value
             pageConfig = pageConfig.copy(cropBorders = value)
+            reloadPages()
         }
 
     /** Whether double-tapping a page zooms it in/out (yomi's "Double tap to zoom"). */
@@ -81,8 +83,14 @@ class WebtoonViewer(context: Context) {
     var decodeWidth: Int = 0
 
     /** Tall strips (the chunked decode path) decode as RGB_565 at Low image quality — half the
-     *  memory per chunk. Set by the reader; mirrors the short-page path's quality handling. */
+     *  memory per chunk. Set by the reader; mirrors the short-page path's quality handling.
+     *  Changing it re-renders the live pages (reloadPages), like the other per-page options. */
     var decodeRgb565: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            reloadPages()
+        }
 
     /** Rendering config for each page (fit-width, pinch-to-zoom, ...). */
     var pageConfig: ReaderPageImageView.Config = ReaderPageImageView.Config(
@@ -172,6 +180,20 @@ class WebtoonViewer(context: Context) {
         if (this.trailer == trailer) return
         adapter.submit(adapter.items, trailer)
         this.trailer = trailer
+    }
+
+    /** Re-binds every currently bound page holder so a render-config change (crop borders, image
+     *  quality) takes effect immediately instead of only on the next bind. Scroll position is
+     *  untouched — bind keeps the holder's pre-sized real height. */
+    fun reloadPages() {
+        for (i in 0 until recycler.childCount) {
+            val holder = recycler.getChildViewHolder(recycler.getChildAt(i)) as? WebtoonPageHolder
+                ?: continue
+            val pos = holder.bindingAdapterPosition
+            if (pos == RecyclerView.NO_POSITION) continue
+            val item = adapter.items.getOrNull(pos) as? WebtoonItem.Page ?: continue
+            holder.bind(item)
+        }
     }
 
     /** Applies the reader background and chrome text color. */
