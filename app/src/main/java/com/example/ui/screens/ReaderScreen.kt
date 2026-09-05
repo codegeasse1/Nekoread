@@ -229,7 +229,7 @@ fun ReaderScreen(
         }
     }
     val pagedColorFilter = remember(grayInvMatrix) {
-        grayInvMatrix?.let { ColorFilter.colorMatrix(ColorMatrix.from(it)) }
+        grayInvMatrix?.let { ColorFilter.colorMatrix(ColorMatrix(it.getArray())) }
     }
     val webtoonColorFilter = remember(grayInvMatrix) {
         grayInvMatrix?.let { android.graphics.ColorMatrixColorFilter(it) }
