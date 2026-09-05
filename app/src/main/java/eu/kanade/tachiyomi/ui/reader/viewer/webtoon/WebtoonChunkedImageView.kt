@@ -223,7 +223,10 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
      *  The chunked view fills its holder, so the holder's `top` (relative to the recycler content)
      *  is the page's position: when scrolled down by S, holder.top = itemTop - S, so the viewport
      *  covers page rows [-holder.top, -holder.top + viewportHeight). */
-    private fun viewportTop(): Int = -(parent as? View)?.top ?: 0
+    private fun viewportTop(): Int {
+        val holder = parent as? View ?: return 0
+        return -holder.top
+    }
 
     private fun viewportHeight(): Int {
         var p = parent
