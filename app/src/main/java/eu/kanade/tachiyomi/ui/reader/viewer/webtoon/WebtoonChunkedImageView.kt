@@ -259,7 +259,7 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
     /** One decode worker: pulls the missing chunk nearest the viewport's centre and decodes it,
      *  repeating until the window is fully decoded (or the page generation changed / cancelled).
      *  Several workers run concurrently so a fast fling fills blank regions quickly. */
-    private suspend fun decodeWorker(gen: Long) {
+    private suspend fun CoroutineScope.decodeWorker(gen: Long) {
         while (isActive && gen == generation) {
             val idx = nextChunkToDecode() ?: return
             inFlight.add(idx)
