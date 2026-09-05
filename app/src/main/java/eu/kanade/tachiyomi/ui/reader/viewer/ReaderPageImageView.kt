@@ -25,6 +25,7 @@ import com.davemorrissey.labs.subscaleview.ImageSource
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import com.example.data.reader.WebtoonPageCache
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonBorderDetector
+import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonChunkedImageView
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonSubsamplingImageView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -122,13 +123,17 @@ open class ReaderPageImageView @JvmOverloads constructor(
         } else {
             // yomi's fast path: non-tall webtoon pages (on hardware-capable devices, without border
             // cropping) are decoded by Coil into a plain ImageView — a single, memory-cached decode
-            // (warmed by the reader's preload loop). TALL strips and cropped pages use the
-            // subsampling view's region-decode from the cache file.
+            // (warmed by the reader's preload loop). TALL strips are decoded ONCE into display-width
+            // chunks by the chunked view (no SSIV tile churn during scroll); only cropped pages
+            // keep using the subsampling view's region-decode from the cache file.
             val isTall = config.isTallImage ?: isTallImageFile(file)
             val canUseHardware = config.canUseHardwareBitmap ?: (android.os.Build.VERSION.SDK_INT >= 26)
             if (isWebtoon && !isTall && canUseHardware && !config.cropBorders) {
                 prepareShortImageView()
                 setShortImage(file, config)
+            } else if (isWebtoon && isTall && !config.cropBorders) {
+                prepareChunkedImageView()
+                setChunkedImage(file, config)
             } else {
                 prepareNonAnimatedImageView()
                 setNonAnimatedImage(file, config)
@@ -142,6 +147,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
         pageView?.let {
             when (it) {
                 is SubsamplingScaleImageView -> it.recycle()
+                is WebtoonChunkedImageView -> it.recycle()
                 is ImageView -> it.dispose()
             }
             it.isVisible = false
@@ -227,9 +233,8 @@ open class ReaderPageImageView @JvmOverloads constructor(
         }
     }
 
-    /** True if [file] is a tall webtoon strip (height > 3x width — yomi/mihon's rule) — region-
-     *  decoded by the subsampling view instead of decoded whole via Coil. Bounds-only decode; falls
-     *  back to tall. */
+    /** True if [file] is a tall webtoon strip (height > 3x width — yomi/mihon's rule) — chunk-decoded
+     *  by the chunked view instead of decoded whole via Coil. Bounds-only decode; falls back to tall. */
     private fun isTallImageFile(file: File): Boolean {
         return try {
             val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -238,6 +243,23 @@ open class ReaderPageImageView @JvmOverloads constructor(
         } catch (e: Throwable) {
             true
         }
+    }
+
+    private fun prepareChunkedImageView() {
+        if (pageView is WebtoonChunkedImageView) return
+        removeView(pageView)
+        pageView = WebtoonChunkedImageView(context)
+        addView(pageView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+    }
+
+    private fun setChunkedImage(
+        file: File,
+        config: Config,
+    ) = (pageView as? WebtoonChunkedImageView)?.apply {
+        onReady = { this@ReaderPageImageView.onImageLoaded() }
+        onError = { this@ReaderPageImageView.onImageLoadError() }
+        val decodeW = if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels
+        setChunkedImage(file, decodeW, config.decodeRgb565)
     }
 
     private fun prepareShortImageView() {
@@ -317,7 +339,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
     fun getImageView(): View? = pageView
 
     /** Configuration for a single page render. [isTallImage] picks yomi's fast Coil path vs the
-     *  SSIV region-decode path for webtoon pages; [minimumScaleType]/[cropBorders]/[webtoonSmartFit]
+     *  chunked/SSIV paths for webtoon pages; [minimumScaleType]/[cropBorders]/[webtoonSmartFit]
      *  configure the non-animated (SSIV) render; the rest mirror yomi's config. */
     data class Config(
         val zoomDuration: Int = 200,
@@ -327,6 +349,9 @@ open class ReaderPageImageView @JvmOverloads constructor(
         val enablePinchToZoom: Boolean = true,
         val isTallImage: Boolean? = null,
         val canUseHardwareBitmap: Boolean? = null,
+        // Tall-strip chunks decode as RGB_565 at Low image quality — half the memory per chunk for
+        // nearly identical appearance (webtoon art is flat colors), mirroring the short-page path.
+        val decodeRgb565: Boolean = false,
     )
 
     /** True if [file] looks like an animated GIF or animated WebP. */

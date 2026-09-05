@@ -93,7 +93,10 @@ class WebtoonPageHolder(
                 frame.setImage(
                     file,
                     meta?.isAnimated == true,
-                    viewer.pageConfig.copy(isTallImage = meta?.isTall),
+                    viewer.pageConfig.copy(
+                        isTallImage = meta?.isTall,
+                        decodeRgb565 = viewer.decodeRgb565,
+                    ),
                 )
             } catch (e: CancellationException) {
                 throw e

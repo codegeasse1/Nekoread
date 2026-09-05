@@ -767,6 +767,7 @@ fun ReaderScreen(
                         doubleTapZoom = doubleTapZoom,
                         tapToChangePages = tapToChangePages,
                         decodeWidth = displayDecodeWidth,
+                        rgb565 = useRgb565,
                         autoScroll = autoScroll,
                         autoScrollSpeedDp = autoScrollSpeedDp,
                         initialPageIndex = initialPageIndex,

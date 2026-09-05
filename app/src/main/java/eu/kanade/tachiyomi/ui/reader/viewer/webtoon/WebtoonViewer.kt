@@ -37,10 +37,12 @@ class WebtoonViewer(context: Context) {
     private val scrollDistance = context.resources.displayMetrics.heightPixels * 3 / 4
 
     /** How far beyond the viewport the layout manager creates/binds pages, so pages attach (from
-     *  the warmed Coil memory cache / cached metadata) well before they scroll into view. Larger
-     *  than yomi's tap distance on purpose: pages are cheap to attach now (mostly memory-cache
-     *  hits), and the extra runway removes blank-then-pop while flinging. */
-    private val extraLayoutSpace = context.resources.displayMetrics.heightPixels * 2
+     *  the warmed Coil memory cache / cached metadata / the chunked decode) well before they scroll
+     *  into view. One screen matches yomi: binds are cheap now (Coil memory-cache hits for short
+     *  pages, one chunk decode for tall strips), so a full extra screen of runway is enough — a
+     *  second screen would only keep more decoded page bitmaps alive (the 2x we used before was
+     *  compensating for the SSIV view's slow per-bind region-decode). */
+    private val extraLayoutSpace = context.resources.displayMetrics.heightPixels
 
     /** Layout manager of the recycler view. */
     private val layoutManager = WebtoonLayoutManager(context, extraLayoutSpace)
@@ -77,6 +79,10 @@ class WebtoonViewer(context: Context) {
     /** Target decode width (px) for short webtoon pages that render via Coil (yomi's fast path).
      *  Set by the reader from the quality-scaled display width; 0 means the screen width. */
     var decodeWidth: Int = 0
+
+    /** Tall strips (the chunked decode path) decode as RGB_565 at Low image quality — half the
+     *  memory per chunk. Set by the reader; mirrors the short-page path's quality handling. */
+    var decodeRgb565: Boolean = false
 
     /** Rendering config for each page (fit-width, pinch-to-zoom, ...). */
     var pageConfig: ReaderPageImageView.Config = ReaderPageImageView.Config(
