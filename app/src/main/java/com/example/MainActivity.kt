@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CollectionsBookmark
@@ -39,7 +38,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -155,8 +153,12 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             NekoReadTheme {
-                // Ambient gradient + glow blobs behind the whole app: the translucent
-                // glass surfaces on top pick up these colors for the frosted look.
+                // Ambient gradient + glow spots behind the whole app: the translucent
+                // glass surfaces on top pick up these colors for the frosted look. The glows are
+                // drawn as radial gradients (NOT Modifier.blur) — blur on large root layers forces
+                // a per-frame software/GPU re-blur on many devices (API < 31 especially) and is the
+                // classic cause of whole-app scroll jank; a radial falloff looks identical and is
+                // free.
                 Box(modifier = Modifier.fillMaxSize()) {
                     Box(
                         modifier = Modifier
@@ -171,16 +173,18 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier
                             .size(380.dp)
                             .offset(x = (-110).dp, y = (-80).dp)
-                            .background(GlowViolet, CircleShape)
-                            .blur(90.dp)
+                            .background(
+                                Brush.radialGradient(listOf(GlowViolet, GlowViolet.copy(alpha = 0f)))
+                            )
                     )
                     Box(
                         modifier = Modifier
                             .size(440.dp)
                             .align(Alignment.BottomEnd)
                             .offset(x = 80.dp, y = 100.dp)
-                            .background(GlowCyan, CircleShape)
-                            .blur(120.dp)
+                            .background(
+                                Brush.radialGradient(listOf(GlowCyan, GlowCyan.copy(alpha = 0f)))
+                            )
                     )
                     MainAppScreen(viewModel = viewModel)
                 }

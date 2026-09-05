@@ -64,6 +64,15 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
     private var infoJob: Job? = null
     private var decodeJob: Job? = null
 
+    /** Chunk indices currently being decoded by a worker (so two workers never decode the same
+     *  chunk). Bookkeeping happens only on the main thread (workers decode on IO). */
+    private val inFlight = mutableSetOf<Int>()
+
+    /** How many chunk-decode workers run in parallel per page. Decoding is the reader's per-fling
+     *  bottleneck (each 2k-px chunk takes tens of ms), so two workers fill the viewport window
+     *  roughly twice as fast and fast flings stop hitting blank patches. */
+    private val decodeWorkers = 2
+
     /** Bumped on every setChunkedImage/recycle/detach so stale in-flight work recognizes itself. */
     private var generation = 0L
 
@@ -152,6 +161,7 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
         infoJob = null
         decodeJob?.cancel()
         decodeJob = null
+        inFlight.clear()
         info = null
         decodeWindow = null
         keepRange = null
@@ -241,15 +251,26 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
         if (decodeJob?.isActive == true) return
         val gen = generation
         decodeJob = scope?.launch {
-            while (isActive && gen == generation) {
-                val idx = nextChunkToDecode() ?: break
+            val workers = List(decodeWorkers) { launch { decodeWorker(gen) } }
+            workers.forEach { it.join() }
+        }
+    }
+
+    /** One decode worker: pulls the missing chunk nearest the viewport's centre and decodes it,
+     *  repeating until the window is fully decoded (or the page generation changed / cancelled).
+     *  Several workers run concurrently so a fast fling fills blank regions quickly. */
+    private suspend fun decodeWorker(gen: Long) {
+        while (isActive && gen == generation) {
+            val idx = nextChunkToDecode() ?: return
+            inFlight.add(idx)
+            try {
                 val bmp = decodeChunk(idx) ?: run {
                     if (gen == generation) onError?.invoke()
-                    break
+                    return
                 }
                 if (gen != generation) {
                     bmp.recycle()
-                    return@launch
+                    return
                 }
                 if (!chunkWanted(idx)) {
                     // Scrolled out of the keep range while decoding — free it instead of caching.
@@ -262,6 +283,8 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
                     readyFired = true
                     onReady?.invoke()
                 }
+            } finally {
+                inFlight.remove(idx)
             }
         }
     }
@@ -275,6 +298,7 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
         val center = viewportTop() + viewportHeight() / 2
         for (i in win) {
             if (i < 0 || i >= bitmaps.size || bitmaps[i] != null) continue
+            if (i in inFlight) continue
             val dist = abs(i * chunkHeight + chunkHeight / 2 - center)
             if (dist < bestDist) {
                 bestDist = dist

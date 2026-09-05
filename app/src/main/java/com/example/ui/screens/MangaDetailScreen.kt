@@ -61,7 +61,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -237,13 +236,14 @@ fun MangaDetailScreen(
                         .fillMaxWidth()
                         .height(280.dp)
                 ) {
-                    // Blurred Cover Background
+                    // Cover background (no blur: blur on the hero forces a per-frame software/GPU
+                    // re-blur while the list scrolls, which is a major scroll-stutter source on
+                    // many devices — the gradient overlay below already keeps the text readable).
                     AsyncImage(
                         model = coverModelFor(manga),
                         contentDescription = null,
                         modifier = Modifier
-                            .fillMaxSize()
-                            .blur(20.dp),
+                            .fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
 

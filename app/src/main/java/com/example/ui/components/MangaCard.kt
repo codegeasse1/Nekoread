@@ -98,14 +98,14 @@ fun MangaGridCard(
                     .fillMaxWidth()
                     .aspectRatio(0.72f)
             ) {
-                // State-aware cover: a small spinner ONLY while the thumbnail is genuinely loading,
-                // and a dim broken-image tile on failure (never an endless spinner). With Coil's
-                // disk cache a loaded cover shows instantly when you come back to the screen.
+                // State-aware cover: a static placeholder while the thumbnail loads (no spinner, no
+                // crossfade — during a fast catalog fling many cards load at once, and each animated
+                // spinner/crossfade costs frames), and a dim broken-image tile on failure. With
+                // Coil's disk cache a loaded cover shows instantly when you come back to the screen.
                 val ctx = LocalContext.current
                 SubcomposeAsyncImage(
                     model = ImageRequest.Builder(ctx)
                         .data(coverModelFor(manga))
-                        .crossfade(true)
                         .size(360, 500)
                         .memoryCacheKey("cover:${manga.id}")
                         .diskCacheKey("cover:${manga.id}:${manga.coverUrl}")
@@ -115,15 +115,10 @@ fun MangaGridCard(
                     contentScale = ContentScale.Crop,
                     loading = {
                         Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
-                            )
-                        }
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                        )
                     },
                     error = {
                         Box(
