@@ -4,11 +4,11 @@ import android.content.Context
 import android.graphics.PointF
 import android.graphics.RectF
 import android.graphics.drawable.Animatable
-import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.util.AttributeSet
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.FrameLayout
 import android.widget.ImageView
 import androidx.annotation.AttrRes
@@ -37,11 +37,11 @@ import java.io.File
 import java.io.FileInputStream
 
 /**
- * The webtoon page view ported from yomi's reader: every non-animated page is drawn by a
- * [SubsamplingScaleImageView]. Exactly like yomi, SHORT webtoon pages (height ≤ 1.5x width) are
- * decoded ONCE by Coil at the strip's display width and handed to the subsampling view as a bitmap
- * base layer — a fast, memory-bounded decode with no per-bind region-decode pipeline. TALL strips
- * (long webtoon pages) are region-decoded by the subsampling view straight from the page's on-device
+ * The webtoon page view ported from yomi's reader. Exactly like yomi, SHORT webtoon pages
+ * (height ≤ 1.5x width) are decoded ONCE by Coil at the strip's display width and shown in a plain
+ * [ImageView] — a single, memory-cached decode (warmed by the reader's preload loop) instead of a
+ * per-bind region-decode pipeline, which is what keeps scrolling smooth. TALL strips (long webtoon
+ * pages) are region-decoded by a [SubsamplingScaleImageView] straight from the page's on-device
  * cache file (never a giant full-height bitmap in memory — that is what keeps long-strip scrolling
  * smooth on slow sources like comix). Animated images (gif / animated webp) fall back to a plain
  * [ImageView] fed by Coil. Touches are ignored on the image itself — the reader's scroll container
@@ -118,8 +118,19 @@ open class ReaderPageImageView @JvmOverloads constructor(
             prepareAnimatedImageView()
             setAnimatedImage(file, config)
         } else {
-            prepareNonAnimatedImageView()
-            setNonAnimatedImage(file, config)
+            // yomi's fast path: SHORT webtoon pages (on hardware-capable devices, without border
+            // cropping) are decoded by Coil into a plain ImageView — a single, memory-cached decode
+            // (warmed by the reader's preload loop). TALL strips and cropped pages use the
+            // subsampling view's region-decode from the cache file.
+            val isTall = config.isTallImage ?: isTallImageFile(file)
+            val canUseHardware = config.canUseHardwareBitmap ?: (android.os.Build.VERSION.SDK_INT >= 26)
+            if (isWebtoon && !isTall && canUseHardware && !config.cropBorders) {
+                prepareShortImageView()
+                setShortImage(file, config)
+            } else {
+                prepareNonAnimatedImageView()
+                setNonAnimatedImage(file, config)
+            }
         }
     }
 
@@ -191,58 +202,26 @@ open class ReaderPageImageView @JvmOverloads constructor(
             },
         )
 
-        val imageView = this
-        val isTall = config.isTallImage ?: isTallImageFile(file)
         val canUseHardware = config.canUseHardwareBitmap ?: (android.os.Build.VERSION.SDK_INT >= 26)
+        setHardwareConfig(canUseHardware)
 
-        // yomi's fast path: SHORT webtoon pages (on devices that support hardware bitmaps) are
-        // decoded ONCE by Coil at the strip's display width, then handed to the subsampling view as
-        // a bitmap base layer — one fast decode instead of the per-bind region-decode pipeline.
-        // Border cropping needs the region decoder, so cropped pages stay on the file path.
-        if (isWebtoon && !isTall && canUseHardware && !config.cropBorders) {
-            val decodeW = if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels
-            val request = ImageRequest.Builder(context)
-                .data(file)
-                .size(Size(decodeW, Dimension.Undefined))
-                .memoryCachePolicy(CachePolicy.DISABLED)
-                .diskCachePolicy(CachePolicy.DISABLED)
-                .target(
-                    onSuccess = { drawable ->
-                        val bmp = (drawable as? BitmapDrawable)?.bitmap
-                        if (bmp != null) {
-                            imageView.setImage(ImageSource.bitmap(bmp))
-                        } else {
-                            imageView.setImage(ImageSource.provider { FileInputStream(file) })
-                        }
-                        imageView.isVisible = true
-                    },
-                    onError = {
-                        imageView.setImage(ImageSource.provider { FileInputStream(file) })
-                        imageView.isVisible = true
-                    },
-                )
-                .build()
-            context.imageLoader.enqueue(request)
-        } else {
-            setHardwareConfig(canUseHardware)
-            if (config.webtoonSmartFit && scope != null) {
-                smartFitJob = scope?.launch {
-                    val bounds = withContext(Dispatchers.IO) {
-                        runCatching {
-                            WebtoonBorderDetector.detectContentBounds(FileInputStream(file))
-                        }.getOrNull()
-                    }
-                    if (bounds != null) {
-                        setImage(ImageSource.provider { FileInputStream(file) }.region(bounds))
-                    } else {
-                        setImage(ImageSource.provider { FileInputStream(file) })
-                    }
-                    isVisible = true
+        if (config.webtoonSmartFit && scope != null) {
+            smartFitJob = scope?.launch {
+                val bounds = withContext(Dispatchers.IO) {
+                    runCatching {
+                        WebtoonBorderDetector.detectContentBounds(FileInputStream(file))
+                    }.getOrNull()
                 }
-            } else {
-                setImage(ImageSource.provider { FileInputStream(file) })
+                if (bounds != null) {
+                    setImage(ImageSource.provider { FileInputStream(file) }.region(bounds))
+                } else {
+                    setImage(ImageSource.provider { FileInputStream(file) })
+                }
                 isVisible = true
             }
+        } else {
+            setImage(ImageSource.provider { FileInputStream(file) })
+            isVisible = true
         }
     }
 
@@ -259,6 +238,46 @@ open class ReaderPageImageView @JvmOverloads constructor(
         } catch (e: Throwable) {
             true
         }
+    }
+
+    private fun prepareShortImageView() {
+        if (pageView is ImageView && pageView !is SubsamplingScaleImageView) return
+        removeView(pageView)
+        pageView = ImageView(context).apply {
+            adjustViewBounds = true
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setBackgroundColor(0)
+        }
+        addView(pageView, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+    }
+
+    private fun setShortImage(
+        file: File,
+        config: Config,
+    ) = (pageView as? ImageView)?.apply {
+        val decodeW = if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels
+        val request = ImageRequest.Builder(context)
+            .data(file)
+            .size(Size(decodeW, Dimension.Undefined))
+            // Enabled so the preload loop's display-size warm (same file + size + policies) is a
+            // cache hit here — the page pops in instantly instead of re-decoding per bind.
+            .memoryCachePolicy(CachePolicy.ENABLED)
+            .diskCachePolicy(CachePolicy.DISABLED)
+            // Software bitmaps so the decode result is actually storable in the memory cache
+            // (hardware bitmaps are not cacheable in Coil 2).
+            .allowHardware(false)
+            .target(
+                onSuccess = { drawable ->
+                    setImageDrawable(drawable)
+                    isVisible = true
+                    this@ReaderPageImageView.onImageLoaded()
+                },
+                onError = {
+                    this@ReaderPageImageView.onImageLoadError()
+                },
+            )
+            .build()
+        context.imageLoader.enqueue(request)
     }
 
     private fun prepareAnimatedImageView() {

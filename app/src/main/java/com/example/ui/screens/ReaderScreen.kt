@@ -113,8 +113,6 @@ import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonTrailer
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonViewer
 import java.io.File
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -415,6 +413,9 @@ fun ReaderScreen(
     // loop below), and the visible items render from those files — so a scroll never re-fetches a
     // page. The visible item has its own retry + button if it wins the race with the prewarm.
     val webtoonDownloaded = remember { mutableStateMapOf<String, Boolean>() }
+    // Pages currently being downloaded by the prewarm pipeline (tracked so the non-stalling loop
+    // never launches the same page twice while a download is in flight).
+    val webtoonInFlight = remember { mutableStateMapOf<String, Boolean>() }
     // imageUrl -> time of last failed download. The prewarm backs off on these for a few seconds so
     // a transient failure doesn't spin in a hot loop; the visible item has its own retry + button.
     val downloadFailed = remember { mutableStateMapOf<String, Long>() }
@@ -463,12 +464,13 @@ fun ReaderScreen(
             val segIdx = if (isWebtoon) streamPosition.first.coerceIn(0, segs.lastIndex) else 0
             val segSize = segs[segIdx].size
             val globCur = (starts[segIdx] + (currentPage - 1).coerceIn(0, segSize - 1)).coerceIn(0, total - 1)
-            // Preload window: 8 pages behind and 8 pages ahead of the current page are made
+            // Preload window: 8 pages behind and 12 ahead of the current page are made
             // display-ready (Coil memory-cache warm for short pages, cache-file download for tall
-            // strips) so that scrolling — and jumping straight to any page — shows the 8 neighbours
-            // instantly instead of decoding them on first scroll-in.
+            // strips) so that scrolling — and jumping straight to any page — shows the neighbours
+            // instantly instead of decoding them on first scroll-in. The webtoon window leans
+            // further AHEAD because that's the direction the user scrolls.
             val warmFrom = (globCur - 8).coerceAtLeast(0)
-            val warmTo = (globCur + 8).coerceAtMost(total - 1)
+            val warmTo = (if (isWebtoon) globCur + 12 else globCur + 8).coerceAtMost(total - 1)
 
             // Pick the nearest not-yet-processed pages, walking outward from the current page
             // (current, +1, -1, +2, -2, ...). After a scroll or a skip, the pages closest to the
@@ -503,7 +505,7 @@ fun ReaderScreen(
                         // this loop just fills the ±8 page window AHEAD of the scroll so pages are
                         // already on disk (single-flighted via WebtoonPageCache) when the holder
                         // asks — the yomi trick that keeps long strips smooth on slow sources.
-                        if (!webtoonDownloaded.containsKey(key)) {
+                        if (!webtoonDownloaded.containsKey(key) && !webtoonInFlight.containsKey(key)) {
                             collected.add(Triple(seg, g, m))
                         }
                     }
@@ -524,33 +526,58 @@ fun ReaderScreen(
             }
 
             if (isWebtoon) {
-                if (batch.isEmpty()) { delay(120); continue }
-                // Process the batch CONCURRENTLY: each page's file download runs through the
-                // source's own client (single-flighted via WebtoonPageCache), so the preload
-                // window fills ~3x faster than one-at-a-time on slow sources. State writes all
-                // happen on the main dispatcher (async inherits it; the downloads themselves run
-                // on WebtoonPageCache's IO scope), so the maps stay safe.
-                coroutineScope {
-                    batch.map { (seg, g, m) ->
-                        async {
+                // Non-stalling download pipeline: launch up to WEBTOON_BATCH downloads at a time as
+                // fire-and-forget children and keep scanning immediately, so ONE slow page (a big
+                // comix image) can never stall the whole window — the old awaitAll blocked on the
+                // slowest member of each batch before starting the next. Each finished download
+                // frees a slot that the next loop tick fills with the nearest pending page, keeping
+                // the window topped up while the user scrolls.
+                if (batch.isNotEmpty()) {
+                    val room = (WEBTOON_BATCH - webtoonInFlight.size).coerceAtLeast(0)
+                    for ((seg, g, m) in batch.take(room)) {
+                        val key = pageKey(m)
+                        if (webtoonInFlight.containsKey(key) || webtoonDownloaded.containsKey(key)) continue
+                        webtoonInFlight[key] = true
+                        launch {
                             try {
-                                val key = pageKey(m)
-                                if (!webtoonDownloaded.containsKey(key) && source != null) {
-                                    WebtoonPageCache.fileFor(m, source, webtoonCacheDir)
+                                if (source != null) {
+                                    val file = WebtoonPageCache.fileFor(m, source, webtoonCacheDir)
+                                    webtoonDownloaded[key] = true
+                                    // Warm Coil's MEMORY cache for SHORT pages with the exact request
+                                    // the page holder will use (same file, size, policies), so a page
+                                    // scrolling in is an instant cache hit instead of a fresh decode
+                                    // (and every re-scroll is free). Tall strips are left to the
+                                    // subsampling view's region-decode from the file.
+                                    val d = WebtoonPageCache.dimensions(m, webtoonCacheDir)
+                                    val tall = d == null || d.second.toFloat() > d.first.toFloat() * 1.5f
+                                    if (!tall) {
+                                        runCatching {
+                                            imageLoader.execute(
+                                                ImageRequest.Builder(context)
+                                                    .data(file)
+                                                    .size(Size(displayDecodeWidth, Dimension.Undefined))
+                                                    .memoryCachePolicy(CachePolicy.ENABLED)
+                                                    .diskCachePolicy(CachePolicy.DISABLED)
+                                                    .allowHardware(false)
+                                                    .build(),
+                                            )
+                                        }
+                                    }
                                 }
-                                webtoonDownloaded[key] = true
                             } catch (e: Throwable) {
                                 // Effect restarts (scroll/key change) cancel in-flight work — don't
                                 // treat a cancellation as a page failure.
                                 if (e is CancellationException) throw e
                                 // A failed page shouldn't wedge the loop on the same entry forever.
-                                val key = pageKey(m)
                                 downloadFailed[key] = System.currentTimeMillis()
                                 if (looksLikeCloudflare(e)) pendingCfVerify = true
+                            } finally {
+                                webtoonInFlight.remove(key)
                             }
                         }
-                    }.awaitAll()
+                    }
                 }
+                delay(60)
                 continue
             }
 
