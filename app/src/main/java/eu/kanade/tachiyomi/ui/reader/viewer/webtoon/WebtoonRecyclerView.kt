@@ -213,12 +213,18 @@ class WebtoonRecyclerView @JvmOverloads constructor(
 
         setScaleRate(currentScale)
 
-        layoutParams.height = if (currentScale < 1) {
-            (originalHeight / currentScale).toInt()
-        } else {
-            originalHeight
+        // Only resize once the real (measured) strip height is known. Before the first layout
+        // originalHeight is 0 (the webtoon config is applied on construction, before the view is
+        // attached) — writing it back would pin the recycler to zero height and leave the reader
+        // permanently black. Leave MATCH_PARENT alone in that case.
+        if (originalHeight > 0) {
+            layoutParams.height = if (currentScale < 1) {
+                (originalHeight / currentScale).toInt()
+            } else {
+                originalHeight
+            }
+            halfHeight = layoutParams.height / 2
         }
-        halfHeight = layoutParams.height / 2
 
         if (currentScale != DEFAULT_RATE) {
             x = getPositionX(x)

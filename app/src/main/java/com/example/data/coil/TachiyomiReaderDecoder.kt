@@ -38,7 +38,8 @@ class TachiyomiReaderDecoder(
 ) : Decoder {
 
     override suspend fun decode(): DecodeResult {
-        val bitmap = if (options.cropBorders) decodeCropped() else decodeWhole()
+        val bitmap = (if (options.cropBorders) decodeCropped() else decodeWhole())
+            ?: throw IllegalStateException("Decode returned a null bitmap")
         return DecodeResult(
             drawable = BitmapDrawable(options.context.resources, bitmap),
             isSampled = true,
@@ -99,7 +100,9 @@ class TachiyomiReaderDecoder(
                 BitmapFactory.Options().apply { inSampleSize = sampleSize },
             )
             regionDecoder.recycle()
-            bitmap
+            // decodeRegion can return null for some streams; never feed a null bitmap to Coil
+            // (it would render as a silent black page) — fall back to the whole decode.
+            bitmap ?: decodeFileWhole(file)
         } catch (e: Exception) {
             // Region decoding can fail on exotic formats (e.g. AVIF); fall back to a whole decode.
             decodeFileWhole(file)
@@ -119,7 +122,7 @@ class TachiyomiReaderDecoder(
                 BitmapFactory.Options().apply { inSampleSize = sampleSize },
             )
             regionDecoder.recycle()
-            bitmap
+            bitmap ?: decodeBytesWhole(bytes)
         } catch (e: Exception) {
             decodeBytesWhole(bytes)
         }
