@@ -174,11 +174,12 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
     }
 
     private fun newRegionDecoder(file: File): BitmapRegionDecoder {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val decoder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             BitmapRegionDecoder.newInstance(FileInputStream(file))
         } else {
             @Suppress("DEPRECATION")
             BitmapRegionDecoder.newInstance(FileInputStream(file), false)
         }
+        return decoder ?: throw java.io.IOException("Couldn't create image region decoder")
     }
 }
