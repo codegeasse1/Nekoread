@@ -262,12 +262,12 @@ class WebtoonViewer(context: Context) {
 
     /** Smooth-scrolls the strip by [dy] pixels over [durationMs] (used by smooth auto-scroll). */
     fun smoothScrollBy(dy: Int, durationMs: Long) {
-        recycler.smoothScrollBy(0, dy, LinearInterpolator(), durationMs)
+        recycler.smoothScrollBy(0, dy, LinearInterpolator(), durationMs.toInt())
     }
 
     /** Smooth-scrolls one screen height over [durationMs] (yomi's linear auto-scroll step). */
     fun linearScroll(durationMs: Long) {
-        recycler.smoothScrollBy(0, recycler.height, LinearInterpolator(), durationMs)
+        recycler.smoothScrollBy(0, recycler.height, LinearInterpolator(), durationMs.toInt())
     }
 
     /** Downloads the page's bytes once to the cache file and returns it. */

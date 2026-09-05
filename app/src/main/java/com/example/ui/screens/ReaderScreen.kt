@@ -229,7 +229,7 @@ fun ReaderScreen(
         }
     }
     val pagedColorFilter = remember(grayInvMatrix) {
-        grayInvMatrix?.let { ColorFilter.colorMatrix(ColorMatrix(it)) }
+        grayInvMatrix?.let { ColorFilter.colorMatrix(ColorMatrix.from(it)) }
     }
     val webtoonColorFilter = remember(grayInvMatrix) {
         grayInvMatrix?.let { android.graphics.ColorMatrixColorFilter(it) }
@@ -946,7 +946,7 @@ fun ReaderScreen(
                                 spinnerColor = contentTextColor,
                                 doubleTapZoom = doubleTapZoom,
                                 tapToChangePages = tapToChangePages,
-                                cropBorders = cropBordersPaged,
+                                cropBordersEnabled = cropBordersPaged,
                                 colorFilter = pagedColorFilter,
                                 isReversed = false,
                                 isVertical = true,
@@ -976,7 +976,7 @@ fun ReaderScreen(
                                 spinnerColor = contentTextColor,
                                 doubleTapZoom = doubleTapZoom,
                                 tapToChangePages = tapToChangePages,
-                                cropBorders = cropBordersPaged,
+                                cropBordersEnabled = cropBordersPaged,
                                 colorFilter = pagedColorFilter,
                                 isReversed = readerMode == ReaderMode.RIGHT_TO_LEFT,
                                 isVertical = false,
@@ -1019,7 +1019,9 @@ fun ReaderScreen(
             )
             .then(
                 if (colorFilter) {
-                    Modifier.background(Color(colorFilterValue), blendMode = overlayBlendMode)
+                    Modifier.drawBehind {
+                        drawRect(color = Color(colorFilterValue), blendMode = overlayBlendMode)
+                    }
                 } else {
                     Modifier
                 }
@@ -1284,7 +1286,7 @@ private fun PagedPage(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = contentScale,
                 spinnerColor = spinnerColor,
-                cropBorders = cropBordersEnabled,
+                cropBordersEnabled = cropBordersEnabled,
                 colorFilter = colorFilter,
                 placeholderModifier = Modifier.fillMaxSize(),
             )

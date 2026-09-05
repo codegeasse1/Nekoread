@@ -93,6 +93,7 @@ class TachiyomiReaderDecoder(
         val sampleSize = calculateInSampleSize(w, h, targetWidthPx(), targetHeightPx())
         return try {
             val regionDecoder = BitmapRegionDecoder.newInstance(file.absolutePath, true)
+                ?: return decodeFileWhole(file)
             val bitmap = regionDecoder.decodeRegion(
                 bounds,
                 BitmapFactory.Options().apply { inSampleSize = sampleSize },
@@ -112,6 +113,7 @@ class TachiyomiReaderDecoder(
         val sampleSize = calculateInSampleSize(w, h, targetWidthPx(), targetHeightPx())
         return try {
             val regionDecoder = BitmapRegionDecoder.newInstance(ByteArrayInputStream(bytes), true)
+                ?: return decodeBytesWhole(bytes)
             val bitmap = regionDecoder.decodeRegion(
                 bounds,
                 BitmapFactory.Options().apply { inSampleSize = sampleSize },
