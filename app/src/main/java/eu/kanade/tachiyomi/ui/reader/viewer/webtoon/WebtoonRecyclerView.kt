@@ -46,6 +46,15 @@ class WebtoonRecyclerView @JvmOverloads constructor(
     private val minRate
         get() = if (zoomOutDisabled) DEFAULT_RATE else MIN_RATE
 
+    /** Whether pinch-to-zoom gestures are accepted (wired from the "Pinch to zoom" setting). */
+    var pinchToZoom = true
+
+    /** Whether taps are reported on confirm (slow) instead of on up (fast). */
+    var useConfirmedSingleTap = false
+
+    private var isManuallyScrolling = false
+    private var tapDuringManualScroll = false
+
     private val listener = GestureListener()
     private val detector = Detector()
 
@@ -65,6 +74,9 @@ class WebtoonRecyclerView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
+        if (e.actionMasked == MotionEvent.ACTION_DOWN) {
+            tapDuringManualScroll = isManuallyScrolling
+        }
         detector.onTouchEvent(e)
         return super.onTouchEvent(e)
     }
@@ -79,6 +91,9 @@ class WebtoonRecyclerView @JvmOverloads constructor(
 
     override fun onScrollStateChanged(state: Int) {
         super.onScrollStateChanged(state)
+        if (state == RecyclerView.SCROLL_STATE_IDLE) {
+            isManuallyScrolling = false
+        }
         val layoutManager = layoutManager
         val visibleItemCount = layoutManager?.childCount ?: 0
         val totalItemCount = layoutManager?.itemCount ?: 0
@@ -184,7 +199,13 @@ class WebtoonRecyclerView @JvmOverloads constructor(
     }
 
     fun onScale(scaleFactor: Float) {
-        currentScale *= scaleFactor
+        if (!detector.isQuickScaling && !pinchToZoom) return
+        scaleTo(currentScale * scaleFactor)
+    }
+
+    /** Sets the whole-strip zoom to [scale] (clamped), used by pinch zoom and gaps smart-scaling. */
+    fun scaleTo(scale: Float) {
+        currentScale = scale
         currentScale = currentScale.coerceIn(
             minRate,
             MAX_SCALE_RATE,
@@ -222,10 +243,24 @@ class WebtoonRecyclerView @JvmOverloads constructor(
         }
     }
 
+    /** Called by the frame when a fling starts, so a tap right after a fling isn't mis-triggered. */
+    fun onManualScroll() {
+        isManuallyScrolling = true
+    }
+
     inner class GestureListener : GestureDetectorWithLongTap.Listener() {
 
+        override fun onSingleTapUp(ev: MotionEvent): Boolean {
+            if (!useConfirmedSingleTap && !tapDuringManualScroll) {
+                tapListener?.invoke(ev)
+            }
+            return false
+        }
+
         override fun onSingleTapConfirmed(ev: MotionEvent): Boolean {
-            tapListener?.invoke(ev)
+            if (useConfirmedSingleTap && !tapDuringManualScroll) {
+                tapListener?.invoke(ev)
+            }
             return false
         }
 

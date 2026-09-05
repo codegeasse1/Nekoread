@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
  * retry button.
  */
 class WebtoonPageHolder(
-    private val frame: ReaderPageImageView,
+    val frame: ReaderPageImageView,
     private val viewer: WebtoonViewer,
 ) : androidx.recyclerview.widget.RecyclerView.ViewHolder(frame) {
 
@@ -98,6 +98,7 @@ class WebtoonPageHolder(
                         decodeRgb565 = viewer.decodeRgb565,
                     ),
                 )
+                frame.colorFilter = viewer.colorFilter
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -108,15 +109,18 @@ class WebtoonPageHolder(
 
     private fun refreshLayoutParams() {
         val bottomMargin = if (viewer.gaps) dp(15) else 0
+        val sidePadding = (viewer.config.webtoonSidePadding.coerceIn(0, 25) / 100f) * frame.context.resources.displayMetrics.widthPixels
 
         // Avoid layout thrash: rebinds while scrolling must not trigger a requestLayout
         // when nothing about the layout params actually changed.
         val current = frame.layoutParams as? FrameLayout.LayoutParams
-        if (current != null && current.bottomMargin == bottomMargin) {
+        if (current != null && current.bottomMargin == bottomMargin && current.leftMargin.toFloat() == sidePadding) {
             return
         }
         frame.layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
             this.bottomMargin = bottomMargin
+            this.leftMargin = sidePadding.toInt()
+            this.rightMargin = sidePadding.toInt()
         }
     }
 

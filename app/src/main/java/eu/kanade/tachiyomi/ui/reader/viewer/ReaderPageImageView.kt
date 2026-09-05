@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.ui.reader.viewer
 
 import android.content.Context
+import android.graphics.ColorFilter
 import android.graphics.PointF
-import android.graphics.RectF
 import android.graphics.drawable.Animatable
 import android.graphics.drawable.Drawable
 import android.util.AttributeSet
@@ -23,9 +23,9 @@ import coil.size.Dimension
 import coil.size.Size
 import com.davemorrissey.labs.subscaleview.ImageSource
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
+import com.example.data.coil.cropBorders
 import com.example.data.reader.WebtoonPageCache
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonBorderDetector
-import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonChunkedImageView
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonSubsamplingImageView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,16 +39,13 @@ import java.io.File
 import java.io.FileInputStream
 
 /**
- * The webtoon page view ported from yomi's reader. Exactly like yomi, non-tall webtoon pages
- * (height ≤ 3x width — mihon's ImageUtil.isTallImage rule) are decoded ONCE by Coil at the strip's
- * display width and shown in a plain [ImageView] — a single, memory-cached decode (warmed by the
- * reader's preload loop) instead of a per-bind region-decode pipeline, which is what keeps
- * scrolling smooth. TALL strips (long webtoon pages, h > 3w) are region-decoded by a
- * [SubsamplingScaleImageView] straight from the page's on-device cache file (never a giant
- * full-height bitmap in memory — that is what keeps long-strip scrolling smooth on slow sources
- * like comix). Animated images (gif / animated webp) fall back to a plain [ImageView] fed by Coil.
- * Touches are ignored on the image itself — the reader's scroll container (or the whole-strip zoom
- * handled by the viewer frame) owns all gestures, exactly like yomi.
+ * The webtoon page view ported from yomi/chimahon. Non-tall webtoon pages (height ≤ 3x width) are
+ * decoded ONCE by Coil at the strip's display width and shown in a plain [ImageView] — a single,
+ * memory-cached decode (warmed by the reader's preload loop) instead of a per-bind region-decode
+ * pipeline, which is what keeps scrolling smooth. TALL strips (long webtoon pages, h > 3w) are
+ * region-decoded by a [SubsamplingScaleImageView] straight from the page's on-device cache file.
+ * Animated images (gif / animated webp) fall back to a plain [ImageView] fed by Coil. Border
+ * cropping on the fast path goes through the custom Coil decoder (see TachiyomiReaderDecoder).
  */
 open class ReaderPageImageView @JvmOverloads constructor(
     context: Context,
@@ -64,6 +61,13 @@ open class ReaderPageImageView @JvmOverloads constructor(
 
     private var scope: CoroutineScope? = null
     private var smartFitJob: Job? = null
+
+    /** Color filter (grayscale / inverted colors) applied to the plain-ImageView render paths. */
+    var colorFilter: ColorFilter? = null
+        set(value) {
+            field = value
+            (pageView as? ImageView)?.colorFilter = value
+        }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
@@ -88,14 +92,19 @@ open class ReaderPageImageView @JvmOverloads constructor(
     /** Automatic background: set as this view's background once the image loads. */
     var pageBackground: Drawable? = null
 
-    /** Target decode width (px) for short webtoon pages decoded by Coil (yomi's fast path). Set by
-     *  the page holder from the viewer's quality-scaled width; 0 means the screen width. */
+    /** Target decode width (px) for short webtoon pages decoded by Coil (yomi's fast path). */
     var decodeWidthPx: Int = 0
 
     @CallSuper
     open fun onImageLoaded() {
         onImageLoaded?.invoke()
         background = pageBackground
+        if (config?.fadeIn == true) {
+            pageView?.let { v ->
+                v.alpha = 0f
+                v.animate().alpha(1f).setDuration(200).start()
+            }
+        }
     }
 
     @CallSuper
@@ -121,24 +130,16 @@ open class ReaderPageImageView @JvmOverloads constructor(
             prepareAnimatedImageView()
             setAnimatedImage(file, config)
         } else {
-            // yomi's fast path: non-tall webtoon pages (on hardware-capable devices, without border
-            // cropping) are decoded by Coil into a plain ImageView — a single, memory-cached decode
-            // (warmed by the reader's preload loop). TALL strips are decoded ONCE into display-width
-            // chunks by the chunked view (no SSIV tile churn during scroll); only cropped pages
-            // keep using the subsampling view's region-decode from the cache file.
             val isTall = config.isTallImage ?: isTallImageFile(file)
-            val canUseHardware = config.canUseHardwareBitmap ?: (android.os.Build.VERSION.SDK_INT >= 26)
-            if (isWebtoon && !isTall && canUseHardware && !config.cropBorders) {
+            if (isWebtoon && !isTall && !config.alwaysDecodeLongStripWithSSIV) {
                 prepareShortImageView()
                 setShortImage(file, config)
-            } else if (isWebtoon && isTall && !config.cropBorders) {
-                prepareChunkedImageView()
-                setChunkedImage(file, config)
             } else {
                 prepareNonAnimatedImageView()
                 setNonAnimatedImage(file, config)
             }
         }
+        (pageView as? ImageView)?.colorFilter = colorFilter
     }
 
     fun recycle() {
@@ -147,7 +148,6 @@ open class ReaderPageImageView @JvmOverloads constructor(
         pageView?.let {
             when (it) {
                 is SubsamplingScaleImageView -> it.recycle()
-                is WebtoonChunkedImageView -> it.recycle()
                 is ImageView -> it.dispose()
             }
             it.isVisible = false
@@ -168,9 +168,6 @@ open class ReaderPageImageView @JvmOverloads constructor(
             setPanLimit(SubsamplingScaleImageView.PAN_LIMIT_INSIDE)
             setMinimumTileDpi(180)
             if (isWebtoon) {
-                // Defer high-res tile decoding until gestures/flings settle. This reduces decode
-                // churn while scrolling through long strips, which is a major source of dropped
-                // frames on high refresh rate displays (90/120Hz+).
                 setEagerLoadingEnabled(false)
             }
             setOnStateChangedListener(
@@ -196,12 +193,13 @@ open class ReaderPageImageView @JvmOverloads constructor(
         setZoomEnabled(config.enablePinchToZoom)
         setDoubleTapZoomDuration(config.zoomDuration.coerceAtLeast(1))
         setMinimumScaleType(config.minimumScaleType)
-        setMinimumDpi(1) // Just so that very small images fit for initial load
+        setMinimumDpi(1)
         setCropBorders(config.cropBorders)
         setOnImageEventListener(
             object : SubsamplingScaleImageView.DefaultOnImageEventListener() {
                 override fun onReady() {
                     this@ReaderPageImageView.onImageLoaded()
+                    setupZoom(config)
                 }
 
                 override fun onImageLoadError(e: Exception) {
@@ -210,8 +208,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
             },
         )
 
-        val canUseHardware = config.canUseHardwareBitmap ?: (android.os.Build.VERSION.SDK_INT >= 26)
-        setHardwareConfig(canUseHardware)
+        setHardwareConfig(config.canUseHardwareBitmap ?: (android.os.Build.VERSION.SDK_INT >= 26))
 
         if (config.webtoonSmartFit && scope != null) {
             smartFitJob = scope?.launch {
@@ -233,8 +230,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
         }
     }
 
-    /** True if [file] is a tall webtoon strip (height > 3x width — yomi/mihon's rule) — chunk-decoded
-     *  by the chunked view instead of decoded whole via Coil. Bounds-only decode; falls back to tall. */
+    /** True if [file] is a tall webtoon strip (height > 3x width — yomi/mihon's rule). */
     private fun isTallImageFile(file: File): Boolean {
         return try {
             val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -245,21 +241,24 @@ open class ReaderPageImageView @JvmOverloads constructor(
         }
     }
 
-    private fun prepareChunkedImageView() {
-        if (pageView is WebtoonChunkedImageView) return
-        removeView(pageView)
-        pageView = WebtoonChunkedImageView(context)
-        addView(pageView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-    }
-
-    private fun setChunkedImage(
-        file: File,
-        config: Config,
-    ) = (pageView as? WebtoonChunkedImageView)?.apply {
-        onReady = { this@ReaderPageImageView.onImageLoaded() }
-        onError = { this@ReaderPageImageView.onImageLoadError() }
-        val decodeW = if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels
-        setChunkedImage(file, decodeW, config.decodeRgb565)
+    /** Applies the zoom configuration once the image is ready (chimahon's setupZoom). */
+    private fun setupZoom(config: Config) {
+        val imageView = pageView as? SubsamplingScaleImageView ?: return
+        val scale = imageView.scale
+        imageView.maxScale = scale * 5
+        if (config.disableZoomIn) {
+            imageView.isZoomEnabled = false
+        } else {
+            imageView.setDoubleTapZoomScale(if (config.doubleTapZoom) scale * 2 else scale)
+        }
+        when (config.zoomStartPosition) {
+            Config.ZoomStartPosition.LEFT ->
+                imageView.setScaleAndCenter(scale, PointF(0f, 0f))
+            Config.ZoomStartPosition.RIGHT ->
+                imageView.setScaleAndCenter(scale, PointF(imageView.sWidth.toFloat(), 0f))
+            Config.ZoomStartPosition.CENTER ->
+                imageView.setScaleAndCenter(scale, PointF(imageView.sWidth / 2f, imageView.sHeight / 2f))
+        }
     }
 
     private fun prepareShortImageView() {
@@ -281,13 +280,10 @@ open class ReaderPageImageView @JvmOverloads constructor(
         val request = ImageRequest.Builder(context)
             .data(file)
             .size(Size(decodeW, Dimension.Undefined))
-            // Enabled so the preload loop's display-size warm (same file + size + policies) is a
-            // cache hit here — the page pops in instantly instead of re-decoding per bind.
             .memoryCachePolicy(CachePolicy.ENABLED)
             .diskCachePolicy(CachePolicy.DISABLED)
-            // Software bitmaps so the decode result is actually storable in the memory cache
-            // (hardware bitmaps are not cacheable in Coil 2).
             .allowHardware(false)
+            .cropBorders(config.cropBorders)
             .target(
                 onSuccess = { drawable ->
                     setImageDrawable(drawable)
@@ -338,9 +334,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
 
     fun getImageView(): View? = pageView
 
-    /** Configuration for a single page render. [isTallImage] picks yomi's fast Coil path vs the
-     *  chunked/SSIV paths for webtoon pages; [minimumScaleType]/[cropBorders]/[webtoonSmartFit]
-     *  configure the non-animated (SSIV) render; the rest mirror yomi's config. */
+    /** Configuration for a single page render. */
     data class Config(
         val zoomDuration: Int = 200,
         val minimumScaleType: Int = SubsamplingScaleImageView.SCALE_TYPE_CENTER_INSIDE,
@@ -349,10 +343,15 @@ open class ReaderPageImageView @JvmOverloads constructor(
         val enablePinchToZoom: Boolean = true,
         val isTallImage: Boolean? = null,
         val canUseHardwareBitmap: Boolean? = null,
-        // Tall-strip chunks decode as RGB_565 at Low image quality — half the memory per chunk for
-        // nearly identical appearance (webtoon art is flat colors), mirroring the short-page path.
         val decodeRgb565: Boolean = false,
-    )
+        val alwaysDecodeLongStripWithSSIV: Boolean = false,
+        val doubleTapZoom: Boolean = true,
+        val disableZoomIn: Boolean = false,
+        val zoomStartPosition: ZoomStartPosition = ZoomStartPosition.CENTER,
+        val fadeIn: Boolean = false,
+    ) {
+        enum class ZoomStartPosition { LEFT, CENTER, RIGHT }
+    }
 
     /** True if [file] looks like an animated GIF or animated WebP. */
     fun isAnimatedFile(file: File): Boolean {

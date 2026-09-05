@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.data.local.ChapterEntity
 import com.example.data.source.MangaSource
+import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonConfig
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonItem
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonTrailer
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonViewer
@@ -30,7 +31,9 @@ import java.io.File
  * Hosts the yomi webtoon viewer (a RecyclerView-based reader) inside Compose. Pages are streamed
  * chapter-by-chapter: each streamed segment after the first is preceded by a chapter divider, and
  * a trailing item shows the next-chapter loading/error/end state. All scroll/zoom/tap behavior is
- * handled by the native viewer, exactly as it is in yomi.
+ * handled by the native viewer, exactly as it is in yomi. The webtoon settings ([config]) are a
+ * snapshot built by the caller whenever any of the underlying preferences change; assigning it to
+ * the viewer re-applies crop, tap zones, zoom and scale behavior live.
  */
 @Composable
 fun YomiWebtoonReader(
@@ -42,9 +45,9 @@ fun YomiWebtoonReader(
     bgColor: Color,
     textColor: Color,
     gaps: Boolean,
-    cropBorders: Boolean,
-    doubleTapZoom: Boolean,
-    tapToChangePages: Boolean,
+    config: WebtoonConfig,
+    onHideMenu: () -> Unit,
+    colorFilter: android.graphics.ColorFilter?,
     decodeWidth: Int,
     rgb565: Boolean,
     autoScroll: Boolean,
@@ -100,9 +103,9 @@ fun YomiWebtoonReader(
             v.source = source
             v.cacheDir = cacheDir
             v.gaps = gaps
-            v.cropBorders = cropBorders
-            v.doubleTapZoom = doubleTapZoom
-            v.tapToChangePages = tapToChangePages
+            v.config = config
+            v.onHideMenu = onHideMenu
+            v.colorFilter = colorFilter
             v.decodeWidth = decodeWidth
             v.decodeRgb565 = rgb565
             v.onPageChanged = { seg, page, total -> onPageChanged(seg, page, total) }
@@ -119,9 +122,9 @@ fun YomiWebtoonReader(
             v.source = source ?: v.source
             v.cacheDir = cacheDir
             v.gaps = gaps
-            v.cropBorders = cropBorders
-            v.doubleTapZoom = doubleTapZoom
-            v.tapToChangePages = tapToChangePages
+            v.config = config
+            v.onHideMenu = onHideMenu
+            v.colorFilter = colorFilter
             v.decodeWidth = decodeWidth
             v.decodeRgb565 = rgb565
             v.setTheme(bgColor.toArgb(), textColor.toArgb())
@@ -135,14 +138,22 @@ fun YomiWebtoonReader(
     )
 
     // Yomi-style auto-scroll: drives the native recycler directly; any user touch stops it (the
-    // viewer reports drags and taps through onUserScroll).
-    LaunchedEffect(viewerRef.value, autoScroll, autoScrollSpeedDp) {
+    // viewer reports drags and taps through onUserScroll). With smoothAutoScroll the strip glides
+    // via the recycler's smooth-scroll animation, otherwise it scrolls frame-by-frame.
+    LaunchedEffect(viewerRef.value, autoScroll, autoScrollSpeedDp, config.smoothAutoScroll) {
         val v = viewerRef.value ?: return@LaunchedEffect
         if (!autoScroll) return@LaunchedEffect
         val pxPerMs = with(density) { autoScrollSpeedDp.dp.toPx() } / 1000f
         while (isActive) {
-            v.scrollBy((pxPerMs * 16f).toInt().coerceAtLeast(1))
-            delay(16)
+            if (config.smoothAutoScroll) {
+                // One screen-height glide per ~1.1s keeps the pace near the chosen speed.
+                val step = (pxPerMs * 1100f).toInt().coerceAtLeast(1)
+                v.smoothScrollBy(step, 1100L)
+                delay(1100)
+            } else {
+                v.scrollBy((pxPerMs * 16f).toInt().coerceAtLeast(1))
+                delay(16)
+            }
         }
     }
 }

@@ -36,6 +36,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.NavigateBefore
@@ -74,7 +75,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -98,17 +102,23 @@ import coil.size.Dimension
 import coil.size.Size
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
+import com.example.data.coil.cropBorders
 import com.example.data.reader.WebtoonPageCache
 import com.example.data.source.MangaSource
 import com.example.ui.MainViewModel
+import com.example.ui.ColorFilterMode
 import com.example.ui.ReaderBg
 import com.example.ui.ReaderFit
+import com.example.ui.ReaderHideThreshold
 import com.example.ui.ReaderMode
 import com.example.ui.ReaderOrientation
+import com.example.ui.TappingInvertMode
+import com.example.ui.WebtoonScaleType
 import com.example.ui.looksLikeCloudflare
 import com.example.util.sortChapters
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
+import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonConfig
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonTrailer
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonViewer
 import java.io.File
@@ -168,6 +178,62 @@ fun ReaderScreen(
     val cropBorders: Boolean by viewModel.cropBorders.collectAsStateWithLifecycle()
     val doubleTapZoom: Boolean by viewModel.doubleTapZoom.collectAsStateWithLifecycle()
     val tapToChangePages: Boolean by viewModel.tapToChangePages.collectAsStateWithLifecycle()
+    val pinchToZoom: Boolean by viewModel.pinchToZoom.collectAsStateWithLifecycle()
+    val webtoonCropBorders: Boolean by viewModel.webtoonCropBorders.collectAsStateWithLifecycle()
+    val cropBordersPaged: Boolean by viewModel.cropBordersPaged.collectAsStateWithLifecycle()
+    val cropBordersContinuous: Boolean by viewModel.cropBordersContinuous.collectAsStateWithLifecycle()
+    val webtoonSidePadding: Int by viewModel.webtoonSidePadding.collectAsStateWithLifecycle()
+    val webtoonNavigationMode: Int by viewModel.webtoonNavigationMode.collectAsStateWithLifecycle()
+    val webtoonNavInverted: TappingInvertMode by viewModel.webtoonNavInverted.collectAsStateWithLifecycle()
+    val webtoonSmallerTapZone: Boolean by viewModel.webtoonSmallerTapZone.collectAsStateWithLifecycle()
+    val webtoonScaleType: WebtoonScaleType by viewModel.webtoonScaleType.collectAsStateWithLifecycle()
+    val longStripGapSmartScale: Boolean by viewModel.longStripGapSmartScale.collectAsStateWithLifecycle()
+    val webtoonDisableZoomOut: Boolean by viewModel.webtoonDisableZoomOut.collectAsStateWithLifecycle()
+    val webtoonPageTransitions: Boolean by viewModel.webtoonPageTransitions.collectAsStateWithLifecycle()
+    val webtoonSmoothAutoScroll: Boolean by viewModel.webtoonSmoothAutoScroll.collectAsStateWithLifecycle()
+    val alwaysDecodeLongStripWithSSIV: Boolean by viewModel.alwaysDecodeLongStripWithSSIV.collectAsStateWithLifecycle()
+    val continuousVerticalTappingByPage: Boolean by viewModel.continuousVerticalTappingByPage.collectAsStateWithLifecycle()
+    val readerHideThreshold: ReaderHideThreshold by viewModel.readerHideThreshold.collectAsStateWithLifecycle()
+    val doubleTapAnimDuration: Int by viewModel.doubleTapAnimDuration.collectAsStateWithLifecycle()
+    val showReadingMode: Boolean by viewModel.showReadingMode.collectAsStateWithLifecycle()
+    val customBrightness: Boolean by viewModel.customBrightness.collectAsStateWithLifecycle()
+    val customBrightnessValue: Int by viewModel.customBrightnessValue.collectAsStateWithLifecycle()
+    val colorFilter: Boolean by viewModel.colorFilter.collectAsStateWithLifecycle()
+    val colorFilterValue: Int by viewModel.colorFilterValue.collectAsStateWithLifecycle()
+    val colorFilterMode: Int by viewModel.colorFilterMode.collectAsStateWithLifecycle()
+    val grayscale: Boolean by viewModel.grayscale.collectAsStateWithLifecycle()
+    val invertedColors: Boolean by viewModel.invertedColors.collectAsStateWithLifecycle()
+
+    // Grayscale / inverted-colors combined matrix (chimahon's getCombinedPaint). When both are
+    // enabled the inverted matrix is applied after the grayscale one. Applied to paged pages via
+    // the Compose Image colorFilter and to webtoon pages via the native viewer's image views.
+    val grayInvMatrix = remember(grayscale, invertedColors) {
+        if (!grayscale && !invertedColors) {
+            null
+        } else {
+            val m = android.graphics.ColorMatrix()
+            if (grayscale) m.setSaturation(0f)
+            if (invertedColors) {
+                m.postConcat(
+                    android.graphics.ColorMatrix(
+                        floatArrayOf(
+                            -1f, 0f, 0f, 0f, 255f,
+                            0f, -1f, 0f, 0f, 255f,
+                            0f, 0f, -1f, 0f, 255f,
+                            0f, 0f, 0f, 1f, 0f,
+                        ),
+                    ),
+                )
+            }
+            m
+        }
+    }
+    val pagedColorFilter = remember(grayInvMatrix) {
+        grayInvMatrix?.let { ColorFilter.colorMatrix(ColorMatrix(it)) }
+    }
+    val webtoonColorFilter = remember(grayInvMatrix) {
+        grayInvMatrix?.let { android.graphics.ColorMatrixColorFilter(it) }
+    }
 
     // Both long-strip modes render as one continuous vertical list; only the gap differs.
     val isWebtoon = readerMode == ReaderMode.WEBTOON || readerMode == ReaderMode.WEBTOON_GAPS
@@ -560,6 +626,13 @@ fun ReaderScreen(
                                                     .memoryCachePolicy(CachePolicy.ENABLED)
                                                     .diskCachePolicy(CachePolicy.DISABLED)
                                                     .allowHardware(false)
+                                                    .apply {
+                                                        // Keep the cache key in sync with the page
+                                                        // holder's request so a cropped decode is
+                                                        // what gets warmed (and never collides with
+                                                        // the uncropped one).
+                                                        if (cropBorders) cropBorders(true)
+                                                    }
                                                     .build(),
                                             )
                                         }
@@ -680,6 +753,25 @@ fun ReaderScreen(
         }
     }
 
+    // Custom brightness: a positive value raises the window's screen brightness (0..1); a negative
+    // value is instead rendered as a dark overlay (see the overlay Box below). Reset to the
+    // system-auto level when disabled / on leave.
+    DisposableEffect(customBrightness, customBrightnessValue, activity) {
+        val window = activity?.window
+        if (customBrightness && customBrightnessValue > 0 && window != null) {
+            val lp = window.attributes
+            lp.screenBrightness = (customBrightnessValue / 100f).coerceIn(0f, 1f)
+            window.attributes = lp
+        }
+        onDispose {
+            if (window != null) {
+                val lp = window.attributes
+                lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                window.attributes = lp
+            }
+        }
+    }
+
     // Yomi-style orientation lock: PORTRAIT/LANDSCAPE pin the reader to that orientation for as
     // long as it's open; AUTO restores the system's free rotation. Always reset on dispose so
     // leaving the reader never leaves the app locked.
@@ -754,6 +846,39 @@ fun ReaderScreen(
             else -> {
                 val pageList = pages ?: emptyList()
                 if (isWebtoon) {
+                    // Snapshot of webtoon-mode settings; rebuilt whenever any pref changes so the
+                    // viewer re-applies crop / tap zones / zoom / page scale live (see
+                    // WebtoonConfig). The continuous (no-gap) long-strip crop is the existing
+                    // "Crop borders" setting (keeps the bottom-bar crop toggle + old pref
+                    // working); gaps mode has its own dedicated toggle.
+                    val webtoonConfig = remember(
+                        cropBorders, cropBordersContinuous, webtoonSidePadding, webtoonNavigationMode,
+                        webtoonNavInverted, webtoonSmallerTapZone, webtoonScaleType, longStripGapSmartScale,
+                        webtoonDisableZoomOut, webtoonPageTransitions, readerHideThreshold, doubleTapAnimDuration,
+                        alwaysDecodeLongStripWithSSIV, continuousVerticalTappingByPage, webtoonSmoothAutoScroll,
+                        doubleTapZoom, pinchToZoom, webtoonFade,
+                    ) {
+                        WebtoonConfig().apply {
+                            this.cropBordersWebtoon = cropBorders
+                            this.continuousCropBorders = cropBordersContinuous
+                            this.webtoonSidePadding = webtoonSidePadding
+                            this.navigationMode = webtoonNavigationMode
+                            this.tappingInverted = webtoonNavInverted
+                            this.smallerTapZone = webtoonSmallerTapZone
+                            this.webtoonScaleType = webtoonScaleType
+                            this.longStripGapSmartScale = longStripGapSmartScale
+                            this.webtoonDisableZoomOut = webtoonDisableZoomOut
+                            this.usePageTransitions = webtoonPageTransitions
+                            this.readerHideThreshold = readerHideThreshold
+                            this.doubleTapAnimDuration = doubleTapAnimDuration
+                            this.alwaysDecodeLongStripWithSSIV = alwaysDecodeLongStripWithSSIV
+                            this.continuousVerticalTappingByPage = continuousVerticalTappingByPage
+                            this.smoothAutoScroll = webtoonSmoothAutoScroll
+                            this.doubleTapZoom = doubleTapZoom
+                            this.pinchToZoom = pinchToZoom
+                            this.fadeIn = webtoonFade
+                        }
+                    }
                     YomiWebtoonReader(
                         source = source,
                         cacheDir = webtoonCacheDir,
@@ -763,9 +888,9 @@ fun ReaderScreen(
                         bgColor = bgColor,
                         textColor = contentTextColor,
                         gaps = readerMode == ReaderMode.WEBTOON_GAPS,
-                        cropBorders = cropBorders,
-                        doubleTapZoom = doubleTapZoom,
-                        tapToChangePages = tapToChangePages,
+                        config = webtoonConfig,
+                        onHideMenu = { showHud = false },
+                        colorFilter = webtoonColorFilter,
                         decodeWidth = displayDecodeWidth,
                         rgb565 = useRgb565,
                         autoScroll = autoScroll,
@@ -796,8 +921,11 @@ fun ReaderScreen(
                 } else {
                     val fitScale = when (readerFit) {
                         ReaderFit.FIT -> ContentScale.Fit
+                        ReaderFit.STRETCH -> ContentScale.FillBounds
                         ReaderFit.FIT_WIDTH -> ContentScale.FillWidth
                         ReaderFit.FIT_HEIGHT -> ContentScale.FillHeight
+                        ReaderFit.ORIGINAL_SIZE -> ContentScale.None
+                        ReaderFit.SMART_FIT -> ContentScale.Fit
                     }
                     if (pageList.isEmpty()) {
                         Box(
@@ -818,6 +946,8 @@ fun ReaderScreen(
                                 spinnerColor = contentTextColor,
                                 doubleTapZoom = doubleTapZoom,
                                 tapToChangePages = tapToChangePages,
+                                cropBorders = cropBordersPaged,
+                                colorFilter = pagedColorFilter,
                                 isReversed = false,
                                 isVertical = true,
                                 onToggleHud = { showHud = !showHud },
@@ -846,6 +976,8 @@ fun ReaderScreen(
                                 spinnerColor = contentTextColor,
                                 doubleTapZoom = doubleTapZoom,
                                 tapToChangePages = tapToChangePages,
+                                cropBorders = cropBordersPaged,
+                                colorFilter = pagedColorFilter,
                                 isReversed = readerMode == ReaderMode.RIGHT_TO_LEFT,
                                 isVertical = false,
                                 onToggleHud = { showHud = !showHud },
@@ -870,6 +1002,29 @@ fun ReaderScreen(
     // the DB row flips under it, so we mirror the toggle here and reset whenever the chapter
     // changes.
     var chapterBookmarked by remember(activeChapter.id) { mutableStateOf(activeChapter.bookmarked) }
+
+    // Color/brightness overlays (chimahon's ReaderContentOverlay), drawn above the page content but
+    // below the chrome so the menu stays legible: a dark veil when custom brightness is negative,
+    // plus the blend-mode color filter when enabled.
+    val overlayBlendMode = ColorFilterMode.entries.getOrElse(colorFilterMode) { ColorFilterMode.DEFAULT }.blendMode
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .then(
+                if (customBrightness && customBrightnessValue < 0) {
+                    Modifier.background(Color.Black.copy(alpha = (-customBrightnessValue / 100f).coerceIn(0f, 1f)))
+                } else {
+                    Modifier
+                }
+            )
+            .then(
+                if (colorFilter) {
+                    Modifier.background(Color(colorFilterValue), blendMode = overlayBlendMode)
+                } else {
+                    Modifier
+                }
+            )
+    )
 
         // Yomi-style reader chrome: top bar (bookmark / overflow / auto-scroll), chapter
         // navigator pill, bottom toolbar and the settings sheets/dialogs live in YomiReaderChrome.
@@ -925,10 +1080,58 @@ fun ReaderScreen(
             onSelectReaderOrientation = { viewModel.setReaderOrientation(it) },
             cropBorders = cropBorders,
             onToggleCropBorders = { viewModel.setCropBorders(!cropBorders) },
+            cropBordersPaged = cropBordersPaged,
+            onToggleCropBordersPaged = { viewModel.setCropBordersPaged(!cropBordersPaged) },
+            cropBordersContinuous = cropBordersContinuous,
+            onToggleCropBordersContinuous = { viewModel.setCropBordersContinuous(!cropBordersContinuous) },
             doubleTapZoom = doubleTapZoom,
             onToggleDoubleTapZoom = { viewModel.setDoubleTapZoom(!doubleTapZoom) },
+            pinchToZoom = pinchToZoom,
+            onTogglePinchToZoom = { viewModel.setPinchToZoom(!pinchToZoom) },
             tapToChangePages = tapToChangePages,
             onToggleTapToChangePages = { viewModel.setTapToChangePages(!tapToChangePages) },
+            webtoonSidePadding = webtoonSidePadding,
+            onWebtoonSidePaddingChange = { viewModel.setWebtoonSidePadding(it) },
+            webtoonNavigationMode = webtoonNavigationMode,
+            onWebtoonNavigationModeChange = { viewModel.setWebtoonNavigationMode(it) },
+            webtoonNavInverted = webtoonNavInverted,
+            onWebtoonNavInvertedChange = { viewModel.setWebtoonNavInverted(it) },
+            webtoonSmallerTapZone = webtoonSmallerTapZone,
+            onToggleWebtoonSmallerTapZone = { viewModel.setWebtoonSmallerTapZone(!webtoonSmallerTapZone) },
+            webtoonScaleType = webtoonScaleType,
+            onWebtoonScaleTypeChange = { viewModel.setWebtoonScaleType(it) },
+            longStripGapSmartScale = longStripGapSmartScale,
+            onToggleLongStripGapSmartScale = { viewModel.setLongStripGapSmartScale(!longStripGapSmartScale) },
+            webtoonDisableZoomOut = webtoonDisableZoomOut,
+            onToggleWebtoonDisableZoomOut = { viewModel.setWebtoonDisableZoomOut(!webtoonDisableZoomOut) },
+            webtoonPageTransitions = webtoonPageTransitions,
+            onToggleWebtoonPageTransitions = { viewModel.setWebtoonPageTransitions(!webtoonPageTransitions) },
+            webtoonSmoothAutoScroll = webtoonSmoothAutoScroll,
+            onToggleWebtoonSmoothAutoScroll = { viewModel.setWebtoonSmoothAutoScroll(!webtoonSmoothAutoScroll) },
+            alwaysDecodeLongStripWithSSIV = alwaysDecodeLongStripWithSSIV,
+            onToggleAlwaysDecodeLongStripWithSSIV = { viewModel.setAlwaysDecodeLongStripWithSSIV(!alwaysDecodeLongStripWithSSIV) },
+            continuousVerticalTappingByPage = continuousVerticalTappingByPage,
+            onToggleContinuousVerticalTappingByPage = { viewModel.setContinuousVerticalTappingByPage(!continuousVerticalTappingByPage) },
+            readerHideThreshold = readerHideThreshold,
+            onReaderHideThresholdChange = { viewModel.setReaderHideThreshold(it) },
+            doubleTapAnimDuration = doubleTapAnimDuration,
+            onDoubleTapAnimDurationChange = { viewModel.setDoubleTapAnimDuration(it) },
+            showReadingMode = showReadingMode,
+            onToggleShowReadingMode = { viewModel.setShowReadingMode(!showReadingMode) },
+            customBrightness = customBrightness,
+            onToggleCustomBrightness = { viewModel.setCustomBrightness(!customBrightness) },
+            customBrightnessValue = customBrightnessValue,
+            onCustomBrightnessValueChange = { viewModel.setCustomBrightnessValue(it) },
+            colorFilter = colorFilter,
+            onToggleColorFilter = { viewModel.setColorFilter(!colorFilter) },
+            colorFilterValue = colorFilterValue,
+            onColorFilterValueChange = { viewModel.setColorFilterValue(it) },
+            colorFilterMode = colorFilterMode,
+            onColorFilterModeChange = { viewModel.setColorFilterMode(it) },
+            grayscale = grayscale,
+            onToggleGrayscale = { viewModel.setGrayscale(!grayscale) },
+            invertedColors = invertedColors,
+            onToggleInvertedColors = { viewModel.setInvertedColors(!invertedColors) },
             readerBg = readerBg,
             onSelectReaderBg = { viewModel.setReaderBg(it) },
             showPageNumber = showPageNumber,
@@ -943,13 +1146,37 @@ fun ReaderScreen(
                 viewModel.setReaderOrientation(ReaderOrientation.AUTO)
                 viewModel.setKeepScreenOn(true)
                 viewModel.setShowPageNumber(true)
+                viewModel.setShowReadingMode(true)
                 viewModel.setWebtoonFade(false)
                 viewModel.setAutoScroll(false)
                 viewModel.setAutoScrollSpeedDp(80f)
                 viewModel.setReaderQuality(75)
                 viewModel.setCropBorders(false)
+                viewModel.setCropBordersPaged(false)
+                viewModel.setCropBordersContinuous(false)
                 viewModel.setDoubleTapZoom(true)
+                viewModel.setPinchToZoom(true)
                 viewModel.setTapToChangePages(false)
+                viewModel.setWebtoonSidePadding(0)
+                viewModel.setWebtoonNavigationMode(5)
+                viewModel.setWebtoonNavInverted(TappingInvertMode.NONE)
+                viewModel.setWebtoonSmallerTapZone(false)
+                viewModel.setWebtoonScaleType(WebtoonScaleType.FIT)
+                viewModel.setLongStripGapSmartScale(false)
+                viewModel.setWebtoonDisableZoomOut(false)
+                viewModel.setWebtoonPageTransitions(true)
+                viewModel.setWebtoonSmoothAutoScroll(true)
+                viewModel.setAlwaysDecodeLongStripWithSSIV(false)
+                viewModel.setContinuousVerticalTappingByPage(false)
+                viewModel.setReaderHideThreshold(ReaderHideThreshold.LOW)
+                viewModel.setDoubleTapAnimDuration(500)
+                viewModel.setCustomBrightness(false)
+                viewModel.setCustomBrightnessValue(0)
+                viewModel.setColorFilter(false)
+                viewModel.setColorFilterValue(0)
+                viewModel.setColorFilterMode(0)
+                viewModel.setGrayscale(false)
+                viewModel.setInvertedColors(false)
             },
             seriesOverrideEnabled = seriesOverrideEnabled[manga.id] == true,
             onToggleSeriesOverride = {
@@ -987,6 +1214,8 @@ private fun PagedPage(
     spinnerColor: Color,
     doubleTapZoom: Boolean,
     tapToChangePages: Boolean,
+    cropBordersEnabled: Boolean,
+    colorFilter: ColorFilter?,
     isReversed: Boolean,
     isVertical: Boolean,
     onToggleHud: () -> Unit,
@@ -1055,6 +1284,8 @@ private fun PagedPage(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = contentScale,
                 spinnerColor = spinnerColor,
+                cropBorders = cropBordersEnabled,
+                colorFilter = colorFilter,
                 placeholderModifier = Modifier.fillMaxSize(),
             )
         }
@@ -1072,6 +1303,8 @@ private fun ReaderPageImage(
         .fillMaxWidth()
         .heightIn(min = 240.dp),
     crossfade: Boolean = false,
+    cropBordersEnabled: Boolean = false,
+    colorFilter: ColorFilter? = null,
     decodeWidthPx: Int? = null,
     rgb565: Boolean = false
 ) {
@@ -1108,6 +1341,7 @@ private fun ReaderPageImage(
             .apply {
                 if (crossfade) crossfade(true)
                 if (rgb565) allowRgb565(true)
+                if (cropBordersEnabled) cropBorders(true)
             }
             .build()
     }
@@ -1129,7 +1363,8 @@ private fun ReaderPageImage(
             painter = painter,
             contentDescription = contentDescription,
             modifier = Modifier.fillMaxSize(),
-            contentScale = contentScale
+            contentScale = contentScale,
+            colorFilter = colorFilter
         )
         when {
             state is AsyncImagePainter.State.Loading -> {

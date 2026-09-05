@@ -33,7 +33,12 @@ class WebtoonFrame(context: Context) : FrameLayout(context) {
             recycler?.zoomOutDisabled = value
         }
 
-    var enablePinchToZoom = true
+    /** Whether pinch-to-zoom gestures are accepted (wired from the "Pinch to zoom" setting). */
+    var pinchToZoom = true
+        set(value) {
+            field = value
+            recycler?.pinchToZoom = value
+        }
 
     /** Recycler view added in this frame. */
     private val recycler: WebtoonRecyclerView?
@@ -46,7 +51,7 @@ class WebtoonFrame(context: Context) : FrameLayout(context) {
      * Dispatches a touch event to the detectors.
      */
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        if (enablePinchToZoom) {
+        if (pinchToZoom) {
             scaleDetector.onTouchEvent(ev)
         }
         flingDetector.onTouchEvent(ev)
@@ -95,6 +100,7 @@ class WebtoonFrame(context: Context) : FrameLayout(context) {
             velocityX: Float,
             velocityY: Float,
         ): Boolean {
+            recycler?.onManualScroll()
             return recycler?.zoomFling(velocityX.toInt(), velocityY.toInt()) ?: false
         }
     }

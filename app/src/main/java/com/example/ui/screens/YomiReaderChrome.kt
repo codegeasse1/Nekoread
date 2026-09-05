@@ -92,8 +92,11 @@ import androidx.compose.ui.unit.dp
 import com.example.data.local.ChapterEntity
 import com.example.ui.ReaderBg
 import com.example.ui.ReaderFit
+import com.example.ui.ReaderHideThreshold
 import com.example.ui.ReaderMode
 import com.example.ui.ReaderOrientation
+import com.example.ui.TappingInvertMode
+import com.example.ui.WebtoonScaleType
 
 private val ChromeBarColor = Color(0xCC161926)
 private val SheetColor = Color(0xFF1B1E2A)
@@ -139,10 +142,58 @@ fun YomiReaderChrome(
     onSelectReaderOrientation: (ReaderOrientation) -> Unit,
     cropBorders: Boolean,
     onToggleCropBorders: () -> Unit,
+    cropBordersPaged: Boolean,
+    onToggleCropBordersPaged: () -> Unit,
+    cropBordersContinuous: Boolean,
+    onToggleCropBordersContinuous: () -> Unit,
     doubleTapZoom: Boolean,
     onToggleDoubleTapZoom: () -> Unit,
+    pinchToZoom: Boolean,
+    onTogglePinchToZoom: () -> Unit,
     tapToChangePages: Boolean,
     onToggleTapToChangePages: () -> Unit,
+    webtoonSidePadding: Int,
+    onWebtoonSidePaddingChange: (Int) -> Unit,
+    webtoonNavigationMode: Int,
+    onWebtoonNavigationModeChange: (Int) -> Unit,
+    webtoonNavInverted: TappingInvertMode,
+    onWebtoonNavInvertedChange: (TappingInvertMode) -> Unit,
+    webtoonSmallerTapZone: Boolean,
+    onToggleWebtoonSmallerTapZone: () -> Unit,
+    webtoonScaleType: WebtoonScaleType,
+    onWebtoonScaleTypeChange: (WebtoonScaleType) -> Unit,
+    longStripGapSmartScale: Boolean,
+    onToggleLongStripGapSmartScale: () -> Unit,
+    webtoonDisableZoomOut: Boolean,
+    onToggleWebtoonDisableZoomOut: () -> Unit,
+    webtoonPageTransitions: Boolean,
+    onToggleWebtoonPageTransitions: () -> Unit,
+    webtoonSmoothAutoScroll: Boolean,
+    onToggleWebtoonSmoothAutoScroll: () -> Unit,
+    alwaysDecodeLongStripWithSSIV: Boolean,
+    onToggleAlwaysDecodeLongStripWithSSIV: () -> Unit,
+    continuousVerticalTappingByPage: Boolean,
+    onToggleContinuousVerticalTappingByPage: () -> Unit,
+    readerHideThreshold: ReaderHideThreshold,
+    onReaderHideThresholdChange: (ReaderHideThreshold) -> Unit,
+    doubleTapAnimDuration: Int,
+    onDoubleTapAnimDurationChange: (Int) -> Unit,
+    showReadingMode: Boolean,
+    onToggleShowReadingMode: () -> Unit,
+    customBrightness: Boolean,
+    onToggleCustomBrightness: () -> Unit,
+    customBrightnessValue: Int,
+    onCustomBrightnessValueChange: (Int) -> Unit,
+    colorFilter: Boolean,
+    onToggleColorFilter: () -> Unit,
+    colorFilterValue: Int,
+    onColorFilterValueChange: (Int) -> Unit,
+    colorFilterMode: Int,
+    onColorFilterModeChange: (Int) -> Unit,
+    grayscale: Boolean,
+    onToggleGrayscale: () -> Unit,
+    invertedColors: Boolean,
+    onToggleInvertedColors: () -> Unit,
     readerBg: ReaderBg,
     onSelectReaderBg: (ReaderBg) -> Unit,
     showPageNumber: Boolean,
@@ -219,6 +270,7 @@ fun YomiReaderChrome(
                         showPageNumber = showPageNumber,
                     )
                     BottomReaderBar(
+                        showReadingModeButton = showReadingMode,
                         onClickReadingMode = { showModeDialog = true },
                         onClickOrientation = { showOrientationDialog = true },
                         cropEnabled = cropBorders,
@@ -245,16 +297,64 @@ fun YomiReaderChrome(
                 onToggleShowPageNumber = onToggleShowPageNumber,
                 keepScreenOn = keepScreenOn,
                 onToggleKeepScreenOn = onToggleKeepScreenOn,
+                showReadingMode = showReadingMode,
+                onToggleShowReadingMode = onToggleShowReadingMode,
                 webtoonFade = webtoonFade,
                 onToggleWebtoonFade = onToggleWebtoonFade,
                 readerQuality = readerQuality,
                 onSelectReaderQuality = onSelectReaderQuality,
                 cropBorders = cropBorders,
                 onToggleCropBorders = onToggleCropBorders,
+                cropBordersPaged = cropBordersPaged,
+                onToggleCropBordersPaged = onToggleCropBordersPaged,
+                cropBordersContinuous = cropBordersContinuous,
+                onToggleCropBordersContinuous = onToggleCropBordersContinuous,
                 doubleTapZoom = doubleTapZoom,
                 onToggleDoubleTapZoom = onToggleDoubleTapZoom,
+                pinchToZoom = pinchToZoom,
+                onTogglePinchToZoom = onTogglePinchToZoom,
                 tapToChangePages = tapToChangePages,
                 onToggleTapToChangePages = onToggleTapToChangePages,
+                webtoonSidePadding = webtoonSidePadding,
+                onWebtoonSidePaddingChange = onWebtoonSidePaddingChange,
+                webtoonNavigationMode = webtoonNavigationMode,
+                onWebtoonNavigationModeChange = onWebtoonNavigationModeChange,
+                webtoonNavInverted = webtoonNavInverted,
+                onWebtoonNavInvertedChange = onWebtoonNavInvertedChange,
+                webtoonSmallerTapZone = webtoonSmallerTapZone,
+                onToggleWebtoonSmallerTapZone = onToggleWebtoonSmallerTapZone,
+                webtoonScaleType = webtoonScaleType,
+                onWebtoonScaleTypeChange = onWebtoonScaleTypeChange,
+                longStripGapSmartScale = longStripGapSmartScale,
+                onToggleLongStripGapSmartScale = onToggleLongStripGapSmartScale,
+                webtoonDisableZoomOut = webtoonDisableZoomOut,
+                onToggleWebtoonDisableZoomOut = onToggleWebtoonDisableZoomOut,
+                webtoonPageTransitions = webtoonPageTransitions,
+                onToggleWebtoonPageTransitions = onToggleWebtoonPageTransitions,
+                webtoonSmoothAutoScroll = webtoonSmoothAutoScroll,
+                onToggleWebtoonSmoothAutoScroll = onToggleWebtoonSmoothAutoScroll,
+                alwaysDecodeLongStripWithSSIV = alwaysDecodeLongStripWithSSIV,
+                onToggleAlwaysDecodeLongStripWithSSIV = onToggleAlwaysDecodeLongStripWithSSIV,
+                continuousVerticalTappingByPage = continuousVerticalTappingByPage,
+                onToggleContinuousVerticalTappingByPage = onToggleContinuousVerticalTappingByPage,
+                readerHideThreshold = readerHideThreshold,
+                onReaderHideThresholdChange = onReaderHideThresholdChange,
+                doubleTapAnimDuration = doubleTapAnimDuration,
+                onDoubleTapAnimDurationChange = onDoubleTapAnimDurationChange,
+                customBrightness = customBrightness,
+                onToggleCustomBrightness = onToggleCustomBrightness,
+                customBrightnessValue = customBrightnessValue,
+                onCustomBrightnessValueChange = onCustomBrightnessValueChange,
+                colorFilter = colorFilter,
+                onToggleColorFilter = onToggleColorFilter,
+                colorFilterValue = colorFilterValue,
+                onColorFilterValueChange = onColorFilterValueChange,
+                colorFilterMode = colorFilterMode,
+                onColorFilterModeChange = onColorFilterModeChange,
+                grayscale = grayscale,
+                onToggleGrayscale = onToggleGrayscale,
+                invertedColors = invertedColors,
+                onToggleInvertedColors = onToggleInvertedColors,
                 autoScroll = autoScroll,
                 autoScrollSpeedDp = autoScrollSpeedDp,
                 onToggleAutoScroll = onToggleAutoScroll,
@@ -569,6 +669,7 @@ private fun ChapterNavigatorPill(
 
 @Composable
 private fun BottomReaderBar(
+    showReadingModeButton: Boolean,
     onClickReadingMode: () -> Unit,
     onClickOrientation: () -> Unit,
     cropEnabled: Boolean,
@@ -587,8 +688,10 @@ private fun BottomReaderBar(
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onClickReadingMode) {
-            Icon(Icons.Outlined.ViewComfy, contentDescription = "Reading mode", tint = OnDark)
+        if (showReadingModeButton) {
+            IconButton(onClick = onClickReadingMode) {
+                Icon(Icons.Outlined.ViewComfy, contentDescription = "Reading mode", tint = OnDark)
+            }
         }
         IconButton(onClick = onClickOrientation) {
             Icon(Icons.Outlined.ScreenRotation, contentDescription = "Orientation", tint = OnDark)
@@ -624,16 +727,64 @@ private fun ReaderSettingsSheet(
     onToggleShowPageNumber: () -> Unit,
     keepScreenOn: Boolean,
     onToggleKeepScreenOn: () -> Unit,
+    showReadingMode: Boolean,
+    onToggleShowReadingMode: () -> Unit,
     webtoonFade: Boolean,
     onToggleWebtoonFade: () -> Unit,
     readerQuality: Int,
     onSelectReaderQuality: (Int) -> Unit,
     cropBorders: Boolean,
     onToggleCropBorders: () -> Unit,
+    cropBordersPaged: Boolean,
+    onToggleCropBordersPaged: () -> Unit,
+    cropBordersContinuous: Boolean,
+    onToggleCropBordersContinuous: () -> Unit,
     doubleTapZoom: Boolean,
     onToggleDoubleTapZoom: () -> Unit,
+    pinchToZoom: Boolean,
+    onTogglePinchToZoom: () -> Unit,
     tapToChangePages: Boolean,
     onToggleTapToChangePages: () -> Unit,
+    webtoonSidePadding: Int,
+    onWebtoonSidePaddingChange: (Int) -> Unit,
+    webtoonNavigationMode: Int,
+    onWebtoonNavigationModeChange: (Int) -> Unit,
+    webtoonNavInverted: TappingInvertMode,
+    onWebtoonNavInvertedChange: (TappingInvertMode) -> Unit,
+    webtoonSmallerTapZone: Boolean,
+    onToggleWebtoonSmallerTapZone: () -> Unit,
+    webtoonScaleType: WebtoonScaleType,
+    onWebtoonScaleTypeChange: (WebtoonScaleType) -> Unit,
+    longStripGapSmartScale: Boolean,
+    onToggleLongStripGapSmartScale: () -> Unit,
+    webtoonDisableZoomOut: Boolean,
+    onToggleWebtoonDisableZoomOut: () -> Unit,
+    webtoonPageTransitions: Boolean,
+    onToggleWebtoonPageTransitions: () -> Unit,
+    webtoonSmoothAutoScroll: Boolean,
+    onToggleWebtoonSmoothAutoScroll: () -> Unit,
+    alwaysDecodeLongStripWithSSIV: Boolean,
+    onToggleAlwaysDecodeLongStripWithSSIV: () -> Unit,
+    continuousVerticalTappingByPage: Boolean,
+    onToggleContinuousVerticalTappingByPage: () -> Unit,
+    readerHideThreshold: ReaderHideThreshold,
+    onReaderHideThresholdChange: (ReaderHideThreshold) -> Unit,
+    doubleTapAnimDuration: Int,
+    onDoubleTapAnimDurationChange: (Int) -> Unit,
+    customBrightness: Boolean,
+    onToggleCustomBrightness: () -> Unit,
+    customBrightnessValue: Int,
+    onCustomBrightnessValueChange: (Int) -> Unit,
+    colorFilter: Boolean,
+    onToggleColorFilter: () -> Unit,
+    colorFilterValue: Int,
+    onColorFilterValueChange: (Int) -> Unit,
+    colorFilterMode: Int,
+    onColorFilterModeChange: (Int) -> Unit,
+    grayscale: Boolean,
+    onToggleGrayscale: () -> Unit,
+    invertedColors: Boolean,
+    onToggleInvertedColors: () -> Unit,
     autoScroll: Boolean,
     autoScrollSpeedDp: Float,
     onToggleAutoScroll: () -> Unit,
@@ -679,6 +830,40 @@ private fun ReaderSettingsSheet(
                     onSelectReaderFit = onSelectReaderFit,
                     seriesOverrideEnabled = seriesOverrideEnabled,
                     onToggleSeriesOverride = onToggleSeriesOverride,
+                    cropBorders = cropBorders,
+                    onToggleCropBorders = onToggleCropBorders,
+                    cropBordersPaged = cropBordersPaged,
+                    onToggleCropBordersPaged = onToggleCropBordersPaged,
+                    cropBordersContinuous = cropBordersContinuous,
+                    onToggleCropBordersContinuous = onToggleCropBordersContinuous,
+                    doubleTapZoom = doubleTapZoom,
+                    onToggleDoubleTapZoom = onToggleDoubleTapZoom,
+                    pinchToZoom = pinchToZoom,
+                    onTogglePinchToZoom = onTogglePinchToZoom,
+                    tapToChangePages = tapToChangePages,
+                    onToggleTapToChangePages = onToggleTapToChangePages,
+                    webtoonSidePadding = webtoonSidePadding,
+                    onWebtoonSidePaddingChange = onWebtoonSidePaddingChange,
+                    webtoonNavigationMode = webtoonNavigationMode,
+                    onWebtoonNavigationModeChange = onWebtoonNavigationModeChange,
+                    webtoonNavInverted = webtoonNavInverted,
+                    onWebtoonNavInvertedChange = onWebtoonNavInvertedChange,
+                    webtoonSmallerTapZone = webtoonSmallerTapZone,
+                    onToggleWebtoonSmallerTapZone = onToggleWebtoonSmallerTapZone,
+                    webtoonScaleType = webtoonScaleType,
+                    onWebtoonScaleTypeChange = onWebtoonScaleTypeChange,
+                    longStripGapSmartScale = longStripGapSmartScale,
+                    onToggleLongStripGapSmartScale = onToggleLongStripGapSmartScale,
+                    webtoonDisableZoomOut = webtoonDisableZoomOut,
+                    onToggleWebtoonDisableZoomOut = onToggleWebtoonDisableZoomOut,
+                    webtoonPageTransitions = webtoonPageTransitions,
+                    onToggleWebtoonPageTransitions = onToggleWebtoonPageTransitions,
+                    webtoonSmoothAutoScroll = webtoonSmoothAutoScroll,
+                    onToggleWebtoonSmoothAutoScroll = onToggleWebtoonSmoothAutoScroll,
+                    alwaysDecodeLongStripWithSSIV = alwaysDecodeLongStripWithSSIV,
+                    onToggleAlwaysDecodeLongStripWithSSIV = onToggleAlwaysDecodeLongStripWithSSIV,
+                    continuousVerticalTappingByPage = continuousVerticalTappingByPage,
+                    onToggleContinuousVerticalTappingByPage = onToggleContinuousVerticalTappingByPage,
                 )
                 1 -> SettingsGeneralTab(
                     readerBg = readerBg,
@@ -687,6 +872,8 @@ private fun ReaderSettingsSheet(
                     onToggleShowPageNumber = onToggleShowPageNumber,
                     keepScreenOn = keepScreenOn,
                     onToggleKeepScreenOn = onToggleKeepScreenOn,
+                    showReadingMode = showReadingMode,
+                    onToggleShowReadingMode = onToggleShowReadingMode,
                     webtoonFade = webtoonFade,
                     onToggleWebtoonFade = onToggleWebtoonFade,
                     readerQuality = readerQuality,
@@ -697,12 +884,33 @@ private fun ReaderSettingsSheet(
                     onToggleDoubleTapZoom = onToggleDoubleTapZoom,
                     tapToChangePages = tapToChangePages,
                     onToggleTapToChangePages = onToggleTapToChangePages,
+                    readerHideThreshold = readerHideThreshold,
+                    onReaderHideThresholdChange = onReaderHideThresholdChange,
+                    doubleTapAnimDuration = doubleTapAnimDuration,
+                    onDoubleTapAnimDurationChange = onDoubleTapAnimDurationChange,
                     autoScroll = autoScroll,
                     autoScrollSpeedDp = autoScrollSpeedDp,
                     onToggleAutoScroll = onToggleAutoScroll,
                     onAutoScrollSpeedChange = onAutoScrollSpeedChange,
                 )
-                2 -> SettingsColorTab(readerBg = readerBg, onSelectReaderBg = onSelectReaderBg)
+                2 -> SettingsColorTab(
+                    readerBg = readerBg,
+                    onSelectReaderBg = onSelectReaderBg,
+                    customBrightness = customBrightness,
+                    onToggleCustomBrightness = onToggleCustomBrightness,
+                    customBrightnessValue = customBrightnessValue,
+                    onCustomBrightnessValueChange = onCustomBrightnessValueChange,
+                    colorFilter = colorFilter,
+                    onToggleColorFilter = onToggleColorFilter,
+                    colorFilterValue = colorFilterValue,
+                    onColorFilterValueChange = onColorFilterValueChange,
+                    colorFilterMode = colorFilterMode,
+                    onColorFilterModeChange = onColorFilterModeChange,
+                    grayscale = grayscale,
+                    onToggleGrayscale = onToggleGrayscale,
+                    invertedColors = invertedColors,
+                    onToggleInvertedColors = onToggleInvertedColors,
+                )
             }
         }
         Row(
@@ -737,6 +945,40 @@ private fun ColumnScope.SettingsReadingModeTab(
     onSelectReaderFit: (ReaderFit) -> Unit,
     seriesOverrideEnabled: Boolean,
     onToggleSeriesOverride: () -> Unit,
+    cropBorders: Boolean,
+    onToggleCropBorders: () -> Unit,
+    cropBordersPaged: Boolean,
+    onToggleCropBordersPaged: () -> Unit,
+    cropBordersContinuous: Boolean,
+    onToggleCropBordersContinuous: () -> Unit,
+    doubleTapZoom: Boolean,
+    onToggleDoubleTapZoom: () -> Unit,
+    pinchToZoom: Boolean,
+    onTogglePinchToZoom: () -> Unit,
+    tapToChangePages: Boolean,
+    onToggleTapToChangePages: () -> Unit,
+    webtoonSidePadding: Int,
+    onWebtoonSidePaddingChange: (Int) -> Unit,
+    webtoonNavigationMode: Int,
+    onWebtoonNavigationModeChange: (Int) -> Unit,
+    webtoonNavInverted: TappingInvertMode,
+    onWebtoonNavInvertedChange: (TappingInvertMode) -> Unit,
+    webtoonSmallerTapZone: Boolean,
+    onToggleWebtoonSmallerTapZone: () -> Unit,
+    webtoonScaleType: WebtoonScaleType,
+    onWebtoonScaleTypeChange: (WebtoonScaleType) -> Unit,
+    longStripGapSmartScale: Boolean,
+    onToggleLongStripGapSmartScale: () -> Unit,
+    webtoonDisableZoomOut: Boolean,
+    onToggleWebtoonDisableZoomOut: () -> Unit,
+    webtoonPageTransitions: Boolean,
+    onToggleWebtoonPageTransitions: () -> Unit,
+    webtoonSmoothAutoScroll: Boolean,
+    onToggleWebtoonSmoothAutoScroll: () -> Unit,
+    alwaysDecodeLongStripWithSSIV: Boolean,
+    onToggleAlwaysDecodeLongStripWithSSIV: () -> Unit,
+    continuousVerticalTappingByPage: Boolean,
+    onToggleContinuousVerticalTappingByPage: () -> Unit,
 ) {
     SectionCard("For this series") {
         ToggleRow(
@@ -778,21 +1020,283 @@ private fun ColumnScope.SettingsReadingModeTab(
         }
     }
     SectionCard("Page fit") {
-        OptionRow(
-            label = "Fit Screen",
-            selected = readerFit == ReaderFit.FIT,
-            onClick = { onSelectReaderFit(ReaderFit.FIT) },
+        val fits = listOf(
+            "Fit Screen" to ReaderFit.FIT,
+            "Stretch" to ReaderFit.STRETCH,
+            "Fit Width" to ReaderFit.FIT_WIDTH,
+            "Fit Height" to ReaderFit.FIT_HEIGHT,
+            "Original Size" to ReaderFit.ORIGINAL_SIZE,
+            "Smart Fit" to ReaderFit.SMART_FIT,
         )
-        OptionRow(
-            label = "Fit Width",
-            selected = readerFit == ReaderFit.FIT_WIDTH,
-            onClick = { onSelectReaderFit(ReaderFit.FIT_WIDTH) },
+        fits.chunked(3).forEach { rowFits ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 3.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                rowFits.forEach { (label, fit) ->
+                    ChoiceChip(
+                        label = label,
+                        selected = fit == readerFit,
+                        onClick = { onSelectReaderFit(fit) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                repeat(3 - rowFits.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+    if (readerMode == ReaderMode.WEBTOON) {
+        WebtoonSettingsSection(
+            cropBorders = cropBorders,
+            onToggleCropBorders = onToggleCropBorders,
+            doubleTapZoom = doubleTapZoom,
+            onToggleDoubleTapZoom = onToggleDoubleTapZoom,
+            pinchToZoom = pinchToZoom,
+            onTogglePinchToZoom = onTogglePinchToZoom,
+            webtoonSidePadding = webtoonSidePadding,
+            onWebtoonSidePaddingChange = onWebtoonSidePaddingChange,
+            webtoonNavigationMode = webtoonNavigationMode,
+            onWebtoonNavigationModeChange = onWebtoonNavigationModeChange,
+            webtoonNavInverted = webtoonNavInverted,
+            onWebtoonNavInvertedChange = onWebtoonNavInvertedChange,
+            webtoonSmallerTapZone = webtoonSmallerTapZone,
+            onToggleWebtoonSmallerTapZone = onToggleWebtoonSmallerTapZone,
+            webtoonScaleType = webtoonScaleType,
+            onWebtoonScaleTypeChange = onWebtoonScaleTypeChange,
+            longStripGapSmartScale = longStripGapSmartScale,
+            onToggleLongStripGapSmartScale = onToggleLongStripGapSmartScale,
+            webtoonDisableZoomOut = webtoonDisableZoomOut,
+            onToggleWebtoonDisableZoomOut = onToggleWebtoonDisableZoomOut,
+            webtoonPageTransitions = webtoonPageTransitions,
+            onToggleWebtoonPageTransitions = onToggleWebtoonPageTransitions,
+            webtoonSmoothAutoScroll = webtoonSmoothAutoScroll,
+            onToggleWebtoonSmoothAutoScroll = onToggleWebtoonSmoothAutoScroll,
+            alwaysDecodeLongStripWithSSIV = alwaysDecodeLongStripWithSSIV,
+            onToggleAlwaysDecodeLongStripWithSSIV = onToggleAlwaysDecodeLongStripWithSSIV,
         )
-        OptionRow(
-            label = "Fit Height",
-            selected = readerFit == ReaderFit.FIT_HEIGHT,
-            onClick = { onSelectReaderFit(ReaderFit.FIT_HEIGHT) },
+    }
+    if (readerMode == ReaderMode.WEBTOON_GAPS) {
+        SectionCard("Gaps") {
+            ToggleRow(
+                label = "Crop borders",
+                checked = cropBordersContinuous,
+                onCheckedChange = { onToggleCropBordersContinuous() },
+            )
+            ToggleRow(
+                label = "Tap to change pages",
+                subtitle = "Tap zones flip a page instead of scrolling",
+                checked = continuousVerticalTappingByPage,
+                onCheckedChange = { onToggleContinuousVerticalTappingByPage() },
+            )
+        }
+    }
+    if (readerMode == ReaderMode.LEFT_TO_RIGHT || readerMode == ReaderMode.RIGHT_TO_LEFT || readerMode == ReaderMode.VERTICAL) {
+        SectionCard("Paged") {
+            ToggleRow(
+                label = "Crop borders",
+                checked = cropBordersPaged,
+                onCheckedChange = { onToggleCropBordersPaged() },
+            )
+            ToggleRow(
+                label = "Tap to change pages",
+                checked = tapToChangePages,
+                onCheckedChange = { onToggleTapToChangePages() },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.WebtoonSettingsSection(
+    cropBorders: Boolean,
+    onToggleCropBorders: () -> Unit,
+    doubleTapZoom: Boolean,
+    onToggleDoubleTapZoom: () -> Unit,
+    pinchToZoom: Boolean,
+    onTogglePinchToZoom: () -> Unit,
+    webtoonSidePadding: Int,
+    onWebtoonSidePaddingChange: (Int) -> Unit,
+    webtoonNavigationMode: Int,
+    onWebtoonNavigationModeChange: (Int) -> Unit,
+    webtoonNavInverted: TappingInvertMode,
+    onWebtoonNavInvertedChange: (TappingInvertMode) -> Unit,
+    webtoonSmallerTapZone: Boolean,
+    onToggleWebtoonSmallerTapZone: () -> Unit,
+    webtoonScaleType: WebtoonScaleType,
+    onWebtoonScaleTypeChange: (WebtoonScaleType) -> Unit,
+    longStripGapSmartScale: Boolean,
+    onToggleLongStripGapSmartScale: () -> Unit,
+    webtoonDisableZoomOut: Boolean,
+    onToggleWebtoonDisableZoomOut: () -> Unit,
+    webtoonPageTransitions: Boolean,
+    onToggleWebtoonPageTransitions: () -> Unit,
+    webtoonSmoothAutoScroll: Boolean,
+    onToggleWebtoonSmoothAutoScroll: () -> Unit,
+    alwaysDecodeLongStripWithSSIV: Boolean,
+    onToggleAlwaysDecodeLongStripWithSSIV: () -> Unit,
+) {
+    SectionCard("Webtoon") {
+        Text(
+            text = "Tap zones",
+            style = MaterialTheme.typography.bodySmall.copy(color = Muted),
+            modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp),
         )
+        val zones = listOf(
+            "Default" to 0,
+            "L" to 1,
+            "Kindle" to 2,
+            "Edge" to 3,
+            "Right & Left" to 4,
+            "Disabled" to 5,
+        )
+        zones.chunked(3).forEach { rowZones ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                rowZones.forEach { (label, value) ->
+                    ChoiceChip(
+                        label = label,
+                        selected = webtoonNavigationMode == value,
+                        onClick = { onWebtoonNavigationModeChange(value) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                repeat(3 - rowZones.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+        Text(
+            text = "Invert tap zones",
+            style = MaterialTheme.typography.bodySmall.copy(color = Muted),
+            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
+        )
+        val inverts = listOf(
+            "Default" to TappingInvertMode.NONE,
+            "Horizontal" to TappingInvertMode.HORIZONTAL,
+            "Vertical" to TappingInvertMode.VERTICAL,
+            "Both" to TappingInvertMode.BOTH,
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            inverts.forEach { (label, value) ->
+                ChoiceChip(
+                    label = label,
+                    selected = webtoonNavInverted == value,
+                    onClick = { onWebtoonNavInvertedChange(value) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        ToggleRow(
+            label = "Smaller tap zones",
+            subtitle = "25% zones instead of 33%",
+            checked = webtoonSmallerTapZone,
+            onCheckedChange = { onToggleWebtoonSmallerTapZone() },
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "Webtoon scale type",
+            style = MaterialTheme.typography.bodySmall.copy(color = Muted),
+            modifier = Modifier.padding(start = 16.dp, bottom = 4.dp),
+        )
+        val scales = listOf(
+            "Fit" to WebtoonScaleType.FIT,
+            "4:3" to WebtoonScaleType.R4_3,
+            "3:2" to WebtoonScaleType.R3_2,
+            "16:9" to WebtoonScaleType.R16_9,
+            "20:9" to WebtoonScaleType.R20_9,
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            scales.forEach { (label, value) ->
+                ChoiceChip(
+                    label = label,
+                    selected = webtoonScaleType == value,
+                    onClick = { onWebtoonScaleTypeChange(value) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        ToggleRow(
+            label = "Smart scale in gaps mode",
+            subtitle = "Sizes each page to the chosen scale type",
+            checked = longStripGapSmartScale,
+            onCheckedChange = { onToggleLongStripGapSmartScale() },
+        )
+        ToggleRow(
+            label = "Crop borders",
+            checked = cropBorders,
+            onCheckedChange = { onToggleCropBorders() },
+        )
+        ToggleRow(
+            label = "Pinch to zoom",
+            checked = pinchToZoom,
+            onCheckedChange = { onTogglePinchToZoom() },
+        )
+        ToggleRow(
+            label = "Double tap to zoom",
+            checked = doubleTapZoom,
+            onCheckedChange = { onToggleDoubleTapZoom() },
+        )
+        ToggleRow(
+            label = "Disable zoom out",
+            subtitle = "Stops zooming below the page's fit width",
+            checked = webtoonDisableZoomOut,
+            onCheckedChange = { onToggleWebtoonDisableZoomOut() },
+        )
+        ToggleRow(
+            label = "Page transitions",
+            subtitle = "Smoothly animate tap-zone scrolling",
+            checked = webtoonPageTransitions,
+            onCheckedChange = { onToggleWebtoonPageTransitions() },
+        )
+        ToggleRow(
+            label = "Smooth auto-scroll",
+            checked = webtoonSmoothAutoScroll,
+            onCheckedChange = { onToggleWebtoonSmoothAutoScroll() },
+        )
+        ToggleRow(
+            label = "Always use subsampling view",
+            subtitle = "Region-decode every page (heavier, smoother on very tall strips)",
+            checked = alwaysDecodeLongStripWithSSIV,
+            onCheckedChange = { onToggleAlwaysDecodeLongStripWithSSIV() },
+        )
+        Text(
+            text = "Side padding",
+            style = MaterialTheme.typography.bodySmall.copy(color = Muted),
+            modifier = Modifier.padding(start = 16.dp, top = 8.dp),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Slider(
+                value = webtoonSidePadding.toFloat(),
+                onValueChange = { onWebtoonSidePaddingChange(it.toInt()) },
+                valueRange = 0f..25f,
+                colors = sliderAccentColors(),
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "$webtoonSidePadding%",
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold, color = OnDark),
+            )
+        }
     }
 }
 
@@ -804,6 +1308,8 @@ private fun ColumnScope.SettingsGeneralTab(
     onToggleShowPageNumber: () -> Unit,
     keepScreenOn: Boolean,
     onToggleKeepScreenOn: () -> Unit,
+    showReadingMode: Boolean,
+    onToggleShowReadingMode: () -> Unit,
     webtoonFade: Boolean,
     onToggleWebtoonFade: () -> Unit,
     readerQuality: Int,
@@ -814,6 +1320,10 @@ private fun ColumnScope.SettingsGeneralTab(
     onToggleDoubleTapZoom: () -> Unit,
     tapToChangePages: Boolean,
     onToggleTapToChangePages: () -> Unit,
+    readerHideThreshold: ReaderHideThreshold,
+    onReaderHideThresholdChange: (ReaderHideThreshold) -> Unit,
+    doubleTapAnimDuration: Int,
+    onDoubleTapAnimDurationChange: (Int) -> Unit,
     autoScroll: Boolean,
     autoScrollSpeedDp: Float,
     onToggleAutoScroll: () -> Unit,
@@ -829,6 +1339,12 @@ private fun ColumnScope.SettingsGeneralTab(
             label = "Keep screen on",
             checked = keepScreenOn,
             onCheckedChange = { onToggleKeepScreenOn() },
+        )
+        ToggleRow(
+            label = "Show reading mode",
+            subtitle = "Show the reading mode button in the bottom bar",
+            checked = showReadingMode,
+            onCheckedChange = { onToggleShowReadingMode() },
         )
     }
     SectionCard("Long strip") {
@@ -891,6 +1407,58 @@ private fun ColumnScope.SettingsGeneralTab(
             checked = tapToChangePages,
             onCheckedChange = { onToggleTapToChangePages() },
         )
+        Text(
+            text = "Double-tap animation speed",
+            style = MaterialTheme.typography.bodySmall.copy(color = Muted),
+            modifier = Modifier.padding(start = 16.dp, top = 8.dp),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Slider(
+                value = doubleTapAnimDuration.toFloat(),
+                onValueChange = { onDoubleTapAnimDurationChange(it.toInt()) },
+                valueRange = 100f..1000f,
+                colors = sliderAccentColors(),
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "${doubleTapAnimDuration}ms",
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold, color = OnDark),
+            )
+        }
+    }
+    SectionCard("Reader menu") {
+        Text(
+            text = "Hide menu after scrolling",
+            style = MaterialTheme.typography.bodySmall.copy(color = Muted),
+            modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp),
+        )
+        val thresholds = listOf(
+            "Very fast" to ReaderHideThreshold.HIGHEST,
+            "Fast" to ReaderHideThreshold.HIGH,
+            "Normal" to ReaderHideThreshold.LOW,
+            "Slow" to ReaderHideThreshold.LOWEST,
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            thresholds.forEach { (label, value) ->
+                ChoiceChip(
+                    label = label,
+                    selected = readerHideThreshold == value,
+                    onClick = { onReaderHideThresholdChange(value) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
     }
 }
 
@@ -898,6 +1466,20 @@ private fun ColumnScope.SettingsGeneralTab(
 private fun ColumnScope.SettingsColorTab(
     readerBg: ReaderBg,
     onSelectReaderBg: (ReaderBg) -> Unit,
+    customBrightness: Boolean,
+    onToggleCustomBrightness: () -> Unit,
+    customBrightnessValue: Int,
+    onCustomBrightnessValueChange: (Int) -> Unit,
+    colorFilter: Boolean,
+    onToggleColorFilter: () -> Unit,
+    colorFilterValue: Int,
+    onColorFilterValueChange: (Int) -> Unit,
+    colorFilterMode: Int,
+    onColorFilterModeChange: (Int) -> Unit,
+    grayscale: Boolean,
+    onToggleGrayscale: () -> Unit,
+    invertedColors: Boolean,
+    onToggleInvertedColors: () -> Unit,
 ) {
     SectionCard("Reader background") {
         Row(
@@ -911,9 +1493,104 @@ private fun ColumnScope.SettingsColorTab(
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "The reader background doubles as the color scheme. Color filters are not available in this reader yet.",
+            text = "The reader background doubles as the color scheme.",
             style = MaterialTheme.typography.bodySmall.copy(color = Muted),
             modifier = Modifier.padding(horizontal = 16.dp),
+        )
+    }
+    SectionCard("Custom brightness") {
+        ToggleRow(
+            label = "Custom brightness",
+            subtitle = "Negative dims the screen, positive brightens it",
+            checked = customBrightness,
+            onCheckedChange = { onToggleCustomBrightness() },
+        )
+        if (customBrightness) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Slider(
+                    value = customBrightnessValue.toFloat(),
+                    onValueChange = { onCustomBrightnessValueChange(it.toInt()) },
+                    valueRange = -75f..100f,
+                    colors = sliderAccentColors(),
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "$customBrightnessValue%",
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold, color = OnDark),
+                )
+            }
+        }
+    }
+    SectionCard("Color filter") {
+        ToggleRow(
+            label = "Color filter",
+            subtitle = "Tint the page with a blend-mode color",
+            checked = colorFilter,
+            onCheckedChange = { onToggleColorFilter() },
+        )
+        if (colorFilter) {
+            val a = (colorFilterValue ushr 24) and 0xFF
+            val r = (colorFilterValue ushr 16) and 0xFF
+            val g = (colorFilterValue ushr 8) and 0xFF
+            val b = colorFilterValue and 0xFF
+            ColorChannelSlider("R", r) { nv ->
+                onColorFilterValueChange((a shl 24) or (nv shl 16) or (g shl 8) or b)
+            }
+            ColorChannelSlider("G", g) { nv ->
+                onColorFilterValueChange((a shl 24) or (r shl 16) or (nv shl 8) or b)
+            }
+            ColorChannelSlider("B", b) { nv ->
+                onColorFilterValueChange((a shl 24) or (r shl 16) or (g shl 8) or nv)
+            }
+            ColorChannelSlider("A", a) { nv ->
+                onColorFilterValueChange((nv shl 24) or (r shl 16) or (g shl 8) or b)
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Blend mode",
+                style = MaterialTheme.typography.bodySmall.copy(color = Muted),
+                modifier = Modifier.padding(start = 16.dp, bottom = 4.dp),
+            )
+            val modes = listOf("Normal", "Multiply", "Screen", "Overlay", "Lighten", "Darken")
+            modes.chunked(3).forEach { rowModes ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    rowModes.forEachIndexed { i, label ->
+                        val value = modes.indexOf(label)
+                        ChoiceChip(
+                            label = label,
+                            selected = colorFilterMode == value,
+                            onClick = { onColorFilterModeChange(value) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    repeat(3 - rowModes.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
+    }
+    SectionCard("Grayscale & invert") {
+        ToggleRow(
+            label = "Grayscale",
+            subtitle = "Renders pages in black & white",
+            checked = grayscale,
+            onCheckedChange = { onToggleGrayscale() },
+        )
+        ToggleRow(
+            label = "Inverted colors",
+            subtitle = "Light becomes dark and vice versa",
+            checked = invertedColors,
+            onCheckedChange = { onToggleInvertedColors() },
         )
     }
 }
@@ -1252,6 +1929,65 @@ private fun QualityChip(
             .clickable { onClick() }
             .padding(horizontal = 12.dp, vertical = 8.dp),
     )
+}
+
+@Composable
+private fun ChoiceChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelMedium.copy(
+            color = if (selected) Accent else OnDark,
+            textAlign = TextAlign.Center,
+        ),
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (selected) Accent.copy(alpha = 0.18f) else CardColor)
+            .border(
+                width = if (selected) 1.dp else 0.dp,
+                color = if (selected) Accent else Color.Transparent,
+                shape = RoundedCornerShape(10.dp),
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 6.dp, vertical = 8.dp),
+    )
+}
+
+@Composable
+private fun ColorChannelSlider(
+    name: String,
+    value: Int,
+    onValue: (Int) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = name,
+            style = MaterialTheme.typography.labelMedium.copy(color = Muted),
+            modifier = Modifier.width(16.dp),
+        )
+        Slider(
+            value = value.toFloat(),
+            onValueChange = { onValue(it.toInt()) },
+            valueRange = 0f..255f,
+            colors = sliderAccentColors(),
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = "$value",
+            style = MaterialTheme.typography.labelMedium.copy(color = OnDark),
+            modifier = Modifier.width(34.dp),
+            textAlign = TextAlign.End,
+        )
+    }
 }
 
 @Composable

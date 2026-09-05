@@ -3,27 +3,32 @@ package eu.kanade.tachiyomi.ui.reader.viewer.webtoon
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.graphics.Color as AndroidColor
+import android.graphics.PointF
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.view.animation.LinearInterpolator
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.WebtoonLayoutManager
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import com.example.data.reader.WebtoonPageCache
 import com.example.data.source.MangaSource
+import com.example.ui.WebtoonScaleType
+import eu.kanade.tachiyomi.ui.reader.viewer.NavigationRegion
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
+import eu.kanade.tachiyomi.ui.reader.viewer.ViewerNavigation
 import java.io.File
 import java.io.IOException
+import kotlin.math.abs
 
 /**
- * The yomi webtoon reader, ported into Nekoread. A [RecyclerView] (with the extra-layout-space
- * [WebtoonLayoutManager]) displays every page through a [ReaderPageImageView] that region-decodes
- * each strip straight from its on-device cache file — never a giant full-height bitmap, which is
- * exactly what keeps long-strip scrolling smooth on slow sources like comix. Pinch / double-tap
- * whole-strip zoom, tap zones (left = scroll up, right = scroll down, middle = toggle menu) and
- * near-end reporting mirror yomi's behavior.
+ * The yomi/chimahon webtoon reader, ported into Nekoread. A [RecyclerView] (with the
+ * extra-layout-space [WebtoonLayoutManager]) displays every page through a [ReaderPageImageView]
+ * that region-decodes each strip straight from its on-device cache file. Tap zones (configurable
+ * via [WebtoonConfig]'s navigation scheme), pinch / double-tap whole-strip zoom, side padding,
+ * border cropping and near-end reporting all mirror yomi's behavior.
  */
 class WebtoonViewer(context: Context) {
 
@@ -36,12 +41,7 @@ class WebtoonViewer(context: Context) {
     /** Distance to scroll when the user taps on one side of the recycler view. */
     private val scrollDistance = context.resources.displayMetrics.heightPixels * 3 / 4
 
-    /** How far beyond the viewport the layout manager creates/binds pages, so pages attach (from
-     *  the warmed Coil memory cache / cached metadata / the chunked decode) well before they scroll
-     *  into view. One screen matches yomi: binds are cheap now (Coil memory-cache hits for short
-     *  pages, one chunk decode for tall strips), so a full extra screen of runway is enough — a
-     *  second screen would only keep more decoded page bitmaps alive (the 2x we used before was
-     *  compensating for the SSIV view's slow per-bind region-decode). */
+    /** How far beyond the viewport the layout manager creates/binds pages. */
     private val extraLayoutSpace = context.resources.displayMetrics.heightPixels
 
     /** Layout manager of the recycler view. */
@@ -58,33 +58,32 @@ class WebtoonViewer(context: Context) {
 
     /** Whether a small gap is added between pages (the "vertical with gaps" mode). */
     var gaps: Boolean = false
-
-    /** Whether the page image viewer crops the (often white/black) borders off each strip. */
-    var cropBorders: Boolean = false
         set(value) {
             if (field == value) return
             field = value
-            pageConfig = pageConfig.copy(cropBorders = value)
-            reloadPages()
+            isContinuous = !value
         }
 
-    /** Whether double-tapping a page zooms it in/out (yomi's "Double tap to zoom"). */
-    var doubleTapZoom: Boolean = true
+    /** Whether the pages form one continuous strip (no gaps). */
+    var isContinuous: Boolean = true
         set(value) {
+            if (field == value) return
             field = value
-            frame.doubleTapZoom = value
+            applyConfig()
         }
 
-    /** Whether tapping the left/right side of the screen scrolls (yomi's tap zones). */
-    var tapToChangePages: Boolean = false
+    /** Webtoon-mode settings (tap zones, crop, side padding, zoom...). */
+    var config: WebtoonConfig = WebtoonConfig()
+        set(value) {
+            if (field === value) return
+            field = value
+            applyConfig()
+        }
 
-    /** Target decode width (px) for short webtoon pages that render via Coil (yomi's fast path).
-     *  Set by the reader from the quality-scaled display width; 0 means the screen width. */
+    /** Target decode width (px) for short webtoon pages that render via Coil (yomi's fast path). */
     var decodeWidth: Int = 0
 
-    /** Tall strips (the chunked decode path) decode as RGB_565 at Low image quality — half the
-     *  memory per chunk. Set by the reader; mirrors the short-page path's quality handling.
-     *  Changing it re-renders the live pages (reloadPages), like the other per-page options. */
+    /** Tall strips (the SSIV path) decode as RGB_565 at Low image quality. */
     var decodeRgb565: Boolean = false
         set(value) {
             if (field == value) return
@@ -101,13 +100,25 @@ class WebtoonViewer(context: Context) {
         enablePinchToZoom = true,
     )
 
+    /** Color filter (grayscale / inverted colors) applied to every page's image view. */
+    var colorFilter: android.graphics.ColorFilter? = null
+        set(value) {
+            if (field == value) return
+            field = value
+            for (i in 0 until recycler.childCount) {
+                val holder = recycler.getChildViewHolder(recycler.getChildAt(i)) as? WebtoonPageHolder
+                    ?: continue
+                holder.frame.colorFilter = value
+            }
+        }
+
     /** Called when the current page changes (segment index, 1-based page, page total). */
     var onPageChanged: ((seg: Int, page: Int, pageTotal: Int) -> Unit)? = null
 
     /** Called when the user enters/leaves the last few pages of the last streamed chapter. */
     var onNearEndChanged: ((Boolean) -> Unit)? = null
 
-    /** Called when the user taps the center of the screen (toggle the reader menu). */
+    /** Called when the user taps a menu region (toggle the reader menu). */
     var onMenuTap: (() -> Unit)? = null
 
     /** Called when the user presses "Retry" in the failed-next-chapter trailer. */
@@ -115,6 +126,9 @@ class WebtoonViewer(context: Context) {
 
     /** Called on any user touch (drag or tap) — used to stop auto-scroll. */
     var onUserScroll: (() -> Unit)? = null
+
+    /** Called when a fast scroll should hide the reader menu (threshold from config). */
+    var onHideMenu: (() -> Unit)? = null
 
     /** Text color for the reader chrome (dividers, errors, trailer text). */
     var textColor: Int = AndroidColor.WHITE
@@ -127,6 +141,8 @@ class WebtoonViewer(context: Context) {
     private var positioned = false
     private var reportedPage: Triple<Int, Int, Int>? = null
     private var lastNearEnd: Boolean? = null
+    private var scrolling = false
+    private var navigator: ViewerNavigation = config.buildNavigator()
 
     /** The view this viewer owns (the zoom frame containing the recycler). */
     val view: View get() = frame
@@ -139,14 +155,20 @@ class WebtoonViewer(context: Context) {
         recycler.itemAnimator = null
         recycler.layoutManager = layoutManager
         recycler.adapter = adapter
+        recycler.useConfirmedSingleTap = isContinuous
         recycler.addOnScrollListener(
             object : RecyclerView.OnScrollListener() {
                 override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                     updateCurrentPage()
                     updateNearEnd()
+                    // Hide the reader menu once the user scrolls fast enough (yomi's hide threshold).
+                    if (scrolling && abs(dy) > config.readerHideThreshold.threshold) {
+                        onHideMenu?.invoke()
+                    }
                 }
 
                 override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                    scrolling = newState != RecyclerView.SCROLL_STATE_IDLE
                     if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
                         onUserScroll?.invoke()
                     }
@@ -154,11 +176,31 @@ class WebtoonViewer(context: Context) {
             },
         )
         recycler.tapListener = { event -> handleTap(event) }
-        frame.doubleTapZoom = doubleTapZoom
-        frame.zoomOutDisabled = false
-        frame.enablePinchToZoom = true
+        frame.doubleTapZoom = config.doubleTapZoom
+        frame.pinchToZoom = config.pinchToZoom
+        frame.zoomOutDisabled = config.webtoonDisableZoomOut
         frame.layoutParams = ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)
         frame.addView(recycler)
+    }
+
+    /** Applies the current [config]/[isContinuous] to the frame, page config and navigator. */
+    private fun applyConfig() {
+        val crop = if (isContinuous) config.cropBordersWebtoon else config.continuousCropBorders
+        pageConfig = pageConfig.copy(
+            cropBorders = crop,
+            zoomDuration = config.doubleTapAnimDuration,
+            alwaysDecodeLongStripWithSSIV = config.alwaysDecodeLongStripWithSSIV,
+            enablePinchToZoom = config.pinchToZoom,
+            doubleTapZoom = config.doubleTapZoom,
+            fadeIn = config.fadeIn,
+        )
+        frame.doubleTapZoom = config.doubleTapZoom
+        frame.pinchToZoom = config.pinchToZoom
+        frame.zoomOutDisabled = config.webtoonDisableZoomOut
+        navigator = config.buildNavigator()
+        recycler.useConfirmedSingleTap = isContinuous
+        reloadPages()
+        applyWebtoonScaleType()
     }
 
     /** Sets the reader's items, sizes and trailer, scrolling to [initialPage] on first layout. */
@@ -173,6 +215,8 @@ class WebtoonViewer(context: Context) {
         } else {
             recycler.post { updateCurrentPage() }
         }
+        recycler.useConfirmedSingleTap = isContinuous
+        recycler.post { applyWebtoonScaleType() }
     }
 
     /** Updates only the trailing item (spinner / error / end) without touching the pages. */
@@ -182,9 +226,7 @@ class WebtoonViewer(context: Context) {
         this.trailer = trailer
     }
 
-    /** Re-binds every currently bound page holder so a render-config change (crop borders, image
-     *  quality) takes effect immediately instead of only on the next bind. Scroll position is
-     *  untouched — bind keeps the holder's pre-sized real height. */
+    /** Re-binds every currently bound page holder so a render-config change takes effect now. */
     fun reloadPages() {
         for (i in 0 until recycler.childCount) {
             val holder = recycler.getChildViewHolder(recycler.getChildAt(i)) as? WebtoonPageHolder
@@ -218,32 +260,68 @@ class WebtoonViewer(context: Context) {
         recycler.scrollBy(0, dy)
     }
 
+    /** Smooth-scrolls the strip by [dy] pixels over [durationMs] (used by smooth auto-scroll). */
+    fun smoothScrollBy(dy: Int, durationMs: Long) {
+        recycler.smoothScrollBy(0, dy, LinearInterpolator(), durationMs)
+    }
+
+    /** Smooth-scrolls one screen height over [durationMs] (yomi's linear auto-scroll step). */
+    fun linearScroll(durationMs: Long) {
+        recycler.smoothScrollBy(0, recycler.height, LinearInterpolator(), durationMs)
+    }
+
     /** Downloads the page's bytes once to the cache file and returns it. */
     suspend fun loadPage(item: WebtoonItem.Page): File {
         val src = source ?: throw IOException("No source available for this manga")
         return WebtoonPageCache.fileFor(item.desc, src, cacheDir)
     }
 
-    /** Yomi tap zones: with "tap to change pages" ON, left third scrolls up, right third scrolls
-     *  down, middle toggles the menu. With it OFF (the default) ANY tap anywhere toggles the menu. */
+    /** Tap zones via the config's navigation scheme (port of chimahon's tap listener). */
     private fun handleTap(event: MotionEvent) {
         onUserScroll?.invoke()
-        if (!tapToChangePages) {
-            onMenuTap?.invoke()
-            return
-        }
         val width = recycler.width.coerceAtLeast(1)
-        val x = event.x / width
-        when {
-            x < 0.34f -> scrollBy(-scrollDistance)
-            x > 0.66f -> scrollBy(scrollDistance)
-            else -> onMenuTap?.invoke()
+        val height = recycler.originalHeight.coerceAtLeast(1)
+        val pos = PointF(event.x / width, event.y / height)
+        when (navigator.getAction(pos)) {
+            NavigationRegion.MENU -> onMenuTap?.invoke()
+            NavigationRegion.NEXT, NavigationRegion.RIGHT -> scrollDown()
+            NavigationRegion.PREV, NavigationRegion.LEFT -> scrollUp()
         }
     }
 
-    /** True if [file] is a tall webtoon strip (height > 3x width — yomi/mihon's rule) — the ones
-     *  SSIV region-decodes from disk instead of decoding whole via Coil. Bounds-only decode; falls
-     *  back to tall on error. */
+    private fun scrollUp() {
+        if (config.usePageTransitions) {
+            recycler.smoothScrollBy(0, -scrollDistance)
+        } else {
+            recycler.scrollBy(0, -scrollDistance)
+        }
+    }
+
+    private fun scrollDown() {
+        if (!isContinuous && config.continuousVerticalTappingByPage) {
+            moveToNextPage()
+            return
+        }
+        if (config.usePageTransitions) {
+            recycler.smoothScrollBy(0, scrollDistance)
+        } else {
+            recycler.scrollBy(0, scrollDistance)
+        }
+    }
+
+    /** In gaps mode with tap-by-page enabled: jump to the page after the one at the bottom. */
+    private fun moveToNextPage() {
+        val page = currentLastPage() ?: return
+        val pos = adapter.items.indexOfFirst { it === page }
+        if (pos < 0 || pos + 1 >= adapter.itemCount) return
+        if (config.usePageTransitions) {
+            layoutManager.smoothScrollToPosition(recycler, RecyclerView.State(), pos + 1)
+        } else {
+            layoutManager.scrollToPositionWithOffset(pos + 1, 0)
+        }
+    }
+
+    /** True if [file] is a tall webtoon strip (height > 3x width — yomi/mihon's rule). */
     fun isTallPage(file: File): Boolean {
         return try {
             val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -251,6 +329,38 @@ class WebtoonViewer(context: Context) {
             WebtoonPageCache.isTallPage(opts.outWidth, opts.outHeight)
         } catch (e: Throwable) {
             true
+        }
+    }
+
+    /**
+     * Gaps-mode smart scaling (port of chimahon's webtoonScaleType listener): in gaps mode with
+     * smart scale enabled, pages are zoomed so each displays at the chosen aspect ratio — on tall
+     * portrait screens this is a no-op; on short/landscape screens it zooms pages to fill the
+     * screen height.
+     */
+    private fun applyWebtoonScaleType() {
+        if (isContinuous || !config.longStripGapSmartScale) {
+            recycler.scaleTo(1f)
+            return
+        }
+        recycler.post {
+            val currentWidth = recycler.width
+            val currentHeight = recycler.originalHeight
+            if (currentWidth <= 0 || currentHeight <= 0) return@post
+            val scaleType = config.webtoonScaleType
+            if (scaleType == WebtoonScaleType.FIT) {
+                recycler.scaleTo(1f)
+                return@post
+            }
+            val desiredRatio = scaleType.ratio
+            val screenRatio = currentWidth.toFloat() / currentHeight
+            val desiredWidth = currentHeight * desiredRatio
+            val desiredScale = desiredWidth / currentWidth
+            if (screenRatio > desiredRatio) {
+                recycler.scaleTo(desiredScale)
+            } else {
+                recycler.scaleTo(1f)
+            }
         }
     }
 

@@ -36,7 +36,7 @@ enum class ReaderBg {
 }
 
 enum class ReaderFit {
-    FIT, FIT_WIDTH, FIT_HEIGHT
+    FIT, STRETCH, FIT_WIDTH, FIT_HEIGHT, ORIGINAL_SIZE, SMART_FIT
 }
 
 // Yomi-style reader orientation lock: AUTO follows the system, PORTRAIT/LANDSCAPE force the
@@ -112,8 +112,85 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _doubleTapZoom = MutableStateFlow(true)
     val doubleTapZoom: StateFlow<Boolean> = _doubleTapZoom.asStateFlow()
 
+    private val _pinchToZoom = MutableStateFlow(true)
+    val pinchToZoom: StateFlow<Boolean> = _pinchToZoom.asStateFlow()
+
     private val _tapToChangePages = MutableStateFlow(false)
     val tapToChangePages: StateFlow<Boolean> = _tapToChangePages.asStateFlow()
+
+    // Webtoon-mode settings ported from chimahon.
+    private val _webtoonCropBorders = MutableStateFlow(false)
+    val webtoonCropBorders: StateFlow<Boolean> = _webtoonCropBorders.asStateFlow()
+
+    private val _cropBordersPaged = MutableStateFlow(false)
+    val cropBordersPaged: StateFlow<Boolean> = _cropBordersPaged.asStateFlow()
+
+    private val _cropBordersContinuous = MutableStateFlow(false)
+    val cropBordersContinuous: StateFlow<Boolean> = _cropBordersContinuous.asStateFlow()
+
+    private val _webtoonSidePadding = MutableStateFlow(0)
+    val webtoonSidePadding: StateFlow<Int> = _webtoonSidePadding.asStateFlow()
+
+    private val _webtoonNavigationMode = MutableStateFlow(5)
+    val webtoonNavigationMode: StateFlow<Int> = _webtoonNavigationMode.asStateFlow()
+
+    private val _webtoonNavInverted = MutableStateFlow(TappingInvertMode.NONE)
+    val webtoonNavInverted: StateFlow<TappingInvertMode> = _webtoonNavInverted.asStateFlow()
+
+    private val _webtoonSmallerTapZone = MutableStateFlow(false)
+    val webtoonSmallerTapZone: StateFlow<Boolean> = _webtoonSmallerTapZone.asStateFlow()
+
+    private val _webtoonScaleType = MutableStateFlow(WebtoonScaleType.FIT)
+    val webtoonScaleType: StateFlow<WebtoonScaleType> = _webtoonScaleType.asStateFlow()
+
+    private val _longStripGapSmartScale = MutableStateFlow(false)
+    val longStripGapSmartScale: StateFlow<Boolean> = _longStripGapSmartScale.asStateFlow()
+
+    private val _webtoonDisableZoomOut = MutableStateFlow(false)
+    val webtoonDisableZoomOut: StateFlow<Boolean> = _webtoonDisableZoomOut.asStateFlow()
+
+    private val _webtoonPageTransitions = MutableStateFlow(true)
+    val webtoonPageTransitions: StateFlow<Boolean> = _webtoonPageTransitions.asStateFlow()
+
+    private val _webtoonSmoothAutoScroll = MutableStateFlow(true)
+    val webtoonSmoothAutoScroll: StateFlow<Boolean> = _webtoonSmoothAutoScroll.asStateFlow()
+
+    private val _alwaysDecodeLongStripWithSSIV = MutableStateFlow(false)
+    val alwaysDecodeLongStripWithSSIV: StateFlow<Boolean> = _alwaysDecodeLongStripWithSSIV.asStateFlow()
+
+    private val _continuousVerticalTappingByPage = MutableStateFlow(false)
+    val continuousVerticalTappingByPage: StateFlow<Boolean> = _continuousVerticalTappingByPage.asStateFlow()
+
+    private val _readerHideThreshold = MutableStateFlow(ReaderHideThreshold.LOW)
+    val readerHideThreshold: StateFlow<ReaderHideThreshold> = _readerHideThreshold.asStateFlow()
+
+    private val _doubleTapAnimDuration = MutableStateFlow(500)
+    val doubleTapAnimDuration: StateFlow<Int> = _doubleTapAnimDuration.asStateFlow()
+
+    private val _showReadingMode = MutableStateFlow(true)
+    val showReadingMode: StateFlow<Boolean> = _showReadingMode.asStateFlow()
+
+    // Color options ported from chimahon's color-filter tab.
+    private val _customBrightness = MutableStateFlow(false)
+    val customBrightness: StateFlow<Boolean> = _customBrightness.asStateFlow()
+
+    private val _customBrightnessValue = MutableStateFlow(0)
+    val customBrightnessValue: StateFlow<Int> = _customBrightnessValue.asStateFlow()
+
+    private val _colorFilter = MutableStateFlow(false)
+    val colorFilter: StateFlow<Boolean> = _colorFilter.asStateFlow()
+
+    private val _colorFilterValue = MutableStateFlow(0)
+    val colorFilterValue: StateFlow<Int> = _colorFilterValue.asStateFlow()
+
+    private val _colorFilterMode = MutableStateFlow(0)
+    val colorFilterMode: StateFlow<Int> = _colorFilterMode.asStateFlow()
+
+    private val _grayscale = MutableStateFlow(false)
+    val grayscale: StateFlow<Boolean> = _grayscale.asStateFlow()
+
+    private val _invertedColors = MutableStateFlow(false)
+    val invertedColors: StateFlow<Boolean> = _invertedColors.asStateFlow()
 
     // Per-series reader overrides: a manga can pin its own reading mode (the global mode still
     // applies everywhere else). Enabled state and mode are stored per manga id in prefs.
@@ -131,6 +208,47 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _cropBorders.value = prefs.getBoolean("reader_crop_borders", false)
         _doubleTapZoom.value = prefs.getBoolean("reader_double_tap_zoom", true)
         _tapToChangePages.value = prefs.getBoolean("reader_tap_change_pages", false)
+        _pinchToZoom.value = prefs.getBoolean("reader_pinch_to_zoom", true)
+        _webtoonCropBorders.value = prefs.getBoolean("reader_webtoon_crop_borders", false)
+        _cropBordersPaged.value = prefs.getBoolean("reader_crop_borders_paged", false)
+        _cropBordersContinuous.value = prefs.getBoolean("reader_crop_borders_continuous", false)
+        _webtoonSidePadding.value = prefs.getInt("reader_webtoon_side_padding", 0).coerceIn(0, 25)
+        _webtoonNavigationMode.value = prefs.getInt("reader_navigation_mode_webtoon", 5).coerceIn(0, 5)
+        // One-time migration: users who had "Tap to change pages" enabled before tap zones existed
+        // get the L (default) tap-zone scheme in webtoon mode instead of the (now separate)
+        // Disabled default, so their old behavior doesn't silently vanish.
+        if (!prefs.getBoolean("webtoon_nav_migrated", false)) {
+            prefs.edit().putBoolean("webtoon_nav_migrated", true).apply()
+            if (!prefs.contains("reader_navigation_mode_webtoon") && prefs.getBoolean("reader_tap_change_pages", false)) {
+                _webtoonNavigationMode.value = 0
+                prefs.edit().putInt("reader_navigation_mode_webtoon", 0).apply()
+            }
+        }
+        _webtoonNavInverted.value = runCatching {
+            TappingInvertMode.valueOf(prefs.getString("reader_webtoon_nav_inverted", TappingInvertMode.NONE.name)!!)
+        }.getOrDefault(TappingInvertMode.NONE)
+        _webtoonSmallerTapZone.value = prefs.getBoolean("reader_webtoon_smaller_tap_zone", false)
+        _webtoonScaleType.value = runCatching {
+            WebtoonScaleType.valueOf(prefs.getString("reader_webtoon_scale_type", WebtoonScaleType.FIT.name)!!)
+        }.getOrDefault(WebtoonScaleType.FIT)
+        _longStripGapSmartScale.value = prefs.getBoolean("reader_long_strip_gap_smart_scale", false)
+        _webtoonDisableZoomOut.value = prefs.getBoolean("reader_webtoon_disable_zoom_out", false)
+        _webtoonPageTransitions.value = prefs.getBoolean("reader_webtoon_page_transitions", true)
+        _webtoonSmoothAutoScroll.value = prefs.getBoolean("reader_webtoon_smooth_auto_scroll", true)
+        _alwaysDecodeLongStripWithSSIV.value = prefs.getBoolean("reader_webtoon_always_ssiv", false)
+        _continuousVerticalTappingByPage.value = prefs.getBoolean("reader_webtoon_tap_by_page", false)
+        _readerHideThreshold.value = runCatching {
+            ReaderHideThreshold.valueOf(prefs.getString("reader_hide_threshold", ReaderHideThreshold.LOW.name)!!)
+        }.getOrDefault(ReaderHideThreshold.LOW)
+        _doubleTapAnimDuration.value = prefs.getInt("reader_double_tap_anim_duration", 500).coerceIn(100, 1000)
+        _showReadingMode.value = prefs.getBoolean("reader_show_reading_mode", true)
+        _customBrightness.value = prefs.getBoolean("reader_custom_brightness", false)
+        _customBrightnessValue.value = prefs.getInt("reader_custom_brightness_value", 0).coerceIn(-75, 100)
+        _colorFilter.value = prefs.getBoolean("reader_color_filter", false)
+        _colorFilterValue.value = prefs.getInt("reader_color_filter_value", 0)
+        _colorFilterMode.value = prefs.getInt("reader_color_filter_mode", 0).coerceIn(0, 5)
+        _grayscale.value = prefs.getBoolean("reader_grayscale", false)
+        _invertedColors.value = prefs.getBoolean("reader_inverted_colors", false)
         _seriesOverrideEnabled.value = prefs.all.mapNotNull { (k, v) ->
             if (k.startsWith("series_override_") && v is Boolean) k.removePrefix("series_override_") to v else null
         }.toMap()
@@ -456,9 +574,139 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         prefs.edit().putBoolean("reader_double_tap_zoom", enabled).apply()
     }
 
+    fun setPinchToZoom(enabled: Boolean) {
+        _pinchToZoom.value = enabled
+        prefs.edit().putBoolean("reader_pinch_to_zoom", enabled).apply()
+    }
+
     fun setTapToChangePages(enabled: Boolean) {
         _tapToChangePages.value = enabled
         prefs.edit().putBoolean("reader_tap_change_pages", enabled).apply()
+    }
+
+    fun setWebtoonCropBorders(enabled: Boolean) {
+        _webtoonCropBorders.value = enabled
+        prefs.edit().putBoolean("reader_webtoon_crop_borders", enabled).apply()
+    }
+
+    fun setCropBordersPaged(enabled: Boolean) {
+        _cropBordersPaged.value = enabled
+        prefs.edit().putBoolean("reader_crop_borders_paged", enabled).apply()
+    }
+
+    fun setCropBordersContinuous(enabled: Boolean) {
+        _cropBordersContinuous.value = enabled
+        prefs.edit().putBoolean("reader_crop_borders_continuous", enabled).apply()
+    }
+
+    fun setWebtoonSidePadding(padding: Int) {
+        val p = padding.coerceIn(0, 25)
+        _webtoonSidePadding.value = p
+        prefs.edit().putInt("reader_webtoon_side_padding", p).apply()
+    }
+
+    fun setWebtoonNavigationMode(mode: Int) {
+        val m = mode.coerceIn(0, 5)
+        _webtoonNavigationMode.value = m
+        prefs.edit().putInt("reader_navigation_mode_webtoon", m).apply()
+    }
+
+    fun setWebtoonNavInverted(mode: TappingInvertMode) {
+        _webtoonNavInverted.value = mode
+        prefs.edit().putString("reader_webtoon_nav_inverted", mode.name).apply()
+    }
+
+    fun setWebtoonSmallerTapZone(enabled: Boolean) {
+        _webtoonSmallerTapZone.value = enabled
+        prefs.edit().putBoolean("reader_webtoon_smaller_tap_zone", enabled).apply()
+    }
+
+    fun setWebtoonScaleType(type: WebtoonScaleType) {
+        _webtoonScaleType.value = type
+        prefs.edit().putString("reader_webtoon_scale_type", type.name).apply()
+    }
+
+    fun setLongStripGapSmartScale(enabled: Boolean) {
+        _longStripGapSmartScale.value = enabled
+        prefs.edit().putBoolean("reader_long_strip_gap_smart_scale", enabled).apply()
+    }
+
+    fun setWebtoonDisableZoomOut(enabled: Boolean) {
+        _webtoonDisableZoomOut.value = enabled
+        prefs.edit().putBoolean("reader_webtoon_disable_zoom_out", enabled).apply()
+    }
+
+    fun setWebtoonPageTransitions(enabled: Boolean) {
+        _webtoonPageTransitions.value = enabled
+        prefs.edit().putBoolean("reader_webtoon_page_transitions", enabled).apply()
+    }
+
+    fun setWebtoonSmoothAutoScroll(enabled: Boolean) {
+        _webtoonSmoothAutoScroll.value = enabled
+        prefs.edit().putBoolean("reader_webtoon_smooth_auto_scroll", enabled).apply()
+    }
+
+    fun setAlwaysDecodeLongStripWithSSIV(enabled: Boolean) {
+        _alwaysDecodeLongStripWithSSIV.value = enabled
+        prefs.edit().putBoolean("reader_webtoon_always_ssiv", enabled).apply()
+    }
+
+    fun setContinuousVerticalTappingByPage(enabled: Boolean) {
+        _continuousVerticalTappingByPage.value = enabled
+        prefs.edit().putBoolean("reader_webtoon_tap_by_page", enabled).apply()
+    }
+
+    fun setReaderHideThreshold(threshold: ReaderHideThreshold) {
+        _readerHideThreshold.value = threshold
+        prefs.edit().putString("reader_hide_threshold", threshold.name).apply()
+    }
+
+    fun setDoubleTapAnimDuration(duration: Int) {
+        val d = duration.coerceIn(100, 1000)
+        _doubleTapAnimDuration.value = d
+        prefs.edit().putInt("reader_double_tap_anim_duration", d).apply()
+    }
+
+    fun setShowReadingMode(show: Boolean) {
+        _showReadingMode.value = show
+        prefs.edit().putBoolean("reader_show_reading_mode", show).apply()
+    }
+
+    fun setCustomBrightness(enabled: Boolean) {
+        _customBrightness.value = enabled
+        prefs.edit().putBoolean("reader_custom_brightness", enabled).apply()
+    }
+
+    fun setCustomBrightnessValue(value: Int) {
+        val v = value.coerceIn(-75, 100)
+        _customBrightnessValue.value = v
+        prefs.edit().putInt("reader_custom_brightness_value", v).apply()
+    }
+
+    fun setColorFilter(enabled: Boolean) {
+        _colorFilter.value = enabled
+        prefs.edit().putBoolean("reader_color_filter", enabled).apply()
+    }
+
+    fun setColorFilterValue(value: Int) {
+        _colorFilterValue.value = value
+        prefs.edit().putInt("reader_color_filter_value", value).apply()
+    }
+
+    fun setColorFilterMode(mode: Int) {
+        val m = mode.coerceIn(0, 5)
+        _colorFilterMode.value = m
+        prefs.edit().putInt("reader_color_filter_mode", m).apply()
+    }
+
+    fun setGrayscale(enabled: Boolean) {
+        _grayscale.value = enabled
+        prefs.edit().putBoolean("reader_grayscale", enabled).apply()
+    }
+
+    fun setInvertedColors(enabled: Boolean) {
+        _invertedColors.value = enabled
+        prefs.edit().putBoolean("reader_inverted_colors", enabled).apply()
     }
 
     fun setSeriesOverrideEnabled(mangaId: String, enabled: Boolean) {

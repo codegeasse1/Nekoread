@@ -143,6 +143,7 @@ class MainActivity : ComponentActivity() {
                     add(ExtensionPageImageKeyer())
                     add(ExtensionCoverImageFetcherFactory())
                     add(ExtensionCoverImageKeyer())
+                    add(com.example.data.coil.TachiyomiReaderDecoder.Factory())
                 }
                 // No global crossfade: the reader's long pages pop in with a draw-animation on every
                 // first display while scrolling, which reads as jank. Cards that want a fade request
