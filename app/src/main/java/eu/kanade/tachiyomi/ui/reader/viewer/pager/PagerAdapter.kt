@@ -34,7 +34,7 @@ class PagerAdapter(
     }
 
     override fun destroyItem(container: ViewGroup, position: Int, obj: Any) {
-        (obj as? PagerPageHolder)?.recycle()
+        (obj as? PagerPageHolder)?.onRecycled()
         container.removeView(obj as View)
     }
 

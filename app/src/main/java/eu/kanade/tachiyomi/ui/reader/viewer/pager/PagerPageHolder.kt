@@ -95,7 +95,7 @@ class PagerPageHolder(
     }
 
     /** Called when the view is recycled by the pager. */
-    fun recycle() {
+    fun onRecycled() {
         loadJob?.cancel()
         loadJob = null
         removeErrorLayout()

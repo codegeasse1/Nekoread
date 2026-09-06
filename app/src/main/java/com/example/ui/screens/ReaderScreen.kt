@@ -844,7 +844,7 @@ fun ReaderScreen(
                                     ReaderFit.STRETCH, ReaderFit.FIT_HEIGHT ->
                                         SubsamplingScaleImageView.SCALE_TYPE_CENTER_CROP
                                     ReaderFit.FIT_WIDTH ->
-                                        SubsamplingScaleImageView.SCALE_TYPE_START
+                                        SubsamplingScaleImageView.SCALE_TYPE_FIT_WIDTH
                                     ReaderFit.ORIGINAL_SIZE ->
                                         SubsamplingScaleImageView.SCALE_TYPE_CUSTOM
                                 }
