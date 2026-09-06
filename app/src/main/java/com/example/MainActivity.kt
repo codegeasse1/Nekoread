@@ -1,6 +1,9 @@
 package com.example
 
 import android.os.Bundle
+import java.io.File
+import java.io.PrintWriter
+import java.io.StringWriter
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -13,12 +16,15 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CollectionsBookmark
 import androidx.compose.material.icons.filled.Explore
@@ -56,9 +62,12 @@ import coil.ImageLoader
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import android.Manifest
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.widget.Toast
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.TextButton
@@ -98,6 +107,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Capture any uncaught crash to a file so the user can report the exact stack trace
+        // (the reader's settings sheet crash was hard to pin down without it).
+        installCrashHandler()
+        crashReport.value = readCrashReport()
 
         // A tap on the "update available" notification lands here (or on an already-open activity
         // via onNewIntent below) â surface the in-app update dialog instead of just the banner.
@@ -188,6 +202,44 @@ class MainActivity : ComponentActivity() {
                             )
                     )
                     MainAppScreen(viewModel = viewModel)
+
+                    // If a previous session crashed, surface the captured stack trace so the user
+                    // can copy it and report it (this is how the reader-settings crash gets fixed).
+                    val crash by crashReport.collectAsStateWithLifecycle()
+                    crash?.let { trace ->
+                        AlertDialog(
+                            onDismissRequest = { crashReport.value = null },
+                            title = { Text("Nekoread crashed last time") },
+                            text = {
+                                Text(
+                                    text = trace,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier
+                                        .heightIn(max = 320.dp)
+                                        .verticalScroll(rememberScrollState()),
+                                )
+                            },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    crashReport.value = null
+                                    deleteCrashReport()
+                                }) {
+                                    Text("Dismiss")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(
+                                    onClick = {
+                                        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        cm.setPrimaryClip(android.content.ClipData.newPlainText("crash", trace))
+                                        Toast.makeText(this, "Crash log copied", Toast.LENGTH_SHORT).show()
+                                    }
+                                ) {
+                                    Text("Copy")
+                                }
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -208,6 +260,50 @@ class MainActivity : ComponentActivity() {
             return
         }
         AppUpdater.showUpdateNotification(this, update)
+    }
+
+    /** Installs a crash handler that writes the stack trace to filesDir for the next launch. */
+    private fun installCrashHandler() {
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                val file = File(filesDir, "nekoread_crash.txt")
+                val trace = StringWriter().also { sw ->
+                    throwable.printStackTrace(PrintWriter(sw))
+                }.toString()
+                val text = buildString {
+                    append("Time: ").append(
+                        java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
+                            .format(java.util.Date())
+                    ).append('\n')
+                    append("Thread: ").append(thread.name).append('\n')
+                    append(trace)
+                }
+                file.writeText(text.take(8000))
+                android.util.Log.e("NekoreadCrash", text)
+            } catch (ignored: Throwable) {
+                // Never let the crash handler itself crash
+            }
+            previous?.uncaughtException(thread, throwable)
+        }
+    }
+
+    /** Reads a previously captured crash report, if any. */
+    private fun readCrashReport(): String? {
+        return try {
+            val file = File(filesDir, "nekoread_crash.txt")
+            if (file.exists()) file.readText() else null
+        } catch (e: Throwable) {
+            null
+        }
+    }
+
+    /** Deletes the captured crash report after the user acknowledges it. */
+    private fun deleteCrashReport() {
+        try {
+            File(filesDir, "nekoread_crash.txt").delete()
+        } catch (ignored: Throwable) {
+        }
     }
 
     override fun onRequestPermissionsResult(
@@ -234,6 +330,9 @@ class MainActivity : ComponentActivity() {
 
         /** Non-null while the "update available" dialog should be shown over the app. */
         val updateDialog = MutableStateFlow<UpdateInfo?>(null)
+
+        /** Non-null while the last-crash report dialog should be shown. */
+        val crashReport = MutableStateFlow<String?>(null)
     }
 }
 

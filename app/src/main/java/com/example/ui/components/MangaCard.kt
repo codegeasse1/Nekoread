@@ -98,15 +98,17 @@ fun MangaGridCard(
                     .fillMaxWidth()
                     .aspectRatio(0.72f)
             ) {
-                // State-aware cover: a static placeholder while the thumbnail loads (no spinner, no
-                // crossfade — during a fast catalog fling many cards load at once, and each animated
-                // spinner/crossfade costs frames), and a dim broken-image tile on failure. With
-                // Coil's disk cache a loaded cover shows instantly when you come back to the screen.
+                // State-aware cover: a static placeholder while the thumbnail loads (no spinner —
+                // during a fast catalog fling many cards load at once, and each spinner costs
+                // frames), a quick crossfade when the image lands (chimahon-style smooth thumbnail
+                // loading), and a dim broken-image tile on failure. With Coil's disk cache a loaded
+                // cover shows instantly when you come back to the screen.
                 val ctx = LocalContext.current
                 SubcomposeAsyncImage(
                     model = ImageRequest.Builder(ctx)
                         .data(coverModelFor(manga))
                         .size(360, 500)
+                        .crossfade(true)
                         .memoryCacheKey("cover:${manga.id}")
                         .diskCacheKey("cover:${manga.id}:${manga.coverUrl}")
                         .build(),

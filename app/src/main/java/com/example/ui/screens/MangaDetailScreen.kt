@@ -61,15 +61,19 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import com.example.data.local.CategoryEntity
 import com.example.data.local.ChapterEntity
 import com.example.data.local.MangaEntity
@@ -244,7 +248,8 @@ fun MangaDetailScreen(
                         contentDescription = null,
                         modifier = Modifier
                             .fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                        contentScale = ContentScale.Crop,
+                        crossfade = true,
                     )
 
                     // Gradient Overlay
@@ -278,7 +283,8 @@ fun MangaDetailScreen(
                                 modifier = Modifier
                                     .width(110.dp)
                                     .height(160.dp),
-                                contentScale = ContentScale.Crop
+                                contentScale = ContentScale.Crop,
+                                crossfade = true,
                             )
                         }
 
@@ -520,10 +526,46 @@ fun MangaDetailScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onChapterClick(chapter.id) }
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
                         .testTag("chapter_item_${chapter.id}"),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Chimahon-style chapter row: every row carries the manga's cover as a small
+                    // thumbnail (crossfades in like chimahon's image loading; cached on disk so it
+                    // reappears instantly), and tapping the row selects that chapter.
+                    val ctx = LocalContext.current
+                    SubcomposeAsyncImage(
+                        model = ImageRequest.Builder(ctx)
+                            .data(coverModelFor(manga))
+                            .size(100, 140)
+                            .crossfade(true)
+                            .memoryCacheKey("chapterThumb:${manga.id}")
+                            .diskCacheKey("chapterThumb:${manga.id}:${manga.coverUrl}")
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .width(50.dp)
+                            .height(70.dp)
+                            .clip(RoundedCornerShape(6.dp)),
+                        loading = {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                            )
+                        },
+                        error = {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                            )
+                        },
+                    )
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
                     IconButton(
                         onClick = { viewModel.toggleChapterRead(chapter.id) }
                     ) {

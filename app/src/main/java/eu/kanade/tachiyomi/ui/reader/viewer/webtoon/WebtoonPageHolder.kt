@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.ui.reader.viewer.webtoon
 
 import android.view.Gravity
+import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.Button
@@ -82,8 +83,7 @@ class WebtoonPageHolder(
                 } else {
                     WRAP_CONTENT
                 }
-                val lp = frame.layoutParams as? FrameLayout.LayoutParams
-                if (lp != null && lp.height != targetH) lp.height = targetH
+                setFrameHeight(targetH)
 
                 val file = viewer.loadPage(item)
                 // Everything the render needs (dims, animated, tall) comes from cached metadata —
@@ -111,16 +111,35 @@ class WebtoonPageHolder(
         val bottomMargin = if (viewer.gaps) dp(15) else 0
         val sidePadding = (viewer.config.webtoonSidePadding.coerceIn(0, 25) / 100f) * frame.context.resources.displayMetrics.widthPixels
 
-        // Avoid layout thrash: rebinds while scrolling must not trigger a requestLayout
-        // when nothing about the layout params actually changed.
-        val current = frame.layoutParams as? FrameLayout.LayoutParams
+        // The frame sits inside the RecyclerView, so its layoutParams are RecyclerView.LayoutParams
+        // (a MarginLayoutParams subclass) — check that instead of FrameLayout.LayoutParams so the
+        // "nothing changed" early-return actually fires and we don't recreate layoutParams (and
+        // requestLayout) on every bind/scroll.
+        val current = frame.layoutParams as? ViewGroup.MarginLayoutParams
         if (current != null && current.bottomMargin == bottomMargin && current.leftMargin.toFloat() == sidePadding) {
             return
         }
-        frame.layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
+        val lp = FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
             this.bottomMargin = bottomMargin
             this.leftMargin = sidePadding.toInt()
             this.rightMargin = sidePadding.toInt()
+        }
+        if (viewer.recycler.isComputingLayout) {
+            viewer.recycler.post { frame.layoutParams = lp }
+        } else {
+            frame.layoutParams = lp
+        }
+    }
+
+    /** Pre-sizes the frame to [targetH] without layout thrash (WRAP_CONTENT = unknown page). */
+    private fun setFrameHeight(targetH: Int) {
+        val lp = frame.layoutParams as? ViewGroup.MarginLayoutParams ?: return
+        if (lp.height == targetH) return
+        if (viewer.recycler.isComputingLayout) {
+            viewer.recycler.post { setFrameHeight(targetH) }
+        } else {
+            lp.height = targetH
+            frame.requestLayout()
         }
     }
 

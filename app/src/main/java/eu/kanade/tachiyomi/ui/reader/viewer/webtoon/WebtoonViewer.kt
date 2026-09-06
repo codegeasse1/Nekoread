@@ -144,6 +144,9 @@ class WebtoonViewer(context: Context) {
     private var scrolling = false
     private var navigator: ViewerNavigation = config.buildNavigator()
 
+    /** Hash of the last applied render config; toggles that don't re-render pages skip re-binding. */
+    private var lastRenderKey: Int = -1
+
     /** The view this viewer owns (the zoom frame containing the recycler). */
     val view: View get() = frame
 
@@ -199,8 +202,27 @@ class WebtoonViewer(context: Context) {
         frame.zoomOutDisabled = config.webtoonDisableZoomOut
         navigator = config.buildNavigator()
         recycler.useConfirmedSingleTap = isContinuous
-        reloadPages()
+        // Only re-bind/decode pages when a setting that actually changes how pages render changed.
+        // Navigation-only toggles (tap zones, transitions, hide threshold, pinch/double-tap zoom,
+        // gap size...) used to trigger a full reloadPages() on every tap of the settings sheet —
+        // re-decoding every visible strip for a non-render toggle caused memory spikes (OOM on
+        // low-RAM devices) and visible jank.
+        val key = renderKey()
+        if (key != lastRenderKey) {
+            lastRenderKey = key
+            reloadPages()
+        }
         applyWebtoonScaleType()
+    }
+
+    /** Render-affecting settings only — combined into a hash for change detection. */
+    private fun renderKey(): Int {
+        var h = if (isContinuous) config.cropBordersWebtoon.hashCode() else config.continuousCropBorders.hashCode()
+        h = h * 31 + config.webtoonSidePadding.hashCode()
+        h = h * 31 + config.alwaysDecodeLongStripWithSSIV.hashCode()
+        h = h * 31 + config.fadeIn.hashCode()
+        h = h * 31 + gaps.hashCode()
+        return h
     }
 
     /** Sets the reader's items, sizes and trailer, scrolling to [initialPage] on first layout. */
@@ -228,6 +250,10 @@ class WebtoonViewer(context: Context) {
 
     /** Re-binds every currently bound page holder so a render-config change takes effect now. */
     fun reloadPages() {
+        if (recycler.isComputingLayout) {
+            recycler.post { reloadPages() }
+            return
+        }
         for (i in 0 until recycler.childCount) {
             val holder = recycler.getChildViewHolder(recycler.getChildAt(i)) as? WebtoonPageHolder
                 ?: continue

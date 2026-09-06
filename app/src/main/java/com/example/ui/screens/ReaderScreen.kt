@@ -114,6 +114,7 @@ import com.example.ui.ReaderMode
 import com.example.ui.ReaderOrientation
 import com.example.ui.TappingInvertMode
 import com.example.ui.WebtoonScaleType
+import com.example.ui.components.coverModelFor
 import com.example.ui.looksLikeCloudflare
 import com.example.util.sortChapters
 import androidx.compose.ui.graphics.toArgb
@@ -131,7 +132,7 @@ import kotlinx.coroutines.launch
 // How many in-window webtoon pages the prewarm fetches/decodes at once. A small concurrent batch
 // keeps the ±8 page window filled ahead of the scroll even when every page costs a full download +
 // descramble (e.g. comix) — a sequential one-at-a-time loop can't keep up on slow sources.
-private const val WEBTOON_BATCH = 6
+private const val WEBTOON_BATCH = 4
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1030,6 +1031,9 @@ fun ReaderScreen(
 
         // Yomi-style reader chrome: top bar (bookmark / overflow / auto-scroll), chapter
         // navigator pill, bottom toolbar and the settings sheets/dialogs live in YomiReaderChrome.
+        // The manga cover is passed in so the chapter-list sheet shows a thumbnail per row
+        // (chimahon-style) instead of plain text rows.
+        val chapterCoverModel = remember(manga) { if (manga != null) coverModelFor(manga) else null }
         YomiReaderChrome(
             visible = showHud,
             mangaTitle = manga.title,
@@ -1192,7 +1196,8 @@ fun ReaderScreen(
             },
             chapters = sortedChapters,
             activeChapterId = activeChapter.id,
-            onSelectChapter = { onChapterChange(it) }
+            onSelectChapter = { onChapterChange(it) },
+            chapterCoverModel = chapterCoverModel,
         )
     }
 

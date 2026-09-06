@@ -84,11 +84,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import coil.compose.SubcomposeAsyncImage
 import com.example.data.local.ChapterEntity
 import com.example.ui.ReaderBg
 import com.example.ui.ReaderFit
@@ -210,6 +212,7 @@ fun YomiReaderChrome(
     chapters: List<ChapterEntity>,
     activeChapterId: String,
     onSelectChapter: (String) -> Unit,
+    chapterCoverModel: Any? = null,
     modifier: Modifier = Modifier,
 ) {
     var showSettings by remember { mutableStateOf(false) }
@@ -387,6 +390,7 @@ fun YomiReaderChrome(
                 chapters = chapters,
                 activeChapterId = activeChapterId,
                 onSelectChapter = onSelectChapter,
+                chapterCoverModel = chapterCoverModel,
             )
         }
     }
@@ -641,7 +645,7 @@ private fun ChapterNavigatorPill(
                 }
             }
             Slider(
-                value = currentPage.toFloat(),
+                value = currentPage.toFloat().coerceIn(1f, totalPages.coerceAtLeast(1).toFloat()),
                 onValueChange = { v -> onSeekPage(v.toInt() - 1) },
                 valueRange = 1f..totalPages.coerceAtLeast(1).toFloat(),
                 colors = sliderAccentColors(),
@@ -1709,6 +1713,7 @@ private fun ChapterListSheet(
     chapters: List<ChapterEntity>,
     activeChapterId: String,
     onSelectChapter: (String) -> Unit,
+    chapterCoverModel: Any? = null,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1736,9 +1741,30 @@ private fun ChapterListSheet(
                             onSelectChapter(ch.id)
                             onDismiss()
                         }
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                        .padding(horizontal = 20.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    if (chapterCoverModel != null) {
+                        // Chimahon-style row: a small cover thumbnail on every chapter row (fades in
+                        // smoothly like chimahon's image loading; served from Coil's disk cache after
+                        // the first open, so it appears instantly on later visits).
+                        SubcomposeAsyncImage(
+                            model = chapterCoverModel,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            crossfade = true,
+                            modifier = Modifier
+                                .size(width = 44.dp, height = 60.dp)
+                                .clip(RoundedCornerShape(6.dp)),
+                            loading = {
+                                Box(Modifier.fillMaxSize().background(CardColor))
+                            },
+                            error = {
+                                Box(Modifier.fillMaxSize().background(CardColor))
+                            },
+                        )
+                        Spacer(Modifier.width(12.dp))
+                    }
                     Column(Modifier.weight(1f)) {
                         Text(
                             text = ch.name,
