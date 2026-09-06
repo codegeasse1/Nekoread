@@ -102,6 +102,7 @@ import com.example.ui.TappingInvertMode
 import com.example.ui.WebtoonScaleType
 import com.example.ui.components.coverModelFor
 import com.example.ui.looksLikeCloudflare
+import com.example.util.chapterIdentity
 import com.example.util.sortChapters
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
@@ -372,21 +373,36 @@ fun ReaderScreen(
     // chapter numbers: sources that don't number their chapters store -1 for every chapter, which
     // made both buttons permanently disabled and silently killed the webtoon auto-continue
     // ("End of Chapter / you caught up" even when dozens of chapters were still ahead).
+    //
+    // On top of the position, next/prev SKIP cross-source duplicates: a source can expose the same
+    // chapter number from several scanlators (e.g. "Chapter 1" from WebToon AND from Asura Scans),
+    // so the adjacent list entry is often that very chapter again. Walking past entries with the
+    // same chapter identity keeps the buttons (and the webtoon auto-continue) landing on a
+    // genuinely different chapter, never a re-read of the current one.
     val activeIdx = remember(sortedChapters, activeChapter) {
         sortedChapters.indexOfFirst { it.id == activeChapter.id }
     }
-    val prevChapter = remember(sortedChapters, activeIdx) {
-        if (activeIdx > 0) sortedChapters[activeIdx - 1] else null
+    fun nextAfter(from: ChapterEntity, idx: Int, forward: Boolean): ChapterEntity? {
+        val curKey = chapterIdentity(from)
+        var i = idx + if (forward) 1 else -1
+        while (i in sortedChapters.indices) {
+            if (chapterIdentity(sortedChapters[i]) != curKey) return sortedChapters[i]
+            i += if (forward) 1 else -1
+        }
+        return null
     }
-    val nextChapter = remember(sortedChapters, activeIdx) {
-        if (activeIdx in 0 until sortedChapters.lastIndex) sortedChapters[activeIdx + 1] else null
+    val prevChapter = remember(sortedChapters, activeIdx, activeChapter) {
+        nextAfter(activeChapter, activeIdx, forward = false)
+    }
+    val nextChapter = remember(sortedChapters, activeIdx, activeChapter) {
+        nextAfter(activeChapter, activeIdx, forward = true)
     }
 
     // The next chapter after the LAST one already streamed (used for auto-continue).
     val streamNextChapter = remember(sortedChapters, streamQueue) {
         val last = streamQueue.lastOrNull() ?: return@remember null
         val lastIdx = sortedChapters.indexOfFirst { it.id == last.id }
-        if (lastIdx in 0 until sortedChapters.lastIndex) sortedChapters[lastIdx + 1] else null
+        nextAfter(last, lastIdx, forward = true)
     }
 
     fun loadNextIntoStream(next: ChapterEntity) {

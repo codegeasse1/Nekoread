@@ -4,7 +4,6 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -71,8 +70,8 @@ import com.example.data.local.CategoryEntity
 import com.example.ui.MainViewModel
 import com.example.ui.ReaderBg
 import com.example.ui.ReaderMode
+import com.example.ui.components.FloatingTopAppBar
 import com.example.ui.theme.GlassCardBorder
-import com.example.ui.theme.GlassSurface
 import com.example.ui.theme.NekoGoldBadge
 import com.example.ui.theme.NekoVioletPrimary
 import com.example.BuildConfig
@@ -167,14 +166,8 @@ fun SettingsScreen(
         containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0),
         topBar = {
-            // Rounded glass header (Tadami-style).
-            Surface(
-                color = GlassSurface.copy(alpha = 0.7f),
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
-                border = BorderStroke(1.dp, GlassCardBorder),
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            // Floating rounded glass pill (Hikari/taskbar style), matching the bottom nav pill.
+            FloatingTopAppBar {
                 TopAppBar(
                     windowInsets = WindowInsets(0),
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),

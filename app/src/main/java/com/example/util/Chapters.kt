@@ -8,6 +8,16 @@ import com.example.data.local.ChapterEntity
 fun chapterNameNumber(name: String): Float =
     Regex("""\d+(\.\d+)?""").find(name)?.value?.toFloatOrNull() ?: Float.MAX_VALUE
 
+/** Numeric identity of a chapter, used to detect the SAME chapter offered by different sources
+ *  (e.g. "Chapter 1" from WebToon AND from Asura Scans). A real chapterNumber wins; otherwise the
+ *  number parsed from the chapter NAME. Chapters with no number at all get -1 (undetectable
+ *  duplicates then simply aren't skipped). */
+fun chapterIdentity(c: ChapterEntity): Float {
+    if (c.chapterNumber > 0f) return c.chapterNumber
+    val fromName = chapterNameNumber(c.name)
+    return if (fromName == Float.MAX_VALUE) -1f else fromName
+}
+
 /**
  * Reading order for a chapter list. Sources that provide real chapter numbers (MangaDex, most
  * extensions) sort by that number. Sources that leave the extension's -1 default sort by the

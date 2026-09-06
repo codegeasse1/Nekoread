@@ -76,11 +76,11 @@ import coil.compose.SubcomposeAsyncImageContent
 import com.example.data.local.CategoryEntity
 import com.example.data.local.MangaEntity
 import com.example.ui.MainViewModel
+import com.example.ui.components.FloatingTopAppBar
 import com.example.ui.components.MangaGridCard
 import com.example.ui.components.MangaListCard
 import com.example.ui.components.coverModelFor
 import com.example.ui.theme.GlassCardBorder
-import com.example.ui.theme.GlassSurface
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -138,14 +138,8 @@ fun LibraryScreen(
         containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0),
         topBar = {
-            // Rounded glass header (Tadami-style) so the whole chrome reads as frosted glass.
-            Surface(
-                color = GlassSurface.copy(alpha = 0.7f),
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
-                border = BorderStroke(1.dp, GlassCardBorder),
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            // Floating rounded glass pill (Hikari/taskbar style), matching the bottom nav pill.
+            FloatingTopAppBar {
                 Column {
                     if (selectionMode) {
                         // Multi-select action bar
@@ -248,7 +242,7 @@ fun LibraryScreen(
 
                         // Category Tabs Row
                         LazyRow(
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             item {

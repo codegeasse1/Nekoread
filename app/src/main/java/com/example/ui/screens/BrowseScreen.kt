@@ -1,7 +1,6 @@
 package com.example.ui.screens
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -92,12 +91,12 @@ import com.example.data.local.ExtensionSourceEntity
 import com.example.data.local.MangaEntity
 import com.example.ui.GlobalSearchSection
 import com.example.ui.MainViewModel
+import com.example.ui.components.FloatingTopAppBar
 import com.example.ui.components.GlassCard
 import com.example.ui.components.GlassSearchBar
 import com.example.ui.components.MangaGridCard
 import com.example.ui.components.MangaListCard
 import com.example.ui.theme.GlassCardBorder
-import com.example.ui.theme.GlassSurface
 import com.example.ui.theme.NekoGoldBadge
 import com.example.ui.theme.NekoVioletPrimary
 import kotlinx.coroutines.delay
@@ -335,17 +334,9 @@ fun BrowseScreen(
         contentWindowInsets = WindowInsets(0),
         topBar = {
             if (inExtensionMode) {
-                // Rounded glass header for the catalog-browsing mode: ONE compact row = back arrow +
-                // the search bar with the site-verify globe on its side. The source name shows in the
-                // search placeholder and the "Latest from <source>" label, so the grid below gets more
-                // vertical space (the search bar + tabs no longer stack into a second header row).
-                Surface(
-                    color = GlassSurface.copy(alpha = 0.7f),
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                    shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
-                    border = BorderStroke(1.dp, GlassCardBorder),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                // Floating rounded glass pill (Hikari/taskbar style), matching the bottom nav pill:
+                // back arrow + the search bar with the site-verify globe on its side.
+                FloatingTopAppBar {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
@@ -389,16 +380,11 @@ fun BrowseScreen(
                     }
                 }
             } else {
-                // Rounded glass header (Tadami-style) for the tabbed Browse chrome.
-                Surface(
-                    color = GlassSurface.copy(alpha = 0.7f),
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                    shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
-                    border = BorderStroke(1.dp, GlassCardBorder),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                // Floating rounded glass pill (Hikari/taskbar style), matching the bottom nav pill.
+                FloatingTopAppBar {
                     Column {
                         TopAppBar(
+                            modifier = Modifier.height(52.dp),
                             windowInsets = WindowInsets(0),
                             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                             title = {
