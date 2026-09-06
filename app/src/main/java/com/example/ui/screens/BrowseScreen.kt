@@ -341,7 +341,7 @@ fun BrowseScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(start = 4.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
+                            .padding(start = 4.dp, end = 8.dp, top = 2.dp, bottom = 2.dp)
                     ) {
                         IconButton(
                             onClick = {
@@ -384,7 +384,7 @@ fun BrowseScreen(
                 FloatingTopAppBar {
                     Column {
                         TopAppBar(
-                            modifier = Modifier.height(52.dp),
+                            modifier = Modifier.height(48.dp),
                             windowInsets = WindowInsets(0),
                             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                             title = {
@@ -399,7 +399,8 @@ fun BrowseScreen(
                         ScrollableTabRow(
                             selectedTabIndex = selectedTabIndex,
                             containerColor = Color.Transparent,
-                            edgePadding = 8.dp
+                            edgePadding = 8.dp,
+                            modifier = Modifier.height(40.dp)
                         ) {
                             // Tadami-style badge: the Extensions tab shows how many installed
                             // extensions have a newer version available in their repo.

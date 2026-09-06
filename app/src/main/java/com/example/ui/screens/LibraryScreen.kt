@@ -144,6 +144,7 @@ fun LibraryScreen(
                     if (selectionMode) {
                         // Multi-select action bar
                         TopAppBar(
+                            modifier = Modifier.height(48.dp),
                             windowInsets = WindowInsets(0),
                             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                             navigationIcon = {
@@ -175,6 +176,7 @@ fun LibraryScreen(
                         )
                     } else {
                         TopAppBar(
+                            modifier = Modifier.height(48.dp),
                             windowInsets = WindowInsets(0),
                             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                             title = {
@@ -185,6 +187,7 @@ fun LibraryScreen(
                                         placeholder = { Text("Search library...") },
                                         modifier = Modifier
                                             .fillMaxWidth()
+                                            .height(46.dp)
                                             .testTag("library_search_input"),
                                         singleLine = true,
                                         trailingIcon = {
@@ -242,7 +245,7 @@ fun LibraryScreen(
 
                         // Category Tabs Row
                         LazyRow(
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             item {

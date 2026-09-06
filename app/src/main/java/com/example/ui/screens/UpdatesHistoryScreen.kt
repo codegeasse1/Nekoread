@@ -84,7 +84,7 @@ fun UpdatesHistoryScreen(
             FloatingTopAppBar {
                 Column {
                     TopAppBar(
-                        modifier = Modifier.height(52.dp),
+                        modifier = Modifier.height(48.dp),
                         windowInsets = WindowInsets(0),
                         colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                         title = {
@@ -112,7 +112,8 @@ fun UpdatesHistoryScreen(
                     TabRow(
                         selectedTabIndex = selectedTabIndex,
                         containerColor = Color.Transparent,
-                        contentColor = MaterialTheme.colorScheme.primary
+                        contentColor = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.height(40.dp)
                     ) {
                         tabs.forEachIndexed { index, title ->
                             Tab(

@@ -38,23 +38,31 @@ fun FloatingGlassPill(
 }
 
 /**
- * Scaffold topBar wrapper: floats the [content] pill below the status bar with air on all sides,
- * mirroring the floating bottom nav pill.
+ * Scaffold topBar wrapper: the pill is anchored FLUSH at the very top of the screen (drawing
+ * behind the transparent status bar, edge-to-edge style) so no vertical space is wasted above it.
+ * The status-bar inset is applied INSIDE the pill so the system icons clear the content. Compact:
+ * small side margins, ~2dp of vertical breathing room.
  */
 @Composable
 fun FloatingTopAppBar(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(28.dp),
+    shape: Shape = RoundedCornerShape(24.dp),
     content: @Composable () -> Unit
 ) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .padding(horizontal = 10.dp)
     ) {
         FloatingGlassPill(shape = shape) {
-            content()
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(vertical = 2.dp)
+            ) {
+                content()
+            }
         }
     }
 }
