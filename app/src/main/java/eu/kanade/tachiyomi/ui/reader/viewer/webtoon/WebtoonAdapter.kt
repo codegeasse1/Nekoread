@@ -171,7 +171,9 @@ class WebtoonTrailerHolder(
         container.removeAllViews()
         container.orientation = LinearLayout.VERTICAL
         container.gravity = Gravity.CENTER
-        container.layoutParams = ViewGroup.LayoutParams(
+        // The container is a direct child of the RecyclerView, so it MUST use RecyclerView.LayoutParams
+        // (a MarginLayoutParams) — a plain ViewGroup.LayoutParams crashes getChildViewHolderInt.
+        container.layoutParams = RecyclerView.LayoutParams(
             MATCH_PARENT,
             if (trailer is WebtoonTrailer.Idle) dp(48) else WRAP_CONTENT,
         )

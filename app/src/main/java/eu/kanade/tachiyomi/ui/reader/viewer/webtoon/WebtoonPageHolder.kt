@@ -10,6 +10,7 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.core.view.isVisible
+import androidx.recyclerview.widget.RecyclerView
 import com.example.data.reader.WebtoonPageCache
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
 import kotlinx.coroutines.CancellationException
@@ -111,15 +112,17 @@ class WebtoonPageHolder(
         val bottomMargin = if (viewer.gaps) dp(15) else 0
         val sidePadding = (viewer.config.webtoonSidePadding.coerceIn(0, 25) / 100f) * frame.context.resources.displayMetrics.widthPixels
 
-        // The frame sits inside the RecyclerView, so its layoutParams are RecyclerView.LayoutParams
-        // (a MarginLayoutParams subclass) — check that instead of FrameLayout.LayoutParams so the
-        // "nothing changed" early-return actually fires and we don't recreate layoutParams (and
-        // requestLayout) on every bind/scroll.
+        // The frame sits inside the RecyclerView, so its layoutParams MUST be RecyclerView.LayoutParams
+        // (a MarginLayoutParams subclass) — a plain FrameLayout.LayoutParams here crashes the next
+        // layout pass (getChildViewHolderInt casts every direct child's params). Before the frame is
+        // attached its layoutParams is null: skip entirely (RecyclerView generates proper params on
+        // attach; the bind-time call applies the margins once it's a real child).
         val current = frame.layoutParams as? ViewGroup.MarginLayoutParams
-        if (current != null && current.bottomMargin == bottomMargin && current.leftMargin.toFloat() == sidePadding) {
+        if (current == null) return
+        if (current.bottomMargin == bottomMargin && current.leftMargin.toFloat() == sidePadding) {
             return
         }
-        val lp = FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
+        val lp = RecyclerView.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
             this.bottomMargin = bottomMargin
             this.leftMargin = sidePadding.toInt()
             this.rightMargin = sidePadding.toInt()
