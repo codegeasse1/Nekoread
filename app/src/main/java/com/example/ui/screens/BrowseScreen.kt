@@ -341,7 +341,7 @@ fun BrowseScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(start = 4.dp, end = 8.dp, top = 2.dp, bottom = 2.dp)
+                            .padding(start = 4.dp, end = 8.dp)
                     ) {
                         IconButton(
                             onClick = {
@@ -349,7 +349,8 @@ fun BrowseScreen(
                                 activeSourceBaseUrl = ""
                                 searchQuery = ""
                                 selectedTabIndex = TAB_SOURCES
-                            }
+                            },
+                            modifier = Modifier.size(40.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -369,7 +370,8 @@ fun BrowseScreen(
                                 if (activeSourceBaseUrl.isNotBlank()) {
                                     webviewTarget = activeSourceBaseUrl to sourceUserAgent(activeSourceId)
                                 }
-                            }
+                            },
+                            modifier = Modifier.size(40.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Language,
@@ -384,7 +386,7 @@ fun BrowseScreen(
                 FloatingTopAppBar {
                     Column {
                         TopAppBar(
-                            modifier = Modifier.height(48.dp),
+                            modifier = Modifier.height(40.dp),
                             windowInsets = WindowInsets(0),
                             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                             title = {
@@ -400,7 +402,7 @@ fun BrowseScreen(
                             selectedTabIndex = selectedTabIndex,
                             containerColor = Color.Transparent,
                             edgePadding = 8.dp,
-                            modifier = Modifier.height(40.dp)
+                            modifier = Modifier.height(36.dp)
                         ) {
                             // Tadami-style badge: the Extensions tab shows how many installed
                             // extensions have a newer version available in their repo.

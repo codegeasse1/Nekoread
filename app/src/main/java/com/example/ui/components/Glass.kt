@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -92,8 +93,11 @@ fun GlassSearchBar(
             }
         },
         singleLine = true,
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
+        textStyle = MaterialTheme.typography.bodyMedium,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(44.dp),
+        shape = RoundedCornerShape(22.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = GlassField,
             unfocusedContainerColor = GlassField,

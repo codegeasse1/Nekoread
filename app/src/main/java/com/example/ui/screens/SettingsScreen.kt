@@ -169,21 +169,24 @@ fun SettingsScreen(
             // Floating rounded glass pill (Hikari/taskbar style), matching the bottom nav pill.
             FloatingTopAppBar {
                 TopAppBar(
-                    modifier = Modifier.height(52.dp),
+                    modifier = Modifier.height(44.dp),
                     windowInsets = WindowInsets(0),
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                     title = {
-                        Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = "Settings",
                                 fontWeight = FontWeight.Bold,
                                 style = MaterialTheme.typography.titleMedium
                             )
+                            Spacer(modifier = Modifier.width(10.dp))
                             Text(
                                 text = "Build ${BuildInfo.VERSION}",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
