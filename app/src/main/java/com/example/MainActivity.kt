@@ -232,7 +232,7 @@ class MainActivity : ComponentActivity() {
                                     onClick = {
                                         val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                         cm.setPrimaryClip(android.content.ClipData.newPlainText("crash", trace))
-                                        Toast.makeText(this, "Crash log copied", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(this@MainActivity, "Crash log copied", Toast.LENGTH_SHORT).show()
                                     }
                                 ) {
                                     Text("Copy")

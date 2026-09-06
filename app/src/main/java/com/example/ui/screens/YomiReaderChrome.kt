@@ -86,11 +86,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import com.example.data.local.ChapterEntity
 import com.example.ui.ReaderBg
 import com.example.ui.ReaderFit
@@ -1715,6 +1717,7 @@ private fun ChapterListSheet(
     onSelectChapter: (String) -> Unit,
     chapterCoverModel: Any? = null,
 ) {
+    val ctx = LocalContext.current
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = SheetColor,
@@ -1749,10 +1752,9 @@ private fun ChapterListSheet(
                         // smoothly like chimahon's image loading; served from Coil's disk cache after
                         // the first open, so it appears instantly on later visits).
                         SubcomposeAsyncImage(
-                            model = chapterCoverModel,
+                            model = ImageRequest.Builder(ctx).data(chapterCoverModel).crossfade(true).build(),
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
-                            crossfade = true,
                             modifier = Modifier
                                 .size(width = 44.dp, height = 60.dp)
                                 .clip(RoundedCornerShape(6.dp)),

@@ -151,6 +151,7 @@ fun MangaDetailScreen(
     // getMangaWebUrl may hit the network (TheBlank's getMangaUrl boots tokens), so resolve off
     // the main thread when the button is tapped.
     val isExtensionManga = remember(manga.id) { manga.id.startsWith("ext_") }
+    val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var webviewTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
 
@@ -244,12 +245,11 @@ fun MangaDetailScreen(
                     // re-blur while the list scrolls, which is a major scroll-stutter source on
                     // many devices — the gradient overlay below already keeps the text readable).
                     AsyncImage(
-                        model = coverModelFor(manga),
+                        model = ImageRequest.Builder(ctx).data(coverModelFor(manga)).crossfade(true).build(),
                         contentDescription = null,
                         modifier = Modifier
                             .fillMaxSize(),
                         contentScale = ContentScale.Crop,
-                        crossfade = true,
                     )
 
                     // Gradient Overlay
@@ -278,13 +278,12 @@ fun MangaDetailScreen(
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             AsyncImage(
-                                model = coverModelFor(manga),
+                                model = ImageRequest.Builder(ctx).data(coverModelFor(manga)).crossfade(true).build(),
                                 contentDescription = manga.title,
                                 modifier = Modifier
                                     .width(110.dp)
                                     .height(160.dp),
                                 contentScale = ContentScale.Crop,
-                                crossfade = true,
                             )
                         }
 
@@ -533,7 +532,6 @@ fun MangaDetailScreen(
                     // Chimahon-style chapter row: every row carries the manga's cover as a small
                     // thumbnail (crossfades in like chimahon's image loading; cached on disk so it
                     // reappears instantly), and tapping the row selects that chapter.
-                    val ctx = LocalContext.current
                     SubcomposeAsyncImage(
                         model = ImageRequest.Builder(ctx)
                             .data(coverModelFor(manga))

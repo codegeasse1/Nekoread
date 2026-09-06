@@ -1033,7 +1033,7 @@ fun ReaderScreen(
         // navigator pill, bottom toolbar and the settings sheets/dialogs live in YomiReaderChrome.
         // The manga cover is passed in so the chapter-list sheet shows a thumbnail per row
         // (chimahon-style) instead of plain text rows.
-        val chapterCoverModel = remember(manga) { if (manga != null) coverModelFor(manga) else null }
+        val chapterCoverModel = coverModelFor(manga)
         YomiReaderChrome(
             visible = showHud,
             mangaTitle = manga.title,
