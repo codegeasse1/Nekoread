@@ -21,6 +21,8 @@ runner = "1.6.2"
 coilCompose = "2.7.0"
 subsamplingScaleImageView = "66e0db195d"
 recyclerview = "1.4.0"
+androidxViewpager = "1.1.0"
+directionalViewPager = "1.0.0"
 retrofit = "2.12.0"
 converterMoshi = "2.12.0"
 kotlinxCoroutinesAndroid = "1.11.0"
@@ -82,6 +84,8 @@ androidx-compose-material-icons-extended = { group = "androidx.compose.material"
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coilCompose" }
 subsampling-scale-image-view = { group = "com.github.tachiyomiorg", name = "subsampling-scale-image-view", version.ref = "subsamplingScaleImageView" }
 androidx-recyclerview = { group = "androidx.recyclerview", name = "recyclerview", version.ref = "recyclerview" }
+androidx-viewpager = { group = "androidx.viewpager", name = "viewpager", version.ref = "androidxViewpager" }
+directionalviewpager = { group = "com.github.tachiyomiorg", name = "DirectionalViewPager", version.ref = "directionalViewPager" }
 retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
 converter-moshi = { group = "com.squareup.retrofit2", name = "converter-moshi", version.ref = "converterMoshi" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesAndroid" }
