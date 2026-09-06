@@ -140,166 +140,170 @@ fun LibraryScreen(
         topBar = {
             // Floating rounded glass pill (Hikari/taskbar style), matching the bottom nav pill.
             FloatingTopAppBar {
-                // Single compact row: title, category chips and actions all fit in one ~40dp pill
-                // so the header takes a fraction of the space it used to.
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(40.dp)
-                        .padding(horizontal = 4.dp)
-                ) {
-                    if (selectionMode) {
-                        IconButton(
-                            onClick = { exitSelection() },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .testTag("selection_close")
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = "Cancel")
-                        }
-                        Text(
-                            text = "${selectedIds.size} selected",
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(
-                            onClick = {
-                                viewModel.removeFromLibrary(selectedIds.toList())
-                                exitSelection()
-                            },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .testTag("remove_selected_button")
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = "Remove from library")
-                        }
-                    } else {
-                        if (showSearchField) {
-                            OutlinedTextField(
-                                value = searchQuery,
-                                onValueChange = { viewModel.setLibrarySearchQuery(it) },
-                                placeholder = { Text("Search library...") },
+                // Compact two-row header: title + actions on the first row, category chips on their
+                // own full-width row below so every option stays visible and nothing gets clipped.
+                Column {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(40.dp)
+                            .padding(horizontal = 4.dp)
+                    ) {
+                        if (selectionMode) {
+                            IconButton(
+                                onClick = { exitSelection() },
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .height(40.dp)
-                                    .testTag("library_search_input"),
-                                singleLine = true,
-                                textStyle = MaterialTheme.typography.bodyMedium,
-                                trailingIcon = {
-                                    if (searchQuery.isNotEmpty()) {
-                                        IconButton(onClick = { viewModel.setLibrarySearchQuery("") }) {
-                                            Icon(Icons.Default.Clear, contentDescription = "Clear")
-                                        }
-                                    }
-                                }
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = "Logo",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
+                                    .size(40.dp)
+                                    .testTag("selection_close")
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Cancel")
+                            }
                             Text(
-                                text = "Library (${mangaList.size})",
+                                text = "${selectedIds.size} selected",
                                 fontWeight = FontWeight.Bold,
                                 style = MaterialTheme.typography.titleMedium,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            // Category chips scroll horizontally in the middle of the bar.
-                            LazyRow(
-                                modifier = Modifier.weight(1f),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            IconButton(
+                                onClick = {
+                                    viewModel.removeFromLibrary(selectedIds.toList())
+                                    exitSelection()
+                                },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .testTag("remove_selected_button")
                             ) {
-                                item {
-                                    FilterChip(
-                                        selected = selectedCategory == "All",
-                                        onClick = { viewModel.setSelectedCategory("All") },
-                                        label = { Text("All") },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                            selectedLabelColor = Color.White
-                                        ),
-                                        modifier = Modifier
-                                            .height(30.dp)
-                                            .testTag("category_all")
-                                    )
-                                }
-
-                                items(categories) { category: CategoryEntity ->
-                                    FilterChip(
-                                        selected = selectedCategory == category.name,
-                                        onClick = { viewModel.setSelectedCategory(category.name) },
-                                        label = { Text(category.name) },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                            selectedLabelColor = Color.White
-                                        ),
-                                        modifier = Modifier
-                                            .height(30.dp)
-                                            .testTag("category_${category.name}")
-                                    )
-                                }
-
-                                item {
-                                    FilterChip(
-                                        selected = false,
-                                        onClick = { showAddCategoryDialog = true },
-                                        label = {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Add,
-                                                    contentDescription = "Add Category",
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text("New")
+                                Icon(Icons.Default.Delete, contentDescription = "Remove from library")
+                            }
+                        } else {
+                            if (showSearchField) {
+                                OutlinedTextField(
+                                    value = searchQuery,
+                                    onValueChange = { viewModel.setLibrarySearchQuery(it) },
+                                    placeholder = { Text("Search library...") },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(40.dp)
+                                        .testTag("library_search_input"),
+                                    singleLine = true,
+                                    textStyle = MaterialTheme.typography.bodyMedium,
+                                    trailingIcon = {
+                                        if (searchQuery.isNotEmpty()) {
+                                            IconButton(onClick = { viewModel.setLibrarySearchQuery("") }) {
+                                                Icon(Icons.Default.Clear, contentDescription = "Clear")
                                             }
-                                        },
-                                        modifier = Modifier
-                                            .height(30.dp)
-                                            .testTag("add_category_chip")
-                                    )
-                                }
+                                        }
+                                    }
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = "Logo",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Library (${mangaList.size})",
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            IconButton(
+                                onClick = { showSearchField = !showSearchField },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .testTag("search_toggle_button")
+                            ) {
+                                Icon(
+                                    imageVector = if (showSearchField) Icons.Default.Clear else Icons.Default.Search,
+                                    contentDescription = "Search"
+                                )
+                            }
+                            IconButton(
+                                onClick = { isGridView = !isGridView },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .testTag("view_toggle_button")
+                            ) {
+                                Icon(
+                                    imageVector = if (isGridView) Icons.Default.ViewList else Icons.Default.GridView,
+                                    contentDescription = "Toggle Layout"
+                                )
+                            }
+                            IconButton(
+                                onClick = { showClearLibraryConfirm = true },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .testTag("clear_library_button")
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = "Clear library")
                             }
                         }
+                    }
 
-                        IconButton(
-                            onClick = { showSearchField = !showSearchField },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .testTag("search_toggle_button")
+                    if (!selectionMode) {
+                        // Full-width category chips row — several fit at once, the rest scroll.
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(horizontal = 12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Icon(
-                                imageVector = if (showSearchField) Icons.Default.Clear else Icons.Default.Search,
-                                contentDescription = "Search"
-                            )
-                        }
-                        IconButton(
-                            onClick = { isGridView = !isGridView },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .testTag("view_toggle_button")
-                        ) {
-                            Icon(
-                                imageVector = if (isGridView) Icons.Default.ViewList else Icons.Default.GridView,
-                                contentDescription = "Toggle Layout"
-                            )
-                        }
-                        IconButton(
-                            onClick = { showClearLibraryConfirm = true },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .testTag("clear_library_button")
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = "Clear library")
+                            item {
+                                FilterChip(
+                                    selected = selectedCategory == "All",
+                                    onClick = { viewModel.setSelectedCategory("All") },
+                                    label = { Text("All") },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                        selectedLabelColor = Color.White
+                                    ),
+                                    modifier = Modifier
+                                        .height(30.dp)
+                                        .testTag("category_all")
+                                )
+                            }
+
+                            items(categories) { category: CategoryEntity ->
+                                FilterChip(
+                                    selected = selectedCategory == category.name,
+                                    onClick = { viewModel.setSelectedCategory(category.name) },
+                                    label = { Text(category.name) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                        selectedLabelColor = Color.White
+                                    ),
+                                    modifier = Modifier
+                                        .height(30.dp)
+                                        .testTag("category_${category.name}")
+                                )
+                            }
+
+                            item {
+                                FilterChip(
+                                    selected = false,
+                                    onClick = { showAddCategoryDialog = true },
+                                    label = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.Add,
+                                                contentDescription = "Add Category",
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("New")
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .height(30.dp)
+                                        .testTag("add_category_chip")
+                                )
+                            }
                         }
                     }
                 }
