@@ -106,7 +106,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _readerQuality = MutableStateFlow(75)
     val readerQuality: StateFlow<Int> = _readerQuality.asStateFlow()
 
-    private val _cropBorders = MutableStateFlow(false)
+    private val _cropBorders = MutableStateFlow(true)
     val cropBorders: StateFlow<Boolean> = _cropBorders.asStateFlow()
 
     private val _doubleTapZoom = MutableStateFlow(true)
@@ -205,13 +205,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _readerMode.value = ReaderMode.valueOf(prefs.getString("reader_mode", ReaderMode.WEBTOON.name)!!)
         _readerBg.value = ReaderBg.valueOf(prefs.getString("reader_bg", ReaderBg.PURE_BLACK.name)!!)
         _showPageNumber.value = prefs.getBoolean("show_page_number", true)
-        _cropBorders.value = prefs.getBoolean("reader_crop_borders", false)
+        _cropBorders.value = prefs.getBoolean("reader_crop_borders", true)
         _doubleTapZoom.value = prefs.getBoolean("reader_double_tap_zoom", true)
         _tapToChangePages.value = prefs.getBoolean("reader_tap_change_pages", false)
         _pinchToZoom.value = prefs.getBoolean("reader_pinch_to_zoom", true)
         _webtoonCropBorders.value = prefs.getBoolean("reader_webtoon_crop_borders", false)
         _cropBordersPaged.value = prefs.getBoolean("reader_crop_borders_paged", false)
         _cropBordersContinuous.value = prefs.getBoolean("reader_crop_borders_continuous", false)
+        // One-time migration: webtoon border cropping is now ON by default (strips fill the screen
+        // width instead of showing their own black gutters). Existing installs that stored the old
+        // `false` default get switched to true exactly once; any later choice is respected.
+        if (!prefs.getBoolean("crop_defaults_migrated", false)) {
+            prefs.edit()
+                .putBoolean("crop_defaults_migrated", true)
+                .putBoolean("reader_crop_borders", true)
+                .apply()
+            _cropBorders.value = true
+        }
         _webtoonSidePadding.value = prefs.getInt("reader_webtoon_side_padding", 0).coerceIn(0, 25)
         _webtoonNavigationMode.value = prefs.getInt("reader_navigation_mode_webtoon", 5).coerceIn(0, 5)
         // One-time migration: users who had "Tap to change pages" enabled before tap zones existed

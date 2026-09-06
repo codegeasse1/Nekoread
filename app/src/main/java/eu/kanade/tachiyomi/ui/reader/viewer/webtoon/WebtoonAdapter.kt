@@ -171,12 +171,25 @@ class WebtoonTrailerHolder(
         container.removeAllViews()
         container.orientation = LinearLayout.VERTICAL
         container.gravity = Gravity.CENTER
+        val desiredHeight = if (trailer is WebtoonTrailer.Idle) dp(48) else WRAP_CONTENT
         // The container is a direct child of the RecyclerView, so it MUST use RecyclerView.LayoutParams
-        // (a MarginLayoutParams) — a plain ViewGroup.LayoutParams crashes getChildViewHolderInt.
-        container.layoutParams = RecyclerView.LayoutParams(
-            MATCH_PARENT,
-            if (trailer is WebtoonTrailer.Idle) dp(48) else WRAP_CONTENT,
-        )
+        // (a MarginLayoutParams) — a plain ViewGroup.LayoutParams crashes getChildViewHolderInt. And it
+        // must never have its LayoutParams OBJECT replaced once attached (RecyclerView stamps the
+        // holder ref into it; replacing it nulls that ref and the next layout pass NPEs). Mutate in
+        // place; only a fresh, never-attached view may take new params.
+        val curLp = container.layoutParams
+        if (curLp == null) {
+            container.layoutParams = RecyclerView.LayoutParams(MATCH_PARENT, desiredHeight)
+        } else {
+            val mlp = curLp as? ViewGroup.MarginLayoutParams ?: return
+            if (mlp.height == desiredHeight) return
+            mlp.height = desiredHeight
+            if (viewer.recycler.isComputingLayout) {
+                viewer.recycler.post { container.requestLayout() }
+            } else {
+                container.requestLayout()
+            }
+        }
         when (trailer) {
             WebtoonTrailer.None -> Unit
             WebtoonTrailer.Loading -> {

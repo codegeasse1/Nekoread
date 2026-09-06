@@ -90,6 +90,14 @@ class WebtoonPageHolder(
                 // Everything the render needs (dims, animated, tall) comes from cached metadata —
                 // no bounds decode, no header read, no isTallPage sniff during the bind.
                 if (meta == null) meta = WebtoonPageCache.meta(item.desc, viewer.cacheDir)
+                // The page's dimensions were unknown at bind time (first-ever page still
+                // downloading), so the frame is still the viewport-height placeholder. Now that
+                // the file exists the real size is known — fix the frame to the true strip height
+                // so the page isn't left cropped to the viewport.
+                if (meta != null) {
+                    val rw2 = viewer.recycler.width.takeIf { it > 0 } ?: frame.context.resources.displayMetrics.widthPixels
+                    setFrameHeight((rw2.toFloat() * meta.height / meta.width).toInt().coerceAtLeast(1))
+                }
                 frame.decodeWidthPx = viewer.decodeWidth
                 frame.setImage(
                     file,
@@ -112,25 +120,35 @@ class WebtoonPageHolder(
         val bottomMargin = if (viewer.gaps) dp(15) else 0
         val sidePadding = (viewer.config.webtoonSidePadding.coerceIn(0, 25) / 100f) * frame.context.resources.displayMetrics.widthPixels
 
-        // The frame sits inside the RecyclerView, so its layoutParams MUST be RecyclerView.LayoutParams
-        // (a MarginLayoutParams subclass) — a plain FrameLayout.LayoutParams here crashes the next
-        // layout pass (getChildViewHolderInt casts every direct child's params). Before the frame is
-        // attached its layoutParams is null: skip entirely (RecyclerView generates proper params on
-        // attach; the bind-time call applies the margins once it's a real child).
-        val current = frame.layoutParams as? ViewGroup.MarginLayoutParams
-        if (current == null) return
-        if (current.bottomMargin == bottomMargin && current.leftMargin.toFloat() == sidePadding) {
+        val lp = frame.layoutParams
+        if (lp == null) {
+            // Fresh view that has never been added to the RecyclerView: setting new params is safe
+            // (no ViewHolder stamped in yet). RecyclerView.LayoutParams is required — the frame is
+            // a direct child of the RecyclerView, and getChildViewHolderInt casts every direct
+            // child's params to RecyclerView.LayoutParams during layout.
+            frame.layoutParams = RecyclerView.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
+                this.bottomMargin = bottomMargin
+                this.leftMargin = sidePadding.toInt()
+                this.rightMargin = sidePadding.toInt()
+            }
             return
         }
-        val lp = RecyclerView.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
-            this.bottomMargin = bottomMargin
-            this.leftMargin = sidePadding.toInt()
-            this.rightMargin = sidePadding.toInt()
+        // The frame is (or was) a direct child of the RecyclerView: NEVER replace its LayoutParams
+        // object. RecyclerView stamps a private reference to the child's ViewHolder into the params
+        // at attach time (getChildViewHolderInt), so assigning a fresh object nulls that reference
+        // and the next layout pass crashes (findMinMaxChildLayoutPositions / updateLayoutState).
+        // Mutate the existing params in place instead.
+        val mlp = lp as? ViewGroup.MarginLayoutParams ?: return
+        if (mlp.bottomMargin == bottomMargin && mlp.leftMargin.toFloat() == sidePadding) {
+            return
         }
+        mlp.bottomMargin = bottomMargin
+        mlp.leftMargin = sidePadding.toInt()
+        mlp.rightMargin = sidePadding.toInt()
         if (viewer.recycler.isComputingLayout) {
-            viewer.recycler.post { frame.layoutParams = lp }
+            viewer.recycler.post { frame.requestLayout() }
         } else {
-            frame.layoutParams = lp
+            frame.requestLayout()
         }
     }
 

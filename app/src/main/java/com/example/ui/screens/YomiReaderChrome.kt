@@ -223,6 +223,20 @@ fun YomiReaderChrome(
     var showChapterList by remember { mutableStateOf(false) }
     var autoScrollExpanded by remember { mutableStateOf(false) }
 
+    // The bottom-bar crop toggle operates on whichever crop setting applies to the current reading
+    // mode: webtoon (continuous) → the classic crop setting, webtoon with gaps → its own setting,
+    // paged modes (left-to-right / right-to-left / vertical) → the paged crop setting.
+    val activeCrop = when (readerMode) {
+        ReaderMode.WEBTOON -> cropBorders
+        ReaderMode.WEBTOON_GAPS -> cropBordersContinuous
+        else -> cropBordersPaged
+    }
+    val activeToggleCrop = when (readerMode) {
+        ReaderMode.WEBTOON -> onToggleCropBorders
+        ReaderMode.WEBTOON_GAPS -> onToggleCropBordersContinuous
+        else -> onToggleCropBordersPaged
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -278,8 +292,8 @@ fun YomiReaderChrome(
                         showReadingModeButton = showReadingMode,
                         onClickReadingMode = { showModeDialog = true },
                         onClickOrientation = { showOrientationDialog = true },
-                        cropEnabled = cropBorders,
-                        onClickCropBorder = onToggleCropBorders,
+                        cropEnabled = activeCrop,
+                        onClickCropBorder = activeToggleCrop,
                         onClickChapterList = { showChapterList = true },
                         onClickSettings = { showSettings = true },
                     )
