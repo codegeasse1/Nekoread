@@ -264,11 +264,52 @@ fun ReaderScreen(
         }
     }
 
-    // Seed the webtoon stream with the current chapter's pages once loaded.
-    LaunchedEffect(pages, chapter.id, isWebtoon) {
-        if (isWebtoon && pages != null && (streamSegments.isEmpty() || streamSegments.firstOrNull() != pages)) {
-            streamSegments = listOf(pages!!)
+    // Reading order for all of this manga's chapters (also used by the prev/next arrow buttons and
+    // the webtoon auto-continue below).
+    val sortedChapters = remember(allChapters) { sortChapters(allChapters) }
+
+    // The previous chapter in reading order (skipping cross-source duplicates) — the one the user
+    // jumped FROM via an in-reader next-arrow / chapter-list tap. It's prepended to the webtoon
+    // stream (see the seed effect below) so that scrolling UP after a jump returns to it, instead
+    // of the stream starting at the jumped-to chapter with nothing above it (scroll-up hit a wall).
+    val prevForStream = remember(sortedChapters, chapter.id) {
+        val idx = sortedChapters.indexOfFirst { it.id == chapter.id }
+        if (idx <= 0) return@remember null
+        val curKey = chapterIdentity(chapter)
+        var i = idx - 1
+        while (i >= 0) {
+            if (chapterIdentity(sortedChapters[i]) != curKey) return@remember sortedChapters[i]
+            i--
         }
+        null
+    }
+
+    // Seed the webtoon stream with the current chapter's pages once loaded. When the reader was
+    // opened via an in-reader chapter jump (startAtBeginning), the PREVIOUS chapter's pages are
+    // fetched and prepended too, so scrolling up can return to the chapter the user came from —
+    // same as when that chapter was reached by scrolling down into it. If the previous chapter
+    // fails to load, the stream falls back to the current chapter alone.
+    LaunchedEffect(pages, chapter.id, isWebtoon, startAtBeginning, prevForStream?.id) {
+        if (!isWebtoon) return@LaunchedEffect
+        val cur = pages ?: return@LaunchedEffect
+        if (cur.isEmpty()) return@LaunchedEffect
+        // Already seeded with these pages — don't wipe a stream that auto-continue has grown.
+        if (streamSegments.isNotEmpty() && streamSegments.last() === cur) return@LaunchedEffect
+        val prev = prevForStream
+        if (startAtBeginning && prev != null) {
+            val prevPages = try {
+                viewModel.repository.getChapterPageDescriptors(prev.id)
+            } catch (e: Throwable) {
+                null
+            }
+            if (prevPages != null && prevPages.isNotEmpty()) {
+                streamQueue = listOf(prev, chapter)
+                streamSegments = listOf(prevPages, cur)
+                return@LaunchedEffect
+            }
+        }
+        streamQueue = listOf(chapter)
+        streamSegments = listOf(cur)
     }
 
     val coroutineScope = rememberCoroutineScope()
@@ -290,6 +331,15 @@ fun ReaderScreen(
         0
     } else {
         (chapter.lastPageRead - 1).coerceAtLeast(0)
+    }
+
+    // Global adapter position the webtoon viewer should open at. When the previous chapter was
+    // prepended the current chapter sits at segment 1, so its first page is one divider plus the
+    // previous segment's page count in. Computed from the LIVE stream so a failed previous-chapter
+    // fetch (single-segment stream) still lands on the right page.
+    val webtoonInitialPos = remember(streamSegments, streamQueue, initialPageIndex, chapter.id) {
+        val segIdx = streamQueue.indexOfFirst { it.id == chapter.id }.coerceAtLeast(0)
+        streamSegments.take(segIdx).sumOf { it.size } + segIdx + initialPageIndex
     }
 
     // Webtoon reader state (yomi-style RecyclerView viewer): the current (segment, page, pageTotal)
@@ -318,8 +368,11 @@ fun ReaderScreen(
         try {
             if (isWebtoon) {
                 // The yomi viewer positions itself on first layout (setItems with initialPageIndex);
-                // seed the page state so the HUD reads correctly until the viewer reports in.
-                viewerPos = Triple(0, (target + 1).coerceIn(1, list.size), list.size)
+                // seed the page state so the HUD reads correctly until the viewer reports in. When
+                // the previous chapter was prepended (in-reader jump) the current chapter lives at
+                // segment 1, not 0.
+                val seg = if (startAtBeginning && prevForStream != null) 1 else 0
+                viewerPos = Triple(seg, (target + 1).coerceIn(1, list.size), list.size)
             } else {
                 // The chimahon pager positions itself on creation (setPages with the initial page);
                 // seed the HUD state so the page slider reads correctly until the viewer reports.
@@ -366,8 +419,6 @@ fun ReaderScreen(
             viewModel.saveProgress(manga.id, activeChapter.id, activeChapter.name, currentPage)
         }
     }
-
-    val sortedChapters = remember(allChapters) { sortChapters(allChapters) }
 
     // Previous/next chapters are found by POSITION in the chapter list rather than by comparing
     // chapter numbers: sources that don't number their chapters store -1 for every chapter, which
@@ -809,7 +860,7 @@ fun ReaderScreen(
                         rgb565 = useRgb565,
                         autoScroll = autoScroll,
                         autoScrollSpeedDp = autoScrollSpeedDp,
-                        initialPageIndex = initialPageIndex,
+                        initialPageIndex = webtoonInitialPos,
                         trailer = when {
                             webtoonLoadingNext -> WebtoonTrailer.Loading
                             webtoonError != null && streamNextChapter != null ->
