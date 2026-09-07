@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
@@ -35,7 +37,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.ui.theme.GlassCard
@@ -71,43 +75,77 @@ fun GlassCard(
 }
 
 /**
- * Glassmorphism search bar used across the Browse tabs (sources, extensions, global search).
+ * Compact glassmorphism search bar (Hikari/taskbar style) used across the Browse tabs, the
+ * extension header and the Library header. Custom-drawn (Surface + BasicTextField) so the text
+ * stays perfectly vertically centered at small heights — a squeezed default text field clips the
+ * bottom of the letters.
  */
 @Composable
 fun GlassSearchBar(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    height: Dp = 44.dp
 ) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        placeholder = { Text(placeholder, color = TextMutedDark) },
-        leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
-        trailingIcon = {
+    Surface(
+        shape = RoundedCornerShape(height / 2),
+        color = GlassField,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(1.dp, GlassCardBorder),
+        modifier = modifier.height(height)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = "Search",
+                tint = NekoVioletPrimary,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                    color = MaterialTheme.colorScheme.onSurface
+                ),
+                cursorBrush = SolidColor(NekoVioletPrimary),
+                modifier = Modifier.weight(1f),
+                decorationBox = { innerTextField ->
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (value.isEmpty()) {
+                            Text(
+                                text = placeholder,
+                                style = MaterialTheme.typography.bodyMedium.copy(color = TextMutedDark),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        innerTextField()
+                    }
+                }
+            )
             if (value.isNotEmpty()) {
-                IconButton(onClick = { onValueChange("") }) {
-                    Icon(Icons.Default.Clear, contentDescription = "Clear")
+                Spacer(modifier = Modifier.width(6.dp))
+                IconButton(
+                    onClick = { onValueChange("") },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Clear,
+                        contentDescription = "Clear",
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             }
-        },
-        singleLine = true,
-        textStyle = MaterialTheme.typography.bodyMedium,
-        modifier = modifier
-            .fillMaxWidth()
-            .height(44.dp),
-        shape = RoundedCornerShape(22.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = GlassField,
-            unfocusedContainerColor = GlassField,
-            focusedBorderColor = NekoVioletPrimary,
-            unfocusedBorderColor = GlassCardBorder,
-            cursorColor = NekoVioletPrimary,
-            focusedTextColor = MaterialTheme.colorScheme.onSurface,
-            unfocusedTextColor = MaterialTheme.colorScheme.onSurface
-        )
-    )
+        }
+    }
 }
 
 /**

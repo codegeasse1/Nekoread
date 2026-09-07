@@ -77,6 +77,7 @@ import com.example.data.local.CategoryEntity
 import com.example.data.local.MangaEntity
 import com.example.ui.MainViewModel
 import com.example.ui.components.FloatingTopAppBar
+import com.example.ui.components.GlassSearchBar
 import com.example.ui.components.MangaGridCard
 import com.example.ui.components.MangaListCard
 import com.example.ui.components.coverModelFor
@@ -147,7 +148,7 @@ fun LibraryScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(40.dp)
+                            .height(44.dp)
                             .padding(horizontal = 4.dp)
                     ) {
                         if (selectionMode) {
@@ -180,23 +181,13 @@ fun LibraryScreen(
                             }
                         } else {
                             if (showSearchField) {
-                                OutlinedTextField(
+                                GlassSearchBar(
                                     value = searchQuery,
                                     onValueChange = { viewModel.setLibrarySearchQuery(it) },
-                                    placeholder = { Text("Search library...") },
+                                    placeholder = "Search library...",
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(40.dp)
-                                        .testTag("library_search_input"),
-                                    singleLine = true,
-                                    textStyle = MaterialTheme.typography.bodyMedium,
-                                    trailingIcon = {
-                                        if (searchQuery.isNotEmpty()) {
-                                            IconButton(onClick = { viewModel.setLibrarySearchQuery("") }) {
-                                                Icon(Icons.Default.Clear, contentDescription = "Clear")
-                                            }
-                                        }
-                                    }
+                                        .testTag("library_search_input")
                                 )
                             } else {
                                 Icon(
