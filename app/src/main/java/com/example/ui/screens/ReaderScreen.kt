@@ -197,7 +197,7 @@ fun ReaderScreen(
     val invertedColors: Boolean by viewModel.invertedColors.collectAsStateWithLifecycle()
     val imageEnhance: Boolean by viewModel.imageEnhance.collectAsStateWithLifecycle()
 
-    // Grayscale / inverted-colors / enhance combined matrix (chimahon's getCombinedPaint). When
+    // Grayscale / inverted-colors / enhance combined matrix. When
     // grayscale is enabled the image is desaturated; inverted flips the colors; image enhance
     // applies a subtle contrast + saturation boost so pages pop. All three are plain color
     // matrices applied at draw time, so they work live in both modes without any re-decode or lag.

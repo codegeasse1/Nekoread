@@ -37,6 +37,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -734,7 +735,7 @@ private fun BottomReaderBar(
         }
         IconButton(onClick = onClickEnhance) {
             Icon(
-                Icons.Outlined.AutoAwesome,
+                Icons.Default.AutoAwesome,
                 contentDescription = "Enhance image",
                 tint = if (enhanceEnabled) Accent else OnDark,
             )
