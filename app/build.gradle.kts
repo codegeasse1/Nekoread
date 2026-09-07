@@ -18,8 +18,8 @@ android {
     applicationId = "com.nekoread.manga"
     minSdk = 24
     targetSdk = 36
-    versionCode = project.providers.gradleProperty("versionCode").map { it.toInt() }.getOrElse(1)
-    versionName = project.providers.gradleProperty("versionName").getOrElse("1.0")
+    versionCode = project.providers.gradleProperty("versionCode").map { it.toInt() }.getOrElse(224)
+    versionName = project.providers.gradleProperty("versionName").getOrElse("2.2.4")
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

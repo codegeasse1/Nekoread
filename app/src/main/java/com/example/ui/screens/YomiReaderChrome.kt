@@ -198,6 +198,8 @@ fun YomiReaderChrome(
     onToggleGrayscale: () -> Unit,
     invertedColors: Boolean,
     onToggleInvertedColors: () -> Unit,
+    imageEnhance: Boolean,
+    onToggleImageEnhance: () -> Unit,
     readerBg: ReaderBg,
     onSelectReaderBg: (ReaderBg) -> Unit,
     showPageNumber: Boolean,
@@ -295,6 +297,8 @@ fun YomiReaderChrome(
                         cropEnabled = activeCrop,
                         onClickCropBorder = activeToggleCrop,
                         onClickChapterList = { showChapterList = true },
+                        enhanceEnabled = imageEnhance,
+                        onClickEnhance = onToggleImageEnhance,
                         onClickSettings = { showSettings = true },
                     )
                 }
@@ -695,6 +699,8 @@ private fun BottomReaderBar(
     cropEnabled: Boolean,
     onClickCropBorder: () -> Unit,
     onClickChapterList: () -> Unit,
+    enhanceEnabled: Boolean,
+    onClickEnhance: () -> Unit,
     onClickSettings: () -> Unit,
 ) {
     Row(
@@ -725,6 +731,13 @@ private fun BottomReaderBar(
         }
         IconButton(onClick = onClickChapterList) {
             Icon(Icons.AutoMirrored.Filled.ViewList, contentDescription = "Chapter list", tint = OnDark)
+        }
+        IconButton(onClick = onClickEnhance) {
+            Icon(
+                Icons.Outlined.AutoAwesome,
+                contentDescription = "Enhance image",
+                tint = if (enhanceEnabled) Accent else OnDark,
+            )
         }
         IconButton(onClick = onClickSettings) {
             Icon(Icons.Outlined.Settings, contentDescription = "Settings", tint = OnDark)

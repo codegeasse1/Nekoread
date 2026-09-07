@@ -195,12 +195,14 @@ fun ReaderScreen(
     val colorFilterMode: Int by viewModel.colorFilterMode.collectAsStateWithLifecycle()
     val grayscale: Boolean by viewModel.grayscale.collectAsStateWithLifecycle()
     val invertedColors: Boolean by viewModel.invertedColors.collectAsStateWithLifecycle()
+    val imageEnhance: Boolean by viewModel.imageEnhance.collectAsStateWithLifecycle()
 
-    // Grayscale / inverted-colors combined matrix (chimahon's getCombinedPaint). When both are
-    // enabled the inverted matrix is applied after the grayscale one. Applied to paged pages via
-    // the Compose Image colorFilter and to webtoon pages via the native viewer's image views.
-    val grayInvMatrix = remember(grayscale, invertedColors) {
-        if (!grayscale && !invertedColors) {
+    // Grayscale / inverted-colors / enhance combined matrix (chimahon's getCombinedPaint). When
+    // grayscale is enabled the image is desaturated; inverted flips the colors; image enhance
+    // applies a subtle contrast + saturation boost so pages pop. All three are plain color
+    // matrices applied at draw time, so they work live in both modes without any re-decode or lag.
+    val grayInvMatrix = remember(grayscale, invertedColors, imageEnhance) {
+        if (!grayscale && !invertedColors && !imageEnhance) {
             null
         } else {
             val m = android.graphics.ColorMatrix()
@@ -212,6 +214,25 @@ fun ReaderScreen(
                             -1f, 0f, 0f, 0f, 255f,
                             0f, -1f, 0f, 0f, 255f,
                             0f, 0f, -1f, 0f, 255f,
+                            0f, 0f, 0f, 1f, 0f,
+                        ),
+                    ),
+                )
+            }
+            if (imageEnhance) {
+                // Real-time "enhance": a gentle saturation + contrast boost. It's a color matrix
+                // (GPU-composited at draw time), never a re-decode, so scrolling stays smooth.
+                val sat = android.graphics.ColorMatrix()
+                sat.setSaturation(1.15f)
+                m.postConcat(sat)
+                val c = 1.15f
+                val t = 0.5f * (1f - c) * 255f
+                m.postConcat(
+                    android.graphics.ColorMatrix(
+                        floatArrayOf(
+                            c, 0f, 0f, 0f, t,
+                            0f, c, 0f, 0f, t,
+                            0f, 0f, c, 0f, t,
                             0f, 0f, 0f, 1f, 0f,
                         ),
                     ),
@@ -1102,6 +1123,8 @@ fun ReaderScreen(
             onToggleGrayscale = { viewModel.setGrayscale(!grayscale) },
             invertedColors = invertedColors,
             onToggleInvertedColors = { viewModel.setInvertedColors(!invertedColors) },
+            imageEnhance = imageEnhance,
+            onToggleImageEnhance = { viewModel.setImageEnhance(!imageEnhance) },
             readerBg = readerBg,
             onSelectReaderBg = { viewModel.setReaderBg(it) },
             showPageNumber = showPageNumber,
@@ -1147,6 +1170,7 @@ fun ReaderScreen(
                 viewModel.setColorFilterMode(0)
                 viewModel.setGrayscale(false)
                 viewModel.setInvertedColors(false)
+                viewModel.setImageEnhance(false)
             },
             seriesOverrideEnabled = seriesOverrideEnabled[manga.id] == true,
             onToggleSeriesOverride = {

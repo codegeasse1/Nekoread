@@ -106,7 +106,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _readerQuality = MutableStateFlow(75)
     val readerQuality: StateFlow<Int> = _readerQuality.asStateFlow()
 
-    private val _cropBorders = MutableStateFlow(true)
+    private val _cropBorders = MutableStateFlow(false)
     val cropBorders: StateFlow<Boolean> = _cropBorders.asStateFlow()
 
     private val _doubleTapZoom = MutableStateFlow(true)
@@ -192,6 +192,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _invertedColors = MutableStateFlow(false)
     val invertedColors: StateFlow<Boolean> = _invertedColors.asStateFlow()
 
+    // Real-time image enhancement (bottom-bar "enhance" button): a subtle contrast + saturation
+    // boost applied as a color matrix at draw time — no re-decode, so it never adds lag.
+    private val _imageEnhance = MutableStateFlow(false)
+    val imageEnhance: StateFlow<Boolean> = _imageEnhance.asStateFlow()
+
     // Per-series reader overrides: a manga can pin its own reading mode (the global mode still
     // applies everywhere else). Enabled state and mode are stored per manga id in prefs.
     private val _seriesOverrideEnabled = MutableStateFlow<Map<String, Boolean>>(emptyMap())
@@ -205,22 +210,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _readerMode.value = ReaderMode.valueOf(prefs.getString("reader_mode", ReaderMode.WEBTOON.name)!!)
         _readerBg.value = ReaderBg.valueOf(prefs.getString("reader_bg", ReaderBg.PURE_BLACK.name)!!)
         _showPageNumber.value = prefs.getBoolean("show_page_number", true)
-        _cropBorders.value = prefs.getBoolean("reader_crop_borders", true)
+        _cropBorders.value = prefs.getBoolean("reader_crop_borders", false)
         _doubleTapZoom.value = prefs.getBoolean("reader_double_tap_zoom", true)
         _tapToChangePages.value = prefs.getBoolean("reader_tap_change_pages", false)
         _pinchToZoom.value = prefs.getBoolean("reader_pinch_to_zoom", true)
         _webtoonCropBorders.value = prefs.getBoolean("reader_webtoon_crop_borders", false)
         _cropBordersPaged.value = prefs.getBoolean("reader_crop_borders_paged", false)
         _cropBordersContinuous.value = prefs.getBoolean("reader_crop_borders_continuous", false)
-        // One-time migration: webtoon border cropping is now ON by default (strips fill the screen
-        // width instead of showing their own black gutters). Existing installs that stored the old
-        // `false` default get switched to true exactly once; any later choice is respected.
-        if (!prefs.getBoolean("crop_defaults_migrated", false)) {
+        // One-time migration: border cropping is now OFF by default (an earlier migration forced it
+        // ON). Install that never made their own choice get switched back to off exactly once;
+        // any later choice is respected.
+        if (!prefs.getBoolean("crop_defaults_migrated_v2", false)) {
             prefs.edit()
-                .putBoolean("crop_defaults_migrated", true)
-                .putBoolean("reader_crop_borders", true)
+                .putBoolean("crop_defaults_migrated_v2", true)
+                .putBoolean("reader_crop_borders", false)
                 .apply()
-            _cropBorders.value = true
+            _cropBorders.value = false
         }
         _webtoonSidePadding.value = prefs.getInt("reader_webtoon_side_padding", 0).coerceIn(0, 25)
         _webtoonNavigationMode.value = prefs.getInt("reader_navigation_mode_webtoon", 5).coerceIn(0, 5)
@@ -259,6 +264,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _colorFilterMode.value = prefs.getInt("reader_color_filter_mode", 0).coerceIn(0, 5)
         _grayscale.value = prefs.getBoolean("reader_grayscale", false)
         _invertedColors.value = prefs.getBoolean("reader_inverted_colors", false)
+        _imageEnhance.value = prefs.getBoolean("reader_image_enhance", false)
         _seriesOverrideEnabled.value = prefs.all.mapNotNull { (k, v) ->
             if (k.startsWith("series_override_") && v is Boolean) k.removePrefix("series_override_") to v else null
         }.toMap()
@@ -717,6 +723,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setInvertedColors(enabled: Boolean) {
         _invertedColors.value = enabled
         prefs.edit().putBoolean("reader_inverted_colors", enabled).apply()
+    }
+
+    fun setImageEnhance(enabled: Boolean) {
+        _imageEnhance.value = enabled
+        prefs.edit().putBoolean("reader_image_enhance", enabled).apply()
     }
 
     fun setSeriesOverrideEnabled(mangaId: String, enabled: Boolean) {
