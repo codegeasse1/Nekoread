@@ -119,8 +119,6 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
      *  attached to a window (a fresh bind): the per-view coroutine scope only exists while attached,
      *  so the load is started from [onAttachedToWindow] instead of being dropped. */
     private var pendingFile: File? = null
-    private var pendingDecodeWidth: Int = 0
-    private var pendingRgb565: Boolean = false
 
     var onReady: (() -> Unit)? = null
     var onError: (() -> Unit)? = null
@@ -197,8 +195,6 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
         readyFired = false
         invalidate()
         pendingFile = file
-        pendingDecodeWidth = decodeWidthPx
-        pendingRgb565 = decodeRgb565
         startLoad(gen, file)
     }
 
