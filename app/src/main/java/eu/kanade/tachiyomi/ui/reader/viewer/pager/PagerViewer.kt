@@ -20,7 +20,7 @@ import java.io.IOException
  * The chimahon paged reader, ported into Nekoread. A [androidx.viewpager.widget.ViewPager]
  * (DirectionalViewPager, so it can page vertically too) shows one page per screen through a
  * [PagerPageHolder], which region-decodes each page straight from its on-device cache file
- * (WebtoonPageCache) with a [com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView] — the
+ * (WebtoonPageCache) with a [com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView] â the
  * same smooth, memory-bounded rendering the webtoon reader uses. Tap zones, page transitions,
  * double-tap/pinch zoom, crop borders and zoom start position all mirror chimahon's pager behavior.
  */
@@ -46,8 +46,17 @@ abstract class PagerViewer(val context: Context) {
     /** Target decode width (px) hint passed to the page image view. */
     var decodeWidth: Int = 0
 
-    /** Color filter (grayscale / inverted colors) applied to every page's image view. */
+    /** Color filter (grayscale / inverted colors / enhance) applied to every page's image view. */
     var colorFilter: ColorFilter? = null
+        set(value) {
+            if (field === value) return
+            field = value
+            // Re-apply to the currently-bound page holders so toggling the filter (e.g. the image
+            // enhancer) redraws the visible pages immediately instead of waiting for a page turn.
+            for (i in 0 until pager.childCount) {
+                (pager.getChildAt(i) as? PagerPageHolder)?.colorFilter = value
+            }
+        }
 
     /** Text color for the reader chrome (errors). */
     var textColor: Int = AndroidColor.WHITE

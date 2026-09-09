@@ -18,8 +18,8 @@ android {
     applicationId = "com.nekoread.manga"
     minSdk = 24
     targetSdk = 36
-    versionCode = project.providers.gradleProperty("versionCode").map { it.toInt() }.getOrElse(224)
-    versionName = project.providers.gradleProperty("versionName").getOrElse("2.2.4")
+    versionCode = project.providers.gradleProperty("versionCode").map { it.toInt() }.getOrElse(225)
+    versionName = project.providers.gradleProperty("versionName").getOrElse("2.2.5")
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -133,7 +133,7 @@ dependencies {
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
   // OkHttp 5 + brotli/zstd: extension-lib 1.6 sources (keiyoushi KeiSource) build their client
-  // with OkHttp 5's CompressionInterceptor and reference okhttp3.brotli/zstd — these must be on
+  // with OkHttp 5's CompressionInterceptor and reference okhttp3.brotli/zstd â these must be on
   // the app classpath or those extensions die with NoClassDefFoundError. Same set as Tadami.
   implementation(libs.okhttp.brotli)
   implementation(libs.okhttp.zstd)

@@ -227,8 +227,8 @@ fun YomiReaderChrome(
     var autoScrollExpanded by remember { mutableStateOf(false) }
 
     // The bottom-bar crop toggle operates on whichever crop setting applies to the current reading
-    // mode: webtoon (continuous) → the classic crop setting, webtoon with gaps → its own setting,
-    // paged modes (left-to-right / right-to-left / vertical) → the paged crop setting.
+    // mode: webtoon (continuous) â the classic crop setting, webtoon with gaps â its own setting,
+    // paged modes (left-to-right / right-to-left / vertical) â the paged crop setting.
     val activeCrop = when (readerMode) {
         ReaderMode.WEBTOON -> cropBorders
         ReaderMode.WEBTOON_GAPS -> cropBordersContinuous
@@ -670,6 +670,9 @@ private fun ChapterNavigatorPill(
                 onValueChange = { v -> onSeekPage(v.toInt() - 1) },
                 valueRange = 1f..totalPages.coerceAtLeast(1).toFloat(),
                 colors = sliderAccentColors(),
+                // One tick dot per page (yomi-style), so tapping/dragging shows exactly how far
+                // the chapter's pages stretch and how much a jump skips.
+                steps = (totalPages - 2).coerceAtLeast(0),
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 6.dp)

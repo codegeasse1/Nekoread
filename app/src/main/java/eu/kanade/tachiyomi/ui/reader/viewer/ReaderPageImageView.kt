@@ -39,8 +39,8 @@ import java.io.File
 import java.io.FileInputStream
 
 /**
- * The webtoon page view ported from yomi/chimahon. Non-tall webtoon pages (height ≤ 3x width) are
- * decoded ONCE by Coil at the strip's display width and shown in a plain [ImageView] — a single,
+ * The webtoon page view ported from yomi/chimahon. Non-tall webtoon pages (height â¤ 3x width) are
+ * decoded ONCE by Coil at the strip's display width and shown in a plain [ImageView] â a single,
  * memory-cached decode (warmed by the reader's preload loop) instead of a per-bind region-decode
  * pipeline, which is what keeps scrolling smooth. TALL strips (long webtoon pages, h > 3w) are
  * region-decoded by a [SubsamplingScaleImageView] straight from the page's on-device cache file.
@@ -62,12 +62,30 @@ open class ReaderPageImageView @JvmOverloads constructor(
     private var scope: CoroutineScope? = null
     private var smartFitJob: Job? = null
 
-    /** Color filter (grayscale / inverted colors) applied to the plain-ImageView render paths. */
+    /** Color filter (grayscale / inverted colors / enhance) applied to the whole page at draw time. */
     var colorFilter: ColorFilter? = null
         set(value) {
+            if (field == value) return
             field = value
-            (pageView as? ImageView)?.colorFilter = value
+            invalidate()
         }
+
+    // Everything inside this view (plain ImageView paths AND SubsamplingScaleImageView pages) is
+    // drawn into a layer and composited through this paint, so the filter applies even to pages
+    // that region-decode via SubsamplingScaleImageView — which cannot hold a ColorFilter itself.
+    private val filterPaint = android.graphics.Paint().apply { isFilterBitmap = true }
+
+    override fun dispatchDraw(canvas: android.graphics.Canvas) {
+        val cf = colorFilter
+        if (cf == null) {
+            super.dispatchDraw(canvas)
+            return
+        }
+        filterPaint.colorFilter = cf
+        val layer = canvas.saveLayer(null, filterPaint)
+        super.dispatchDraw(canvas)
+        canvas.restoreToCount(layer)
+    }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
@@ -139,7 +157,6 @@ open class ReaderPageImageView @JvmOverloads constructor(
                 setNonAnimatedImage(file, config)
             }
         }
-        (pageView as? ImageView)?.colorFilter = colorFilter
     }
 
     fun recycle() {
@@ -230,7 +247,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
         }
     }
 
-    /** True if [file] is a tall webtoon strip (height > 3x width — yomi/mihon's rule). */
+    /** True if [file] is a tall webtoon strip (height > 3x width â yomi/mihon's rule). */
     private fun isTallImageFile(file: File): Boolean {
         return try {
             val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
