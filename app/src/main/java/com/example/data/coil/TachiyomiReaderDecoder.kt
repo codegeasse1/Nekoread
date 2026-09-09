@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapRegionDecoder
 import android.graphics.drawable.BitmapDrawable
-import android.os.Build
 import coil.ImageLoader
 import coil.decode.DecodeResult
 import coil.decode.Decoder
@@ -60,14 +59,14 @@ class TachiyomiReaderDecoder(
     private fun decodeFileWhole(file: File): Bitmap? {
         val (w, h) = readDims(file)
         val sampleSize = calculateInSampleSize(w, h, targetWidthPx(), targetHeightPx())
-        val useHardware = options.allowHardware && !options.allowRgb565 &&
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-        // Modern-format pages (AVIF/JXL/HEIF) decoded on this path would otherwise be software
-        // bitmaps the render thread re-uploads to the GPU on first draw — the same upload churn
-        // 2.2.5c removed for the built-in decoder. Decode to a HARDWARE bitmap (drawn for free),
-        // falling back to software if the device/codec rejects it (decodeFile returns null, or the
-        // decoder throws).
-        if (useHardware) {
+        // Mirror Coil 2.7's own decoder: Options.config is HARDWARE on API 26+ unless the request
+        // disabled hardware (border cropping does — the crop path reads pixels back and must stay
+        // software). Modern-format pages (AVIF/JXL/HEIF) decoded on this path would otherwise be
+        // software bitmaps the render thread re-uploads to the GPU on first draw — the same upload
+        // churn 2.2.5c removed for the built-in decoder. Decode to a HARDWARE bitmap (drawn for
+        // free), falling back to software if the device/codec rejects it (decodeFile returns null,
+        // or the decoder throws).
+        if (options.config == Bitmap.Config.HARDWARE && !options.allowRgb565) {
             val hardware = runCatching {
                 BitmapFactory.decodeFile(
                     file.absolutePath,
