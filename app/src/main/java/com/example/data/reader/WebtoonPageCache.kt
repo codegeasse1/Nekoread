@@ -146,7 +146,16 @@ object WebtoonPageCache {
     suspend fun meta(desc: MangaSource.PageDescriptor, dir: File): PageMeta? {
         val key = keyFor(desc.imageUrl)
         dims[key]?.let { d ->
-            val anim = animated[key] ?: return@let null
+            // The prewarm caches the page's dimensions as soon as a download lands, so this branch
+            // is the common path during a scroll. The animated flag may not be cached yet (it is a
+            // separate map) — compute it cheaply from the on-disk header instead of returning null,
+            // otherwise every prewarmed page would bind with the viewport-height placeholder and
+            // snap to its real height when the image decodes (the list jump that reads as
+            // scroll jitter on slow sources like comix).
+            val anim = animated[key] ?: withContext(Dispatchers.IO) {
+                val f = targetFile(key, dir)
+                if (f.exists() && f.length() > 0) isAnimatedFile(f).also { animated[key] = it } else false
+            }
             return PageMeta(d.first, d.second, anim, isTallPage(d.first, d.second))
         }
         val f = targetFile(key, dir)

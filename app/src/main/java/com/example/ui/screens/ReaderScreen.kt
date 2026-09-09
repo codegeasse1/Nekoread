@@ -121,9 +121,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 // How many in-window webtoon pages the prewarm fetches/decodes at once. A small concurrent batch
-// keeps the ±8 page window filled ahead of the scroll even when every page costs a full download +
+// keeps the ±8/±20 page window filled ahead of the scroll even when every page costs a full download +
 // descramble (e.g. comix) — a sequential one-at-a-time loop can't keep up on slow sources.
-private const val WEBTOON_BATCH = 4
+private const val WEBTOON_BATCH = 6
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -583,13 +583,15 @@ fun ReaderScreen(
             val segIdx = if (isWebtoon) streamPosition.first.coerceIn(0, segs.lastIndex) else 0
             val segSize = segs[segIdx].size
             val globCur = (starts[segIdx] + (currentPage - 1).coerceIn(0, segSize - 1)).coerceIn(0, total - 1)
-            // Preload window: 8 pages behind and 12 ahead of the current page are made
+            // Preload window: 8 pages behind and 20 ahead of the current page are made
             // display-ready (Coil memory-cache warm for short pages, cache-file download for tall
             // strips) so that scrolling — and jumping straight to any page — shows the neighbours
             // instantly instead of decoding them on first scroll-in. The webtoon window leans
-            // further AHEAD because that's the direction the user scrolls.
+            // further AHEAD because that's the direction the user scrolls; the extra lead time is
+            // what lets slow sources (comix's big descrambled images) finish downloading before a
+            // page enters the viewport, so its holder never binds against a placeholder height.
             val warmFrom = (globCur - 8).coerceAtLeast(0)
-            val warmTo = (if (isWebtoon) globCur + 12 else globCur + 8).coerceAtMost(total - 1)
+            val warmTo = (if (isWebtoon) globCur + 20 else globCur + 8).coerceAtMost(total - 1)
 
             // Collect the nearest not-yet-downloaded pages, walking outward from the current
             // page (current, +1, -1, +2, -2, ...), then launch a small CONCURRENT batch of
@@ -643,9 +645,12 @@ fun ReaderScreen(
                                 // request the item will use (same file, size, policies), so a page
                                 // scrolling in is an instant cache hit instead of a fresh decode
                                 // (and every re-scroll is free). Tall strips are left to the
-                                // subsampling view's region-decode from the file.
-                                val d = WebtoonPageCache.dimensions(m, webtoonCacheDir)
-                                val tall = d == null || WebtoonPageCache.isTallPage(d.first, d.second)
+                                // subsampling view's region-decode from the file. meta() also caches
+                                // the page's animated flag, so the page holder's own meta() query is
+                                // a pure map lookup and it pre-sizes the frame to the real strip
+                                // height before the page ever enters the viewport.
+                                val mm = WebtoonPageCache.meta(m, webtoonCacheDir)
+                                val tall = mm == null || mm.isTall
                                 if (!tall) {
                                     runCatching {
                                         imageLoader.execute(

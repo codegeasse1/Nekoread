@@ -9,6 +9,10 @@ All notable changes to Nekoread.
 
 ### Reader fixes
 - **Fixed the "Enhance" button doing nothing**: the contrast/saturation boost is now applied at draw time to the whole page — including pages that render through the subsampling decoder (paged modes and tall webtoon strips), where it previously had no effect. Toggling Enhance now updates the current pages instantly, in both paged and webtoon modes.
+- **Fixed jittery webtoon scrolling on heavy sources (comix)**: pages now pre-size to their true strip height from cached metadata before entering the viewport, so the list no longer snaps/jumps as images decode while you scroll. The preload window was widened (20 pages ahead) and more pages download in parallel, so slow descrambled sources finish before a page scrolls into view.
+
+### Settings
+- About text now credits the **Mihon and Aniyomi** extension system, and a tappable **Developer: codegeasse1** link opens the GitHub profile.
 
 ## [2.2.4] - 2026-09-07
 
