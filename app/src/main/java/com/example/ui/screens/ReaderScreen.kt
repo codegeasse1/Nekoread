@@ -13,6 +13,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -1222,7 +1223,7 @@ fun ReaderScreen(
 /** Test-build on-screen diagnostics for the comix long-strip lag: live page-path / decode info
  *  with one-tap copy to clipboard and clear. TEMPORARY — removed once the lag is fixed. */
 @Composable
-private fun ReaderDiagnosticsOverlay() {
+private fun BoxScope.ReaderDiagnosticsOverlay() {
     val context = LocalContext.current
     ReaderDiagnostics.init(context)
     var text by remember { mutableStateOf(ReaderDiagnostics.text()) }
