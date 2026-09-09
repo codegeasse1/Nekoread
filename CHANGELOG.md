@@ -2,6 +2,14 @@
 
 All notable changes to Nekoread.
 
+## [2.2.5c] - 2026-09-09
+
+### Reader performance
+- **Short webtoon pages now decode as hardware (GPU) bitmaps**: previously every page was a software bitmap that the render thread had to re-upload to the GPU on its first draw — with several full-width pages entering the viewport during a fling that upload churn was the remaining scroll jank even when images were already preloaded. Hardware bitmaps draw for free and are still memory-cached, so the preload warm still hits. Border-cropped pages keep the software path (the crop decoder reads pixels back).
+
+### Layout
+- **Removed the double status-bar inset on the tab headers**: the main scaffold already pushes each screen below the status bar, but the floating header pill added a second inset inside itself — leaving a dead band of empty space above "Library (0)", "History & Updates", the "Search …" bar and the Settings header. Headers now hug the top of the screen, so more content fits.
+
 ## [2.2.5] - 2026-09-09
 
 ### Page bar

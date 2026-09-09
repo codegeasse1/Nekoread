@@ -299,7 +299,14 @@ open class ReaderPageImageView @JvmOverloads constructor(
             .size(Size(decodeW, Dimension.Undefined))
             .memoryCachePolicy(CachePolicy.ENABLED)
             .diskCachePolicy(CachePolicy.DISABLED)
-            .allowHardware(false)
+            // GPU-backed hardware bitmaps: drawing a software bitmap forces the RenderThread to
+            // upload its pixels to a texture on first draw — with several full-width pages hitting
+            // the screen during a fling that upload churn is the scroll jank. Hardware bitmaps are
+            // created in GPU memory, draw for free, and Coil 2 DOES store them in the memory cache
+            // (so the prewarm still hits). Disabled only when border-cropping: the crop decoder
+            // reads pixels back, which hardware bitmaps can't do (that decoder returns its own
+            // software bitmap anyway, so the flag is irrelevant to the crop path).
+            .allowHardware(!config.cropBorders)
             .cropBorders(config.cropBorders)
             .target(
                 onSuccess = { drawable ->

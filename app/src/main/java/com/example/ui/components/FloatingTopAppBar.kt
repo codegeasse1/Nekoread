@@ -4,7 +4,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -38,10 +37,12 @@ fun FloatingGlassPill(
 }
 
 /**
- * Scaffold topBar wrapper: the pill is anchored FLUSH at the very top of the screen, stretched up
- * into the status-bar area (edge-to-edge) so there is NO gap below the system icons — the glass
- * box goes right up to the status bar. The status-bar inset is applied INSIDE the pill so the
- * icons clear the content. Compact: small side margins, ~2dp of vertical breathing room.
+ * Scaffold topBar wrapper: a compact glass pill for the tab screens' headers (Library, History,
+ * Browse, Settings). These screens live inside the main Scaffold whose contentWindowInsets
+ * already pads the whole NavHost down below the status bar — so this pill must NOT apply
+ * statusBarsPadding() again (that stacked a second ~24dp inset INSIDE the pill and left a big
+ * dead band above every header's title/search bar). Content sits flush at the pill's top edge
+ * with just ~2dp of breathing room, so the header hugs the top of the screen.
  */
 @Composable
 fun FloatingTopAppBar(
@@ -58,7 +59,6 @@ fun FloatingTopAppBar(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .statusBarsPadding()
                     .padding(vertical = 2.dp)
             ) {
                 content()

@@ -659,7 +659,12 @@ fun ReaderScreen(
                                                 .size(Size(displayDecodeWidth, Dimension.Undefined))
                                                 .memoryCachePolicy(CachePolicy.ENABLED)
                                                 .diskCachePolicy(CachePolicy.DISABLED)
-                                                .allowHardware(false)
+                                                // Same as the page holder's request: hardware
+                                                // bitmaps when not cropping (GPU-backed, no
+                                                // texture-upload churn while scrolling; Coil 2
+                                                // caches them in memory, so this warm still hits
+                                                // when the page scrolls in).
+                                                .allowHardware(!cropBorders)
                                                 .apply {
                                                     // Keep the cache key in sync with the page
                                                     // holder's request so a cropped decode is what
