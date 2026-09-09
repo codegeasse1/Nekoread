@@ -130,6 +130,14 @@ import kotlinx.coroutines.launch
 // descramble (e.g. comix) — a sequential one-at-a-time loop can't keep up on slow sources.
 private const val WEBTOON_BATCH = 6
 
+// Rolling memory-refresh horizon: the prewarm keeps this many pages just ahead (and a couple
+// behind) of the current page warm in Coil's memory cache, re-warming each one as the user
+// advances so the pages about to scroll in are always cache hits. Sized to fit the Coil cache
+// (which holds ~6-12 decoded 1080px strips) — warming more than the cache can hold would just
+// evict the nearest pages before they're viewed.
+private const val WEBTOON_MEM_HORIZON_AHEAD = 8
+private const val WEBTOON_MEM_HORIZON_BEHIND = 2
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReaderScreen(
@@ -547,6 +555,10 @@ fun ReaderScreen(
     // imageUrl -> time of last failed download. The prewarm backs off on these for a few seconds so
     // a transient failure doesn't spin in a hot loop; the visible item has its own retry + button.
     val downloadFailed = remember { mutableStateMapOf<String, Long>() }
+    // imageUrl -> the current-page position it was last memory-warmed for. The rolling refresh
+    // (below) re-warms each page just ahead of the scroll once per position, so the pages about to
+    // scroll in are the freshest in Coil's LRU memory cache instead of evicted-then-cold.
+    val warmPos = remember { mutableStateMapOf<String, Int>() }
     // The chapter's source — used to download webtoon pages through the source's own client
     // (Referer/Origin etc., exactly like yomi's HttpPageLoader), and the on-device cache dir that
     // stores the downloaded page image files for the subsampling view to region-decode.
@@ -568,8 +580,9 @@ fun ReaderScreen(
     // on-device cache file — both the webtoon viewer's items and the chimahon pager's page holders
     // render from those files, so no page is ever fetched twice (the thing that made slow sources
     // like comix stutter). In WEBTOON mode short pages additionally get their display-size decode
-    // warmed into Coil's memory cache with the exact request the item will use, so a page scrolling
-    // in is an instant cache hit; TALL strips (height > 3x width — yomi/mihon's ImageUtil.isTallImage
+    // kept warm in Coil's memory cache by a rolling refresh that re-warms the pages just ahead of
+    // the current one once per position (see below), so a page scrolling in is an instant cache hit;
+    // TALL strips (height > 3x width — yomi/mihon's ImageUtil.isTallImage
     // rule) are left to the subsampling view's region-decode from the file — never a giant
     // full-height bitmap. Paged-mode pages are region-decoded by the pager's subsampling views
     // too, so only the download needs pre-warming there. Pages are processed in a small CONCURRENT
@@ -643,45 +656,8 @@ fun ReaderScreen(
                 launch {
                     try {
                         if (source != null) {
-                            val file = WebtoonPageCache.fileFor(m, source, webtoonCacheDir)
+                            WebtoonPageCache.fileFor(m, source, webtoonCacheDir)
                             webtoonDownloaded[key] = true
-                            if (isWebtoon) {
-                                // Warm Coil's MEMORY cache for SHORT webtoon pages with the exact
-                                // request the item will use (same file, size, policies), so a page
-                                // scrolling in is an instant cache hit instead of a fresh decode
-                                // (and every re-scroll is free). Tall strips are left to the
-                                // subsampling view's region-decode from the file. meta() also caches
-                                // the page's animated flag, so the page holder's own meta() query is
-                                // a pure map lookup and it pre-sizes the frame to the real strip
-                                // height before the page ever enters the viewport.
-                                val mm = WebtoonPageCache.meta(m, webtoonCacheDir)
-                                val tall = mm == null || mm.isTall
-                                if (!tall) {
-                                    runCatching {
-                                        imageLoader.execute(
-                                            ImageRequest.Builder(context)
-                                                .data(file)
-                                                .size(Size(displayDecodeWidth, Dimension.Undefined))
-                                                .memoryCachePolicy(CachePolicy.ENABLED)
-                                                .diskCachePolicy(CachePolicy.DISABLED)
-                                                // Same as the page holder's request: hardware
-                                                // bitmaps when not cropping (GPU-backed, no
-                                                // texture-upload churn while scrolling; Coil 2
-                                                // caches them in memory, so this warm still hits
-                                                // when the page scrolls in).
-                                                .allowHardware(!cropBorders)
-                                                .apply {
-                                                    // Keep the cache key in sync with the page
-                                                    // holder's request so a cropped decode is what
-                                                    // gets warmed (and never collides with the
-                                                    // uncropped one).
-                                                    if (cropBorders) cropBorders(true)
-                                                }
-                                                .build(),
-                                        )
-                                    }
-                                }
-                            }
                         }
                     } catch (e: Throwable) {
                         // Effect restarts (scroll/key change) cancel in-flight work — don't
@@ -692,6 +668,74 @@ fun ReaderScreen(
                         if (looksLikeCloudflare(e)) pendingCfVerify = true
                     } finally {
                         webtoonInFlight.remove(key)
+                    }
+                }
+            }
+
+            // Rolling memory-cache refresh for the pages just ahead of the current one (webtoon
+            // short pages only). The prewarm used to warm each page once right after its file
+            // downloaded; on sources with fast downloads (comix) that filled the whole 29-page
+            // window in a burst, overflowing the Coil cache (which holds only ~6-12 decoded
+            // strips), so LRU evicted the NEAREST pages first — and since the prewarm never
+            // re-warmed an already-downloaded page, a fast scroll still hit a fresh 50-500ms
+            // decode on every page. This pass re-warms each horizon page once per current
+            // position, so as the user advances the pages about to scroll in are re-warmed (a
+            // ~1ms cache hit if still cached, a background decode if evicted) and stay cached.
+            // Farthest-first order keeps the nearest pages the freshest in the LRU cache, so the
+            // pages actually about to be viewed survive eviction. Cache-hit warms never touch the
+            // IO dispatcher, so this stays off the scroll path.
+            if (isWebtoon) {
+                val refreshOrder = buildList {
+                    for (d in WEBTOON_MEM_HORIZON_AHEAD downTo 1) add(globCur + d)
+                    for (d in 1..WEBTOON_MEM_HORIZON_BEHIND) add(globCur - d)
+                }
+                for (g in refreshOrder) {
+                    if (g < 0 || g >= total) continue
+                    var seg = 0
+                    while (seg < segs.size && g >= starts[seg] + segs[seg].size) seg++
+                    if (seg >= segs.size) continue
+                    val m = segs[seg][g - starts[seg]]
+                    if (m !is MangaSource.PageDescriptor) continue
+                    val key = pageKey(m)
+                    // Refresh a page only once per position, and skip pages that just failed.
+                    val lastPos = warmPos[key] ?: -1
+                    if (lastPos >= globCur) continue
+                    if (downloadFailed.containsKey(key) && now - downloadFailed[key]!! < 8000) continue
+                    val f = WebtoonPageCache.targetFile(WebtoonPageCache.keyFor(m.imageUrl), webtoonCacheDir)
+                    if (!f.exists() || f.length() == 0L) continue
+                    val mm = WebtoonPageCache.meta(m, webtoonCacheDir) ?: continue
+                    if (mm.isTall || mm.isAnimated) continue
+                    warmPos[key] = globCur
+                    launch {
+                        val t0 = System.currentTimeMillis()
+                        runCatching {
+                            // Exact same request the page holder uses (same file, size, policies,
+                            // conditional crop parameter), so this warm's memory-cache key matches
+                            // the bind's — see ReaderPageImageView.setShortImage.
+                            val res = imageLoader.execute(
+                                ImageRequest.Builder(context)
+                                    .data(f)
+                                    .size(Size(displayDecodeWidth, Dimension.Undefined))
+                                    .memoryCachePolicy(CachePolicy.ENABLED)
+                                    .diskCachePolicy(CachePolicy.DISABLED)
+                                    .allowHardware(!cropBorders)
+                                    .apply {
+                                        if (cropBorders) cropBorders(true)
+                                    }
+                                    .build(),
+                            )
+                            // Log only the MISSES (a refresh that had to re-decode because the
+                            // page was evicted or never warmed) — with the fix working, most
+                            // refreshes are 1ms cache hits and the bind's own `decoded 1ms` lines
+                            // confirm the scroll-in hit. A steady stream of these MISS lines means
+                            // the memory cache is still losing pages before they're viewed.
+                            if (res.dataSource != coil.decode.DataSource.MEMORY_CACHE) {
+                                ReaderDiagnostics.log(
+                                    "memwarm MISS ${System.currentTimeMillis() - t0}ms " +
+                                        "src=${res.dataSource.name}",
+                                )
+                            }
+                        }
                     }
                 }
             }
