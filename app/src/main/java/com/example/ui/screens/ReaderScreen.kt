@@ -140,6 +140,14 @@ private const val WEBTOON_BATCH = 6
 private const val WEBTOON_MEM_HORIZON_AHEAD = 8
 private const val WEBTOON_MEM_HORIZON_BEHIND = 2
 
+// The rolling memory refresh NEVER floods the decoder: at most this many warm executes may be in
+// flight at once (dx3 launched up to 11 concurrent full decodes every tick — when the pages
+// weren't cached each warm took ~1.7s and the heap churned, which is what still felt like lag),
+// and a page is re-warmed only after the current position has advanced this many pages (so near
+// pages get re-touched enough to survive LRU eviction without re-decoding every 60ms tick).
+private const val WEBTOON_MEM_WARM_CONCURRENCY = 2
+private const val WEBTOON_MEM_WARM_STALE = 3
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReaderScreen(
@@ -558,9 +566,11 @@ fun ReaderScreen(
     // a transient failure doesn't spin in a hot loop; the visible item has its own retry + button.
     val downloadFailed = remember { mutableStateMapOf<String, Long>() }
     // imageUrl -> the current-page position it was last memory-warmed for. The rolling refresh
-    // (below) re-warms each page just ahead of the scroll once per position, so the pages about to
-    // scroll in are the freshest in Coil's LRU memory cache instead of evicted-then-cold.
-    val warmPos = remember { mutableStateMapOf<String, Int>() }
+    // (below) re-warms each page just ahead of the scroll as the position advances, so the pages
+    // about to scroll in are the freshest in Coil's LRU memory cache instead of evicted-then-cold.
+    // A plain map (not snapshot state): only the prewarm loop reads it, so snapshot overhead on
+    // every 60ms tick would be pure waste.
+    val warmPos = remember { HashMap<String, Int>() }
     // The chapter's source — used to download webtoon pages through the source's own client
     // (Referer/Origin etc., exactly like yomi's HttpPageLoader), and the on-device cache dir that
     // stores the downloaded page image files for the subsampling view to region-decode.
@@ -592,6 +602,10 @@ fun ReaderScreen(
     // up when every page costs a full download + descramble (comix).
     LaunchedEffect(pages, streamSegments, imageLoader, displayDecodeWidth, useRgb565, source, webtoonCacheDir) {
         if (imageLoader == null) return@LaunchedEffect
+        // How many rolling memory-warm executes are currently in flight (the bound that keeps the
+        // refresh from flooding the decoder — see WEBTOON_MEM_WARM_CONCURRENCY). Main-dispatcher
+        // only: the loop and the warm children all run here, so no synchronization needed.
+        var memWarmInFlight = 0
         while (isActive) {
             val now = System.currentTimeMillis()
             val segs = streamSegments
@@ -680,18 +694,27 @@ fun ReaderScreen(
             // window in a burst, overflowing the Coil cache (which holds only ~6-12 decoded
             // strips), so LRU evicted the NEAREST pages first — and since the prewarm never
             // re-warmed an already-downloaded page, a fast scroll still hit a fresh 50-500ms
-            // decode on every page. This pass re-warms each horizon page once per current
-            // position, so as the user advances the pages about to scroll in are re-warmed (a
-            // ~1ms cache hit if still cached, a background decode if evicted) and stay cached.
-            // Farthest-first order keeps the nearest pages the freshest in the LRU cache, so the
-            // pages actually about to be viewed survive eviction. Cache-hit warms never touch the
-            // IO dispatcher, so this stays off the scroll path.
+            // decode on every page. The dx3 fix made the refresh re-warm the horizon each tick,
+            // but launched up to 11 concurrent full decodes when the pages weren't cached — that
+            // flooded the decoder (single warms took ~1.7s) and churned the heap, which itself
+            // felt like lag even though the binds became 1ms hits. So this pass is BOUNDED: at
+            // most WEBTOON_MEM_WARM_CONCURRENCY warm executes in flight at once, one new page
+            // claimed per tick, and each page re-warmed only once the position has advanced a few
+            // pages (WEBTOON_MEM_WARM_STALE) — cache-hit warms are ~1ms LRU re-touches that keep
+            // the near pages alive, and a re-decode only happens if a page was actually evicted.
+            // Farthest-first order re-touches the most-evictable pages first, so the nearest (kept
+            // fresh by the binds anyway) end up the most-recently-used; behind pages are last and
+            // only get slots when the ahead set is already warm (e.g. paused), which also serves
+            // backward scrolling.
             if (isWebtoon) {
                 val refreshOrder = buildList {
                     for (d in WEBTOON_MEM_HORIZON_AHEAD downTo 1) add(globCur + d)
                     for (d in 1..WEBTOON_MEM_HORIZON_BEHIND) add(globCur - d)
                 }
+                val warmSlots = (WEBTOON_MEM_WARM_CONCURRENCY - memWarmInFlight).coerceAtLeast(0)
+                var claimed = 0
                 for (g in refreshOrder) {
+                    if (claimed >= warmSlots) break
                     if (g < 0 || g >= total) continue
                     var seg = 0
                     while (seg < segs.size && g >= starts[seg] + segs[seg].size) seg++
@@ -699,44 +722,51 @@ fun ReaderScreen(
                     val m = segs[seg][g - starts[seg]]
                     if (m !is MangaSource.PageDescriptor) continue
                     val key = pageKey(m)
-                    // Refresh a page only once per position, and skip pages that just failed.
+                    // Re-warm only once the position has moved on a few pages — re-touch the near
+                    // pages often enough to survive LRU eviction, but never hot-spin a decode.
                     val lastPos = warmPos[key] ?: -1
-                    if (lastPos >= globCur) continue
+                    if (lastPos >= globCur - WEBTOON_MEM_WARM_STALE) continue
                     if (downloadFailed.containsKey(key) && now - downloadFailed[key]!! < 8000) continue
                     val f = WebtoonPageCache.targetFile(WebtoonPageCache.keyFor(m.imageUrl), webtoonCacheDir)
                     if (!f.exists() || f.length() == 0L) continue
                     val mm = WebtoonPageCache.meta(m, webtoonCacheDir) ?: continue
                     if (mm.isTall || mm.isAnimated) continue
                     warmPos[key] = globCur
+                    memWarmInFlight++
+                    claimed++
                     launch {
-                        val t0 = System.currentTimeMillis()
-                        runCatching {
-                            // Exact same request the page holder uses (same file, size, policies,
-                            // conditional crop parameter), so this warm's memory-cache key matches
-                            // the bind's — see ReaderPageImageView.setShortImage.
-                            val res = imageLoader.execute(
-                                ImageRequest.Builder(context)
-                                    .data(f)
-                                    .size(Size(displayDecodeWidth, Dimension.Undefined))
-                                    .memoryCachePolicy(CachePolicy.ENABLED)
-                                    .diskCachePolicy(CachePolicy.DISABLED)
-                                    .allowHardware(!cropBorders)
-                                    .apply {
-                                        if (cropBorders) cropBorders(true)
-                                    }
-                                    .build(),
-                            )
-                            // Log only the MISSES (a refresh that had to re-decode because the
-                            // page was evicted or never warmed) — with the fix working, most
-                            // refreshes are 1ms cache hits and the bind's own `decoded 1ms` lines
-                            // confirm the scroll-in hit. A steady stream of these MISS lines means
-                            // the memory cache is still losing pages before they're viewed.
-                            if (res is SuccessResult && res.dataSource != DataSource.MEMORY_CACHE) {
-                                ReaderDiagnostics.log(
-                                    "memwarm MISS ${System.currentTimeMillis() - t0}ms " +
-                                        "src=${res.dataSource.name}",
+                        try {
+                            val t0 = System.currentTimeMillis()
+                            runCatching {
+                                // Exact same request the page holder uses (same file, size, policies,
+                                // conditional crop parameter), so this warm's memory-cache key matches
+                                // the bind's — see ReaderPageImageView.setShortImage.
+                                val res = imageLoader.execute(
+                                    ImageRequest.Builder(context)
+                                        .data(f)
+                                        .size(Size(displayDecodeWidth, Dimension.Undefined))
+                                        .memoryCachePolicy(CachePolicy.ENABLED)
+                                        .diskCachePolicy(CachePolicy.DISABLED)
+                                        .allowHardware(!cropBorders)
+                                        .apply {
+                                            if (cropBorders) cropBorders(true)
+                                        }
+                                        .build(),
                                 )
-                            }
+                                // Log only the MISSES (a refresh that had to re-decode because the
+                                // page was evicted) — cache-hit re-touches are ~1ms and silent, and
+                                // the bind's own `decoded 1ms` lines confirm the scroll-in hit. A
+                                // steady stream of these MISS lines means the memory cache is still
+                                // losing pages before they're viewed.
+                                if (res is SuccessResult && res.dataSource != DataSource.MEMORY_CACHE) {
+                                    ReaderDiagnostics.log(
+                                        "memwarm MISS ${System.currentTimeMillis() - t0}ms " +
+                                            "src=${res.dataSource.name}",
+                                    )
+                                }
+                            }.onFailure { if (it is CancellationException) throw it }
+                        } finally {
+                            memWarmInFlight--
                         }
                     }
                 }
