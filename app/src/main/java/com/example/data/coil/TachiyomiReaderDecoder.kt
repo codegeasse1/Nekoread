@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapRegionDecoder
 import android.graphics.drawable.BitmapDrawable
+import android.os.Build
 import coil.ImageLoader
 import coil.decode.DecodeResult
 import coil.decode.Decoder
@@ -46,7 +47,7 @@ class TachiyomiReaderDecoder(
         )
     }
 
-    private fun decodeWhole(): Bitmap {
+    private fun decodeWhole(): Bitmap? {
         val file = source.fileOrNull()?.toFile()
         return if (file != null) {
             decodeFileWhole(file)
@@ -56,9 +57,28 @@ class TachiyomiReaderDecoder(
         }
     }
 
-    private fun decodeFileWhole(file: File): Bitmap {
+    private fun decodeFileWhole(file: File): Bitmap? {
         val (w, h) = readDims(file)
         val sampleSize = calculateInSampleSize(w, h, targetWidthPx(), targetHeightPx())
+        val useHardware = options.allowHardware && !options.allowRgb565 &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+        // Modern-format pages (AVIF/JXL/HEIF) decoded on this path would otherwise be software
+        // bitmaps the render thread re-uploads to the GPU on first draw — the same upload churn
+        // 2.2.5c removed for the built-in decoder. Decode to a HARDWARE bitmap (drawn for free),
+        // falling back to software if the device/codec rejects it (decodeFile returns null, or the
+        // decoder throws).
+        if (useHardware) {
+            val hardware = runCatching {
+                BitmapFactory.decodeFile(
+                    file.absolutePath,
+                    BitmapFactory.Options().apply {
+                        inSampleSize = sampleSize
+                        inPreferredConfig = Bitmap.Config.HARDWARE
+                    },
+                )
+            }.getOrNull()
+            if (hardware != null) return hardware
+        }
         return BitmapFactory.decodeFile(
             file.absolutePath,
             BitmapFactory.Options().apply {
@@ -80,12 +100,12 @@ class TachiyomiReaderDecoder(
         )
     }
 
-    private fun decodeCropped(): Bitmap {
+    private fun decodeCropped(): Bitmap? {
         val file = source.fileOrNull()?.toFile()
         return if (file != null) decodeCroppedFile(file) else decodeCroppedBytes(readBytes())
     }
 
-    private fun decodeCroppedFile(file: File): Bitmap {
+    private fun decodeCroppedFile(file: File): Bitmap? {
         // detectContentBounds closes the stream; the empty rect means "no crop detected" (or error)
         // and we fall back to a plain decode.
         val bounds = WebtoonBorderDetector.detectContentBounds(FileInputStream(file))

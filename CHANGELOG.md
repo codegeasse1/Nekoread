@@ -2,6 +2,12 @@
 
 All notable changes to Nekoread.
 
+## [2.2.6] - 2026-09-09
+
+### Reader performance
+- **Tall webtoon strips (long manhwa pages) no longer fling through the subsampling view's on-demand tile decoding** — the remaining comix scroll lag. Long pages (height > 3x width) are now decoded as display-width chunks by a dedicated chunked view: only the chunks near the viewport decode (nearest the eye first), chunks that scroll far away are recycled, chunks are hardware (GPU) bitmaps on Android 8+, and all decode/window management runs off the draw path behind a global decode cap. Scrolling through long strips no longer pays per-frame tile-decode stalls, and a page never holds the whole strip in memory.
+- **Modern-format pages (AVIF / JPEG-XL / HEIF) now decode as hardware bitmaps too** on the short-page path, closing the same texture-upload churn for sources that serve those formats (with an automatic software fallback).
+
 ## [2.2.5c] - 2026-09-09
 
 ### Reader performance

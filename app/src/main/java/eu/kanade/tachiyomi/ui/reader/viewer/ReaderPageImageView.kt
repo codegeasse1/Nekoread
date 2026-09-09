@@ -26,6 +26,7 @@ import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import com.example.data.coil.cropBorders
 import com.example.data.reader.WebtoonPageCache
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonBorderDetector
+import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonChunkedImageView
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonSubsamplingImageView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,13 +40,17 @@ import java.io.File
 import java.io.FileInputStream
 
 /**
- * The webtoon page view ported from yomi/chimahon. Non-tall webtoon pages (height â¤ 3x width) are
- * decoded ONCE by Coil at the strip's display width and shown in a plain [ImageView] â a single,
+ * The webtoon page view ported from yomi/chimahon. Non-tall webtoon pages (height ≤ 3x width) are
+ * decoded ONCE by Coil at the strip's display width and shown in a plain [ImageView] — a single,
  * memory-cached decode (warmed by the reader's preload loop) instead of a per-bind region-decode
  * pipeline, which is what keeps scrolling smooth. TALL strips (long webtoon pages, h > 3w) are
- * region-decoded by a [SubsamplingScaleImageView] straight from the page's on-device cache file.
- * Animated images (gif / animated webp) fall back to a plain [ImageView] fed by Coil. Border
- * cropping on the fast path goes through the custom Coil decoder (see TachiyomiReaderDecoder).
+ * decoded as display-width chunks by a [WebtoonChunkedImageView] — lazy viewport-window decoding,
+ * hardware bitmaps, and recycling off the draw path, so a fling never pays the subsampling view's
+ * per-frame tile-decode churn (the source of the remaining comix lag). Only border-cropped pages
+ * (or the explicit "always decode long strips with SSIV" setting) keep using a
+ * [SubsamplingScaleImageView] region-decoded from the page's on-device cache file. Animated images
+ * (gif / animated webp) fall back to a plain [ImageView] fed by Coil. Border cropping on the fast
+ * path goes through the custom Coil decoder (see TachiyomiReaderDecoder).
  */
 open class ReaderPageImageView @JvmOverloads constructor(
     context: Context,
@@ -152,6 +157,9 @@ open class ReaderPageImageView @JvmOverloads constructor(
             if (isWebtoon && !isTall && !config.alwaysDecodeLongStripWithSSIV) {
                 prepareShortImageView()
                 setShortImage(file, config)
+            } else if (isWebtoon && isTall && !config.cropBorders && !config.alwaysDecodeLongStripWithSSIV) {
+                prepareChunkedImageView()
+                setChunkedImage(file, config)
             } else {
                 prepareNonAnimatedImageView()
                 setNonAnimatedImage(file, config)
@@ -165,6 +173,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
         pageView?.let {
             when (it) {
                 is SubsamplingScaleImageView -> it.recycle()
+                is WebtoonChunkedImageView -> it.recycle()
                 is ImageView -> it.dispose()
             }
             it.isVisible = false
@@ -256,6 +265,26 @@ open class ReaderPageImageView @JvmOverloads constructor(
         } catch (e: Throwable) {
             true
         }
+    }
+
+    private fun prepareChunkedImageView() {
+        if (pageView is WebtoonChunkedImageView) return
+        removeView(pageView)
+        pageView = WebtoonChunkedImageView(context)
+        addView(pageView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+    }
+
+    private fun setChunkedImage(
+        file: File,
+        config: Config,
+    ) = (pageView as? WebtoonChunkedImageView)?.apply {
+        onReady = { this@ReaderPageImageView.onImageLoaded() }
+        onError = { this@ReaderPageImageView.onImageLoadError() }
+        val decodeW = if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels
+        setChunkedImage(file, decodeW, config.decodeRgb565)
+        // The holder's recycle() hides the page view when the view scrolls off; a rebound (or
+        // fresh) chunked view must be visible again or the page stays blank after re-entering.
+        isVisible = true
     }
 
     /** Applies the zoom configuration once the image is ready (chimahon's setupZoom). */
