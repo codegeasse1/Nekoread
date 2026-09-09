@@ -86,8 +86,10 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.math.roundToInt
 import coil.compose.LocalImageLoader
+import coil.decode.DataSource
 import coil.request.CachePolicy
 import coil.request.ImageRequest
+import coil.request.SuccessResult
 import coil.size.Dimension
 import coil.size.Size
 import com.example.data.local.ChapterEntity
@@ -729,7 +731,7 @@ fun ReaderScreen(
                             // refreshes are 1ms cache hits and the bind's own `decoded 1ms` lines
                             // confirm the scroll-in hit. A steady stream of these MISS lines means
                             // the memory cache is still losing pages before they're viewed.
-                            if (res.dataSource != coil.decode.DataSource.MEMORY_CACHE) {
+                            if (res is SuccessResult && res.dataSource != DataSource.MEMORY_CACHE) {
                                 ReaderDiagnostics.log(
                                     "memwarm MISS ${System.currentTimeMillis() - t0}ms " +
                                         "src=${res.dataSource.name}",
