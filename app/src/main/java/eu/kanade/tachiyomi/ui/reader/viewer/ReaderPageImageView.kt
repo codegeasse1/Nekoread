@@ -4,7 +4,9 @@ import android.content.Context
 import android.graphics.ColorFilter
 import android.graphics.PointF
 import android.graphics.drawable.Animatable
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.os.SystemClock
 import android.util.AttributeSet
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -154,30 +156,42 @@ open class ReaderPageImageView @JvmOverloads constructor(
     }
 
     fun setImage(file: File, isAnimated: Boolean, config: Config) {
+        ReaderDiagnostics.init(context)
         this.config = config
         smartFitJob?.cancel()
         smartFitJob = null
+        val dims = runCatching {
+            val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            android.graphics.BitmapFactory.decodeFile(file.absolutePath, o)
+            "${o.outWidth}x${o.outHeight}"
+        }.getOrDefault("?")
+        val decodeW = if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels
         if (isAnimated) {
+            ReaderDiagnostics.log("path=ANIMATED dims=$dims")
             prepareAnimatedImageView()
             setAnimatedImage(file, config)
         } else {
             val isTall = config.isTallImage ?: isTallImageFile(file)
             if (isWebtoon && !isTall && !config.alwaysDecodeLongStripWithSSIV) {
+                ReaderDiagnostics.log("path=SHORT_WHOLE dims=$dims tall=false decodeW=$decodeW rgb565=${config.decodeRgb565}")
                 prepareShortImageView()
                 setShortImage(file, config)
             } else if (isWebtoon && isTall && !config.cropBorders && !config.alwaysDecodeLongStripWithSSIV) {
                 if (fitsSingleDecode(file)) {
                     // Whole-strip single decode (software, memory-cached by Coil): one stable
                     // bitmap drawn per frame — no per-frame tile/chunk decode, the smooth path.
+                    ReaderDiagnostics.log("path=TALL_WHOLE dims=$dims tall=true decodeW=$decodeW rgb565=${config.decodeRgb565}")
                     prepareShortImageView()
                     setTallImage(file, config)
                 } else {
                     // Pathological mega-strip: a single bitmap would blow the memory budget, so
                     // render it as a windowed stack of chunks instead.
+                    ReaderDiagnostics.log("path=TALL_CHUNKED dims=$dims tall=true decodeW=$decodeW (exceeds 40MB single-decode budget)")
                     prepareChunkedImageView()
                     setChunkedImage(file, config)
                 }
             } else {
+                ReaderDiagnostics.log("path=SSIV dims=$dims tall=$isTall cropBorders=${config.cropBorders} alwaysSSIV=${config.alwaysDecodeLongStripWithSSIV}")
                 prepareNonAnimatedImageView()
                 setNonAnimatedImage(file, config)
             }
@@ -233,6 +247,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
         file: File,
         config: Config,
     ) = (pageView as? SubsamplingScaleImageView)?.apply {
+        val t0 = SystemClock.elapsedRealtime()
         setZoomEnabled(config.enablePinchToZoom)
         setDoubleTapZoomDuration(config.zoomDuration.coerceAtLeast(1))
         setMinimumScaleType(config.minimumScaleType)
@@ -241,11 +256,13 @@ open class ReaderPageImageView @JvmOverloads constructor(
         setOnImageEventListener(
             object : SubsamplingScaleImageView.DefaultOnImageEventListener() {
                 override fun onReady() {
+                    ReaderDiagnostics.log("SSIV ready ${SystemClock.elapsedRealtime() - t0}ms (tile-decode from file)")
                     this@ReaderPageImageView.onImageLoaded()
                     setupZoom(config)
                 }
 
                 override fun onImageLoadError(e: Exception) {
+                    ReaderDiagnostics.log("SSIV ERROR after ${SystemClock.elapsedRealtime() - t0}ms: ${e.message}")
                     this@ReaderPageImageView.onImageLoadError()
                 }
             },
@@ -340,6 +357,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
         config: Config,
     ) = (pageView as? ImageView)?.apply {
         val decodeW = if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels
+        val t0 = SystemClock.elapsedRealtime()
         val request = ImageRequest.Builder(context)
             .data(file)
             .size(Size(decodeW, Dimension.Undefined))
@@ -358,9 +376,15 @@ open class ReaderPageImageView @JvmOverloads constructor(
                 onSuccess = { drawable ->
                     setImageDrawable(drawable)
                     isVisible = true
+                    ReaderDiagnostics.log(
+                        "decoded ${SystemClock.elapsedRealtime() - t0}ms " +
+                            "bitmap=${drawable.intrinsicWidth}x${drawable.intrinsicHeight} " +
+                            "config=${(drawable as? BitmapDrawable)?.bitmap?.config?.name ?: "?"}",
+                    )
                     this@ReaderPageImageView.onImageLoaded()
                 },
                 onError = {
+                    ReaderDiagnostics.log("decode ERROR after ${SystemClock.elapsedRealtime() - t0}ms")
                     this@ReaderPageImageView.onImageLoadError()
                 },
             )
@@ -380,6 +404,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
         config: Config,
     ) = (pageView as? ImageView)?.apply {
         val decodeW = if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels
+        val t0 = SystemClock.elapsedRealtime()
         val request = ImageRequest.Builder(context)
             .data(file)
             .size(Size(decodeW, Dimension.Undefined))
@@ -391,9 +416,16 @@ open class ReaderPageImageView @JvmOverloads constructor(
                 onSuccess = { drawable ->
                     setImageDrawable(drawable)
                     isVisible = true
+                    ReaderDiagnostics.log(
+                        "decoded ${SystemClock.elapsedRealtime() - t0}ms " +
+                            "bitmap=${drawable.intrinsicWidth}x${drawable.intrinsicHeight} " +
+                            "config=${(drawable as? BitmapDrawable)?.bitmap?.config?.name ?: "?"} " +
+                            "tallWhole=true",
+                    )
                     this@ReaderPageImageView.onImageLoaded()
                 },
                 onError = {
+                    ReaderDiagnostics.log("decode ERROR after ${SystemClock.elapsedRealtime() - t0}ms (whole-strip)")
                     this@ReaderPageImageView.onImageLoadError()
                 },
             )
