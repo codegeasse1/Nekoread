@@ -11,6 +11,7 @@ import android.os.Build
 import android.util.AttributeSet
 import android.view.View
 import androidx.recyclerview.widget.RecyclerView
+import eu.kanade.tachiyomi.ui.reader.viewer.ReaderDiagnostics
 import java.io.File
 import java.io.FileInputStream
 import java.util.concurrent.Semaphore
@@ -226,6 +227,11 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
             bitmaps.clear()
             repeat(built.partCount) { bitmaps.add(null) }
             decodeWindow = null
+            ReaderDiagnostics.log(
+                "chunked info: decodeW=${built.srcWidth / built.sample} " +
+                    "sample=${built.sample} partCount=${built.partCount} " +
+                    "chunkBytes=${built.chunkBytes / 1024}KB",
+            )
             invalidate()
             updateVisible()
         }

@@ -12,6 +12,7 @@ import android.widget.TextView
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
 import com.example.data.reader.WebtoonPageCache
+import eu.kanade.tachiyomi.ui.reader.viewer.ReaderDiagnostics
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -64,6 +65,9 @@ class WebtoonPageHolder(
     /** Binds the given [page] to this holder and starts loading its cache file. */
     fun bind(item: WebtoonItem.Page) {
         this.item = item
+        ReaderDiagnostics.init(frame.context)
+        ReaderDiagnostics.currentLabel = item.desc.imageUrl
+        ReaderDiagnostics.log("bind seg=${item.segIndex} page=${item.number}")
         loadJob?.cancel()
         removeErrorLayout()
         progressContainer.isVisible = true
@@ -86,7 +90,12 @@ class WebtoonPageHolder(
                 }
                 setFrameHeight(targetH)
 
+                val wasCached = WebtoonPageCache.targetFile(
+                    WebtoonPageCache.keyFor(item.desc.imageUrl),
+                    viewer.cacheDir,
+                ).exists()
                 val file = viewer.loadPage(item)
+                ReaderDiagnostics.log("file ready ${file.length() / 1024}KB cachedBeforeBind=$wasCached")
                 // Everything the render needs (dims, animated, tall) comes from cached metadata —
                 // no bounds decode, no header read, no isTallPage sniff during the bind.
                 if (meta == null) meta = WebtoonPageCache.meta(item.desc, viewer.cacheDir)

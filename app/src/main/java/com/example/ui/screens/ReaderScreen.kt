@@ -3,6 +3,7 @@ package com.example.ui.screens
 import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -75,7 +76,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -100,6 +103,7 @@ import com.example.ui.ReaderMode
 import com.example.ui.ReaderOrientation
 import com.example.ui.TappingInvertMode
 import com.example.ui.WebtoonScaleType
+import eu.kanade.tachiyomi.ui.reader.viewer.ReaderDiagnostics
 import com.example.ui.components.coverModelFor
 import com.example.ui.looksLikeCloudflare
 import com.example.util.chapterIdentity
@@ -1197,6 +1201,10 @@ fun ReaderScreen(
             onSelectChapter = { onChapterChange(it) },
             chapterCoverModel = chapterCoverModel,
         )
+
+        if (ReaderDiagnostics.ENABLED) {
+            ReaderDiagnosticsOverlay()
+        }
     }
 
     webviewTarget?.let { (url, ua) ->
@@ -1208,5 +1216,75 @@ fun ReaderScreen(
                 retryKey++
             }
         )
+    }
+}
+
+/** Test-build on-screen diagnostics for the comix long-strip lag: live page-path / decode info
+ *  with one-tap copy to clipboard and clear. TEMPORARY — removed once the lag is fixed. */
+@Composable
+private fun ReaderDiagnosticsOverlay() {
+    val context = LocalContext.current
+    ReaderDiagnostics.init(context)
+    var text by remember { mutableStateOf(ReaderDiagnostics.text()) }
+    DisposableEffect(Unit) {
+        val prev = ReaderDiagnostics.onUpdate
+        ReaderDiagnostics.onUpdate = { text = ReaderDiagnostics.text() }
+        onDispose { ReaderDiagnostics.onUpdate = prev }
+    }
+    Box(
+        modifier = Modifier
+            .align(Alignment.TopCenter)
+            .padding(top = 8.dp)
+            .fillMaxWidth(0.9f),
+    ) {
+        Surface(
+            color = Color.Black.copy(alpha = 0.55f),
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        "Reader dx",
+                        color = Color(0xFFFFFFFF),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Row {
+                        TextButton(
+                            onClick = {
+                                ReaderDiagnostics.copy(context)
+                                Toast.makeText(context, "Diagnostics copied", Toast.LENGTH_SHORT).show()
+                            },
+                        ) {
+                            Text("Copy", color = Color(0xFF4FC3F7), fontSize = 12.sp)
+                        }
+                        TextButton(onClick = { ReaderDiagnostics.clear() }) {
+                            Text("Clear", color = Color(0xFF90A4AE), fontSize = 12.sp)
+                        }
+                    }
+                }
+                Text(
+                    text = text.ifEmpty { "no events yet — open a comix manhwa and scroll" },
+                    color = Color(0xFFDDDDDD),
+                    fontSize = 9.sp,
+                    maxLines = 8,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                ReaderDiagnostics.path()?.let { p ->
+                    Text(
+                        text = p,
+                        color = Color(0xFF90A4AE),
+                        fontSize = 8.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
     }
 }
