@@ -26,40 +26,46 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Renders a tall webtoon strip as a stack of display-width chunk bitmaps decoded from the page's
- * cache file — but LAZILY: only the chunks near the viewport are decoded (nearest-to-the-eye
- * first), and chunks that scroll far out of view are recycled so a page never holds the whole
- * strip in memory and a bind never pays a full-strip decode stall. That is the difference from
- * the previous version (which decoded every chunk at bind time — a several-hundred-ms stall per
- * page entering the viewport during a fling, plus full-strip memory for every live page).
+ * Renders a pathologically tall webtoon strip (one whose whole-strip decode would exceed the
+ * reader's single-decode memory budget) as a stack of display-width chunk bitmaps decoded from the
+ * page's cache file. Chunks are decoded lazily nearest-to-the-eye first, and — critically for
+ * scroll smoothness — ONCE: a decoded chunk stays cached for the page's lifetime (so scrolling and
+ * re-scrolling is a set of stable bitmaps the render thread has already texture-cached, with no
+ * per-frame decode/upload churn). Memory is bounded by recycling only the chunks farthest from the
+ * viewport once the retained total exceeds a byte budget.
  *
- * Render-path rules (the difference that keeps a fling smooth):
+ * Render-path rules:
  *  - onDraw ONLY draws the chunk range overlapping the viewport (+1 margin) — never scans,
- *    recycles or launches work. A long page can hold 20+ decoded chunks but only 2-4 are on screen.
+ *    recycles or launches work.
  *  - Decode/window management runs OFF the draw path, driven by the recycler's scroll listener,
  *    the view's layout pass, and the per-draw "viewport moved?" check — each coalesced into at
- *    most one posted pass, so a scroll burst can't flood the main thread with redundant scans.
- *  - Chunks decode as HARDWARE bitmaps on API 26+ (with a software fallback), so drawing them on
- *    the hardware canvas is a direct GPU blit instead of a multi-MB software-bitmap texture upload
- *    (with its heap churn) every frame. That is the classic reason a reader scrolls janky while
- *    yomi/mihon (hardware SSIV tiles) stays smooth.
- *  - A single global semaphore caps how many region decodes run at once across ALL live pages —
- *    otherwise each page's decode workers multiply (2 workers x N live holders) and saturate the
- *    device's IO/CPU during a fling.
+ *    most one posted pass.
+ *  - Chunks are drawn into EQUAL contiguous display slots whose total is exactly the view height
+ *    (slot step = viewHeight / partCount). Every chunk is stretched to fill its slot, so there are
+ *    NEVER gaps between chunks — the old fixed-2048px-slot math left a solid black bar between
+ *    every chunk whenever the decoded chunk width overshot the view width (which it almost always
+ *    did, since sampling is power-of-two). Missing (not-yet-decoded) chunks just skip their slot;
+ *    neighbours stay aligned.
+ *  - Chunks decode as plain software ARGB_8888/RGB_565. BitmapRegionDecoder CANNOT produce
+ *    hardware bitmaps (Android rejects HARDWARE config for region decode — the old code attempted
+ *    it and silently fell back to software on every chunk), and that silent fallback plus the
+ *    per-scroll recycling was the remaining comix jank. Software chunks are fine here because they
+ *    are stable for the page's lifetime.
+ *  - A single global semaphore caps how many region decodes run at once across ALL live pages.
  *
  * The view is scroll-aware: each pass reads its position in the recycler (via the holder's `top` —
  * the view itself fills the holder, so its own `top` is always 0) and decodes/recycles chunks
- * around the visible window, mihon's model. Touches are ignored — the reader's scroll container
- * owns all gestures. Each chunk is capped at [chunkHeight] display pixels so no single bitmap
- * approaches the 4096 GPU texture limit, and a fresh [BitmapRegionDecoder] is opened per chunk
- * (cheap; mihon does the same) so no decoder state is shared across coroutines.
+ * around the visible window. Touches are ignored — the reader's scroll container owns all
+ * gestures. Each chunk is capped at [chunkHeight] display pixels so no single bitmap approaches
+ * the 4096 GPU texture limit, and a fresh [BitmapRegionDecoder] is opened per chunk (cheap; no
+ * decoder state is shared across coroutines).
  */
 class WebtoonChunkedImageView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
 ) : View(context, attrs) {
 
-    /** Target height (px) of each chunk in display space. Keeps every bitmap comfortably under the
+    /** Target height (px) of each chunk in decode space. Keeps every bitmap comfortably under the
      *  GPU's 4096 texture limit and keeps per-chunk decode latency a few frames at most. */
     private val chunkHeight: Int = 2048
 
@@ -67,10 +73,9 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
     private val decodeBehindChunks: Int = 1
     private val decodeAheadChunks: Int = 2
 
-    /** Recycle decoded chunks this many chunk-heights outside the viewport (they re-decode on
-     *  demand if the user scrolls back). Must be >= the decode margins. */
-    private val keepBehindChunks: Int = 2
-    private val keepAheadChunks: Int = 3
+    /** Hard cap on retained decoded chunk bytes per page; beyond it the chunks farthest from the
+     *  viewport are recycled (they re-decode on demand if the user scrolls back). */
+    private val maxRetainedBytes: Int = 64 * 1024 * 1024
 
     private var scope: CoroutineScope? = null
 
@@ -82,6 +87,12 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
     /** Chunk indices currently being decoded by a worker (so two workers never decode the same
      *  chunk). Bookkeeping happens only on the main thread (workers decode on IO). */
     private val inFlight = mutableSetOf<Int>()
+
+    /** Chunk indices whose decode already failed for this page. They are skipped so a transient
+     *  failure isn't retried in a hot loop; only a failure on a chunk overlapping the actual
+     *  viewport (or the failure of every chunk) fails the page. */
+    private val failed = mutableSetOf<Int>()
+    private var errorFired = false
 
     /** How many chunk-decode workers run in parallel per page. The global [decodeSemaphore] still
      *  bounds the total across all live pages, so several pages can't multiply this. */
@@ -97,6 +108,8 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
         val sample: Int,
         val partCount: Int,
         val chunkHeight: Int,
+        /** Approx bytes of one full chunk bitmap (decode width x chunk height x bpp). */
+        val chunkBytes: Int,
     ) {
         fun srcTop(i: Int): Int = i * chunkHeight * sample
         fun srcBottom(i: Int): Int = minOf(srcHeight, (i + 1) * chunkHeight * sample)
@@ -105,7 +118,7 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
     private var info: ChunkInfo? = null
 
     /** Decoded chunk bitmaps, aligned to fixed display slots (index i occupies display rows
-     *  [i*chunkHeight, ...)). Null entries are not decoded (yet). */
+     *  [i*step, (i+1)*step) where step = viewHeight/partCount). Null entries are not decoded (yet). */
     private val bitmaps = ArrayList<Bitmap?>(0)
 
     private var decodeWidth: Int = 0
@@ -113,7 +126,6 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
     private var readyFired = false
 
     private var decodeWindow: IntRange? = null
-    private var keepRange: IntRange? = null
 
     /** The most recent [setChunkedImage] request, remembered in case it arrives before the view is
      *  attached to a window (a fresh bind): the per-view coroutine scope only exists while attached,
@@ -158,7 +170,7 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
             }
         }
         recyclerView?.addOnScrollListener(scrollListener!!)
-        // A setChunkedImage that landed before we were attached starts here (the scope it needs
+        // A setChunkedImage that landed before we were attached starts here (the scope it needed
         // didn't exist yet, and without this the first-bound page would stay blank forever).
         if (info == null) pendingFile?.let { startLoad(generation, it) }
     }
@@ -214,7 +226,6 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
             bitmaps.clear()
             repeat(built.partCount) { bitmaps.add(null) }
             decodeWindow = null
-            keepRange = null
             invalidate()
             updateVisible()
         }
@@ -234,9 +245,10 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
         decodeJob?.cancel()
         decodeJob = null
         inFlight.clear()
+        failed.clear()
+        errorFired = false
         info = null
         decodeWindow = null
-        keepRange = null
     }
 
     private fun releaseChunks() {
@@ -244,8 +256,6 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
         bitmaps.clear()
     }
 
-    /** Hardware bitmaps (API 26+) must not be recycled (they throw) — they're GPU-owned and freed
-     *  by GC. Software bitmaps still recycle() to release native memory promptly. */
     private fun recycleChunk(b: Bitmap) {
         if (!b.isRecycled) runCatching { b.recycle() }
     }
@@ -263,27 +273,30 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
             lastViewportBottom = vBottom
             scheduleUpdateVisible()
         }
-        // Draw ONLY the chunk range overlapping the viewport (+1 margin). A long page can hold 20+
+        // Draw ONLY the chunk range overlapping the viewport (+1 margin). A long page can hold many
         // decoded chunks but only 2-4 are ever on screen — walking/drawing all of them per frame is
         // wasted work.
-        val first = ((lastViewportTop / chunkHeight) - 1).coerceIn(0, bitmaps.lastIndex)
-        val last = ((lastViewportBottom / chunkHeight) + 1).coerceIn(0, bitmaps.lastIndex)
+        val step = chunkStep()
+        val first = ((lastViewportTop / step) - 1).coerceIn(0, bitmaps.lastIndex)
+        val last = ((lastViewportBottom / step) + 1).coerceIn(0, bitmaps.lastIndex)
         val scale = width.coerceAtLeast(1).toFloat()
         val hTotal = height.toFloat()
+        val slotH = hTotal / cur.partCount
         val dst = RectF()
         for (i in first..last) {
             val b = bitmaps[i] ?: continue
-            // Fixed display slots — chunk i always sits at rows [i*chunkHeight, i*chunkHeight+h),
-            // so partially decoded pages draw in the right place (the old cumulative-y draw broke
-            // once chunks could be missing).
-            val h = b.height * (scale / b.width)
-            val bottom = if (i == bitmaps.lastIndex) hTotal else i * chunkHeight + h
-            dst.set(0f, i * chunkHeight.toFloat(), scale, bottom)
+            // Equal contiguous slots: chunk i always fills rows [i*slotH, (i+1)*slotH) (the last
+            // chunk stretches to the view's exact height). Because slotH is the REAL displayed
+            // chunk height (total view height / chunk count), chunks tile the page with no gaps —
+            // the old fixed-chunkHeight slots left a black bar between every chunk whenever the
+            // decoded chunk width overshot the view width (which sampling makes almost certain).
+            val bottom = if (i == bitmaps.lastIndex) hTotal else (i + 1) * slotH
+            dst.set(0f, i * slotH, scale, bottom)
             canvas.drawBitmap(b, null, dst, null)
         }
     }
 
-    /** Computes the display-space row layout for [file]: power-of-two sample so the decoded width
+    /** Computes the decode-space row layout for [file]: power-of-two sample so the decoded width
      *  is at least [decodeWidthPx] (BitmapRegionDecoder only supports power-of-two sampling) and
      *  no dimension exceeds the GPU texture limit. Bounds-only decode; throws on unreadable files. */
     private fun buildChunkInfo(file: File, decodeWidthPx: Int): ChunkInfo {
@@ -295,12 +308,23 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
         var sample = 1
         while (srcW / (sample * 2) >= decodeWidthPx || srcW / sample > 4096) sample *= 2
         val partCount = (srcH / sample + chunkHeight - 1) / chunkHeight
-        return ChunkInfo(file, srcW, srcH, sample, partCount, chunkHeight)
+        val bpp = if (rgb565) 2 else 4
+        val chunkBytes = (srcW / sample) * chunkHeight * bpp
+        return ChunkInfo(file, srcW, srcH, sample, partCount, chunkHeight, chunkBytes)
     }
 
-    /** Re-targets the decode window to the current viewport, recycles chunks that scrolled out of
-     *  the keep range, and (re)starts the decode loop if it isn't running. Runs off the draw path,
-     *  at most once per scroll burst (see [scheduleUpdateVisible]). */
+    /** The display-space height (px) of one chunk slot. Equal slots that tile the page exactly:
+     *  total view height divided by the chunk count. Falls back to [chunkHeight] before the view
+     *  has a measured height. */
+    private fun chunkStep(): Int {
+        val cur = info ?: return chunkHeight
+        if (height > 0 && cur.partCount > 0) return (height / cur.partCount).coerceAtLeast(1)
+        return chunkHeight
+    }
+
+    /** Re-targets the decode window to the current viewport, trims decoded chunks to the memory
+     *  budget, and (re)starts the decode loop if it isn't running. Runs off the draw path, at most
+     *  once per scroll burst (see [scheduleUpdateVisible]). */
     private fun updateVisible() {
         val cur = info ?: return
         if (bitmaps.isEmpty()) return
@@ -309,19 +333,32 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
         lastViewportTop = vTop
         lastViewportBottom = vBottom
         val partCount = cur.partCount
-        val first = ((vTop / chunkHeight) - decodeBehindChunks).coerceIn(0, partCount - 1)
-        val last = ((vBottom / chunkHeight) + decodeAheadChunks).coerceIn(0, partCount - 1)
-        val keepFirst = ((vTop / chunkHeight) - keepBehindChunks).coerceAtLeast(0)
-        val keepLast = ((vBottom / chunkHeight) + keepAheadChunks).coerceAtMost(partCount - 1)
+        val step = chunkStep()
+        val first = ((vTop / step) - decodeBehindChunks).coerceIn(0, partCount - 1)
+        val last = ((vBottom / step) + decodeAheadChunks).coerceIn(0, partCount - 1)
         decodeWindow = first..last
-        keepRange = keepFirst..keepLast
-        for (i in bitmaps.indices) {
-            if (bitmaps[i] != null && (i < keepFirst || i > keepLast)) {
-                recycleChunk(bitmaps[i]!!)
-                bitmaps[i] = null
-            }
-        }
+        trimToBudget(vTop, vBottom, cur)
         kickDecodeLoop()
+    }
+
+    /** Decoded chunks stay cached for the page's lifetime (so scrolling and re-scrolling is a set
+     *  of stable bitmaps — never re-decode/re-upload churn). Only when the retained total exceeds
+     *  [maxRetainedBytes] are the chunks farthest from the viewport recycled, to bound memory on
+     *  pathological mega-strips. */
+    private fun trimToBudget(vTop: Int, vBottom: Int, cur: ChunkInfo) {
+        val decoded = bitmaps.indices.filter { bitmaps[it] != null }
+        if (decoded.size * cur.chunkBytes <= maxRetainedBytes) return
+        val center = vTop + (vBottom - vTop) / 2
+        val step = chunkStep()
+        // Farthest from the viewport's centre first, so the visible/upcoming chunks are kept.
+        val order = decoded.sortedBy { -abs(it * step + step / 2 - center) }
+        var total = decoded.size * cur.chunkBytes
+        for (i in order) {
+            if (total <= maxRetainedBytes) break
+            recycleChunk(bitmaps[i]!!)
+            bitmaps[i] = null
+            total -= cur.chunkBytes
+        }
     }
 
     /** The scroll offset of this page's top edge within the recycler viewport, in display px.
@@ -342,6 +379,14 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
             p = p.parent
         }
         return height
+    }
+
+    /** True if chunk [idx]'s display slot overlaps the viewport rows last seen by the draw pass. */
+    private fun isChunkVisible(idx: Int): Boolean {
+        val step = chunkStep()
+        val first = lastViewportTop / step
+        val last = lastViewportBottom / step
+        return idx in first..last
     }
 
     private fun scheduleUpdateVisible() {
@@ -368,18 +413,21 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
             val idx = nextChunkToDecode() ?: return
             inFlight.add(idx)
             try {
-                val bmp = decodeChunk(idx) ?: run {
-                    if (gen == generation) onError?.invoke()
-                    return
+                val bmp = decodeChunk(idx)
+                if (bmp == null) {
+                    // A failed chunk is skipped, not retried in a loop. Only fail the page when a
+                    // chunk the user is actually looking at failed (fail fast — don't leave a hole
+                    // at their viewport with a spinner), or when every chunk failed.
+                    failed.add(idx)
+                    if (!errorFired && (isChunkVisible(idx) || failed.size >= bitmaps.size)) {
+                        errorFired = true
+                        onError?.invoke()
+                    }
+                    continue
                 }
                 if (gen != generation) {
                     recycleChunk(bmp)
                     return
-                }
-                if (!chunkWanted(idx)) {
-                    // Scrolled out of the keep range while decoding — free it instead of caching.
-                    recycleChunk(bmp)
-                    continue
                 }
                 bitmaps[idx] = bmp
                 invalidate()
@@ -399,11 +447,12 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
         val win = decodeWindow ?: return null
         var best: Int? = null
         var bestDist = Int.MAX_VALUE
+        val step = chunkStep()
         val center = viewportTop() + viewportHeight() / 2
         for (i in win) {
             if (i < 0 || i >= bitmaps.size || bitmaps[i] != null) continue
-            if (i in inFlight) continue
-            val dist = abs(i * chunkHeight + chunkHeight / 2 - center)
+            if (i in inFlight || i in failed) continue
+            val dist = abs(i * step + step / 2 - center)
             if (dist < bestDist) {
                 bestDist = dist
                 best = i
@@ -412,12 +461,10 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
         return best
     }
 
-    private fun chunkWanted(idx: Int): Boolean = keepRange?.contains(idx) == true
-
     /** Decodes one chunk on the IO dispatcher with a fresh decoder (never shared, so no concurrent
-     *  decodeRegion hazard). Hardware bitmaps on API 26+ draw on the hardware canvas as a direct
-     *  GPU blit (no per-frame software-bitmap texture upload); the decode falls back to software
-     *  if the device's region decoder rejects hardware. Returns null on any decode failure. */
+     *  decodeRegion hazard). Software ARGB_8888/RGB_565 only — BitmapRegionDecoder cannot produce
+     *  hardware bitmaps (Android rejects HARDWARE for region decode; the old code attempted it and
+     *  silently fell back to software on every chunk). Returns null on any decode failure. */
     private suspend fun decodeChunk(idx: Int): Bitmap? {
         val cur = info ?: return null
         return withContext(Dispatchers.IO) {
@@ -428,22 +475,9 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
                         val rect = Rect(0, cur.srcTop(idx), cur.srcWidth, cur.srcBottom(idx))
                         val opts = BitmapFactory.Options().apply {
                             inSampleSize = cur.sample
-                            inPreferredConfig = preferredConfig()
+                            inPreferredConfig = if (rgb565) Bitmap.Config.RGB_565 else Bitmap.Config.ARGB_8888
                         }
-                        var bmp = try {
-                            decoder.decodeRegion(rect, opts)
-                        } catch (e: Throwable) {
-                            null
-                        }
-                        if (bmp == null && opts.inPreferredConfig == Bitmap.Config.HARDWARE) {
-                            opts.inPreferredConfig = Bitmap.Config.ARGB_8888
-                            bmp = try {
-                                decoder.decodeRegion(rect, opts)
-                            } catch (e: Throwable) {
-                                null
-                            }
-                        }
-                        bmp
+                        decoder.decodeRegion(rect, opts)
                     } finally {
                         decoder.recycle()
                     }
@@ -451,13 +485,6 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
             }
         }
     }
-
-    private fun preferredConfig(): Bitmap.Config =
-        when {
-            rgb565 -> Bitmap.Config.RGB_565
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> Bitmap.Config.HARDWARE
-            else -> Bitmap.Config.ARGB_8888
-        }
 
     private fun newRegionDecoder(file: File): BitmapRegionDecoder {
         val decoder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

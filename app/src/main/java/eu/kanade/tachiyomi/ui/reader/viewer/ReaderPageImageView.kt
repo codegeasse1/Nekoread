@@ -44,13 +44,15 @@ import java.io.FileInputStream
  * decoded ONCE by Coil at the strip's display width and shown in a plain [ImageView] — a single,
  * memory-cached decode (warmed by the reader's preload loop) instead of a per-bind region-decode
  * pipeline, which is what keeps scrolling smooth. TALL strips (long webtoon pages, h > 3w) are
- * decoded as display-width chunks by a [WebtoonChunkedImageView] — lazy viewport-window decoding,
- * hardware bitmaps, and recycling off the draw path, so a fling never pays the subsampling view's
- * per-frame tile-decode churn (the source of the remaining comix lag). Only border-cropped pages
- * (or the explicit "always decode long strips with SSIV" setting) keep using a
- * [SubsamplingScaleImageView] region-decoded from the page's on-device cache file. Animated images
- * (gif / animated webp) fall back to a plain [ImageView] fed by Coil. Border cropping on the fast
- * path goes through the custom Coil decoder (see TachiyomiReaderDecoder).
+ * likewise decoded WHOLE at the display width by Coil into one software bitmap shown in a plain
+ * [ImageView] — a single stable bitmap drawn every frame (the render thread caches its textures),
+ * with no per-frame tile/chunk decoding, which is what finally keeps comix flings smooth. Only
+ * strips whose single decode would exceed a memory budget (pathological mega-strips) fall back to
+ * a [WebtoonChunkedImageView]; only border-cropped pages (or the explicit "always decode long
+ * strips with SSIV" setting) use a [SubsamplingScaleImageView] region-decoded from the page's
+ * on-device cache file. Animated images (gif / animated webp) fall back to a plain [ImageView] fed
+ * by Coil. Border cropping on the fast path goes through the custom Coil decoder (see
+ * TachiyomiReaderDecoder).
  */
 open class ReaderPageImageView @JvmOverloads constructor(
     context: Context,
@@ -118,6 +120,12 @@ open class ReaderPageImageView @JvmOverloads constructor(
     /** Target decode width (px) for short webtoon pages decoded by Coil (yomi's fast path). */
     var decodeWidthPx: Int = 0
 
+    /** Whole-strip single decodes larger than this (bytes, at the quality-scaled decode width) are
+     *  rendered as windowed chunks by [WebtoonChunkedImageView] instead, so a pathological
+     *  mega-strip can't OOM the reader (a few live pages at this size is already ~150MB of heap).
+     */
+    private val TALL_SINGLE_DECODE_BYTES: Long = 40L * 1024 * 1024
+
     @CallSuper
     open fun onImageLoaded() {
         onImageLoaded?.invoke()
@@ -158,8 +166,17 @@ open class ReaderPageImageView @JvmOverloads constructor(
                 prepareShortImageView()
                 setShortImage(file, config)
             } else if (isWebtoon && isTall && !config.cropBorders && !config.alwaysDecodeLongStripWithSSIV) {
-                prepareChunkedImageView()
-                setChunkedImage(file, config)
+                if (fitsSingleDecode(file)) {
+                    // Whole-strip single decode (software, memory-cached by Coil): one stable
+                    // bitmap drawn per frame — no per-frame tile/chunk decode, the smooth path.
+                    prepareShortImageView()
+                    setTallImage(file, config)
+                } else {
+                    // Pathological mega-strip: a single bitmap would blow the memory budget, so
+                    // render it as a windowed stack of chunks instead.
+                    prepareChunkedImageView()
+                    setChunkedImage(file, config)
+                }
             } else {
                 prepareNonAnimatedImageView()
                 setNonAnimatedImage(file, config)
@@ -349,6 +366,61 @@ open class ReaderPageImageView @JvmOverloads constructor(
             )
             .build()
         context.imageLoader.enqueue(request)
+    }
+
+    /** Whole-strip smooth path for TALL webtoon pages: decode the ENTIRE strip once at the display
+     *  width into a single bitmap shown in the plain [ImageView]. The bitmap is deliberately
+     *  SOFTWARE — never hardware — because a tall strip can exceed the GPU's texture-size limit,
+     *  which makes Coil's hardware decode fail entirely; software bitmaps are tiled internally by
+     *  the render thread and, being stable for the page's lifetime, are drawn without any
+     *  per-frame decode or upload churn (the source of the old SSIV/chunked scroll jank).
+     */
+    private fun setTallImage(
+        file: File,
+        config: Config,
+    ) = (pageView as? ImageView)?.apply {
+        val decodeW = if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels
+        val request = ImageRequest.Builder(context)
+            .data(file)
+            .size(Size(decodeW, Dimension.Undefined))
+            .memoryCachePolicy(CachePolicy.ENABLED)
+            .diskCachePolicy(CachePolicy.DISABLED)
+            .allowHardware(false)
+            .allowRgb565(config.decodeRgb565)
+            .target(
+                onSuccess = { drawable ->
+                    setImageDrawable(drawable)
+                    isVisible = true
+                    this@ReaderPageImageView.onImageLoaded()
+                },
+                onError = {
+                    this@ReaderPageImageView.onImageLoadError()
+                },
+            )
+            .build()
+        context.imageLoader.enqueue(request)
+    }
+
+    /** True if [file]'s whole-strip decode at the display width fits within the memory budget (the
+     *  smooth single-decode path). Strips whose single decode would exceed the budget are rendered
+     *  as windowed chunks instead, so a pathological mega-strip can't OOM the reader.
+     */
+    private fun fitsSingleDecode(file: File): Boolean {
+        val cfg = config ?: return true
+        val decodeW = if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels
+        return try {
+            val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            android.graphics.BitmapFactory.decodeFile(file.absolutePath, opts)
+            val w = opts.outWidth
+            val h = opts.outHeight
+            if (w <= 0 || h <= 0) return false
+            val bpp = if (cfg.decodeRgb565) 2 else 4
+            val decodedW = minOf(w, decodeW)
+            val decodedH = decodedW.toLong() * h / w
+            decodedW.toLong() * decodedH * bpp <= TALL_SINGLE_DECODE_BYTES
+        } catch (e: Throwable) {
+            false
+        }
     }
 
     private fun prepareAnimatedImageView() {

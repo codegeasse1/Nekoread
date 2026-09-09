@@ -1,13 +1,21 @@
 name: Build Debug APK
 
 # Automatically builds the app on every push to `main` and makes the APK
-# downloadable from the `build` branch + the Actions artifacts.
+# downloadable from the Actions artifacts. The APK is published to the `build`
+# branch only when the workflow is run manually with the `publish` input checked,
+# so a push-triggered build can be tested first and publishing is explicit.
 # On failure, the Gradle log is pushed to the build branch as build-error.log
 # so the failure is visible without Actions access.
 on:
   push:
     branches: ["main"]
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Also publish the built APK to the build branch"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -95,7 +103,11 @@ jobs:
           if-no-files-found: error
 
       - name: Push result to the build branch
-        if: always()
+        # Publish the built APK to the `build` branch only when this run is a manual
+        # workflow_dispatch with the `publish` input enabled. Push-triggered builds
+        # (which is what testing uses) never auto-publish — the APK stays as a
+        # workflow artifact until publishing is explicitly requested.
+        if: always() && github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true'
         run: |
           set -e
           git config user.name "github-actions[bot]"
