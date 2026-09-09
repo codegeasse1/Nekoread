@@ -358,7 +358,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
     ) = (pageView as? ImageView)?.apply {
         val decodeW = if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels
         val t0 = SystemClock.elapsedRealtime()
-        val request = ImageRequest.Builder(context)
+        val builder = ImageRequest.Builder(context)
             .data(file)
             .size(Size(decodeW, Dimension.Undefined))
             .memoryCachePolicy(CachePolicy.ENABLED)
@@ -371,7 +371,12 @@ open class ReaderPageImageView @JvmOverloads constructor(
             // reads pixels back, which hardware bitmaps can't do (that decoder returns its own
             // software bitmap anyway, so the flag is irrelevant to the crop path).
             .allowHardware(!config.cropBorders)
-            .cropBorders(config.cropBorders)
+        // Only opt into the border-crop path when actually cropping. Setting the crop parameter
+        // (even to false) changes Coil's memory-cache key (MemoryCacheService: parameters become
+        // key extras), so an always-set parameter would make the prewarm's warm request — which
+        // sets it only when cropping — never hit, and every page would cold-decode on scroll-in.
+        if (config.cropBorders) builder.cropBorders(true)
+        val request = builder
             .target(
                 onSuccess = { drawable ->
                     setImageDrawable(drawable)
