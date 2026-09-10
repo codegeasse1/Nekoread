@@ -33,7 +33,7 @@ import java.util.concurrent.ArrayBlockingQueue
 object ReaderDiagnostics {
 
     /** Set to false to compile it out of a normal build. */
-    const val ENABLED = true
+    const val ENABLED = false
 
     private const val MAX_LINES = 120
 
@@ -68,6 +68,7 @@ object ReaderDiagnostics {
 
     /** One-time init from any view that has a Context (idempotent). */
     fun init(context: Context) {
+        if (!ENABLED) return
         if (logFile != null) return
         logFile = File(context.applicationContext.filesDir, "nekoread-diagnostic.log")
         runCatching { logFile?.writeText("") }
