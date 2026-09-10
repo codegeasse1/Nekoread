@@ -41,12 +41,14 @@ import kotlinx.coroutines.withContext
  *  - Decode/window management runs OFF the draw path, driven by the recycler's scroll listener,
  *    the view's layout pass, and the per-draw "viewport moved?" check — each coalesced into at
  *    most one posted pass.
- *  - Chunks are drawn into EQUAL contiguous display slots whose total is exactly the view height
- *    (slot step = viewHeight / partCount). Every chunk is stretched to fill its slot, so there are
- *    NEVER gaps between chunks — the old fixed-2048px-slot math left a solid black bar between
- *    every chunk whenever the decoded chunk width overshot the view width (which it almost always
- *    did, since sampling is power-of-two). Missing (not-yet-decoded) chunks just skip their slot;
- *    neighbours stay aligned.
+ *  - Chunks are drawn at the PAGE's own aspect ratio: the display scale is viewWidth /
+ *    sourceWidth, so chunk i is drawn at source rows [srcTop(i), srcBottom(i)) mapped to
+ *    [srcTop(i)*sx, srcBottom(i)*sx) — its true row count at the true scale. Nothing is stretched:
+ *    the strip's decoded row count is not an even multiple of [chunkHeight] (2048 almost never
+ *    divides it), so the old equal-slot mapping (`slotH = viewHeight / partCount`) rescaled every
+ *    chunk to the same height and inflated the short last chunk to a full slot. Contiguous source
+ *    rows map to contiguous display rows, so the chunks still tile with no gaps. Missing
+ *    (not-yet-decoded) chunks just skip their range; neighbours stay aligned.
  *  - Chunks decode as plain software ARGB_8888/RGB_565. BitmapRegionDecoder CANNOT produce
  *    hardware bitmaps (Android rejects HARDWARE config for region decode — the old code attempted
  *    it and silently fell back to software on every chunk), and that silent fallback plus the
@@ -118,8 +120,9 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
 
     private var info: ChunkInfo? = null
 
-    /** Decoded chunk bitmaps, aligned to fixed display slots (index i occupies display rows
-     *  [i*step, (i+1)*step) where step = viewHeight/partCount). Null entries are not decoded (yet). */
+    /** Decoded chunk bitmaps, one entry per source chunk: index i holds source rows
+     *  [srcTop(i), srcBottom(i)) and therefore occupies display rows starting at `i * step` (step =
+     *  one full chunk's display height at the view width). Null entries are not decoded (yet). */
     private val bitmaps = ArrayList<Bitmap?>(0)
 
     private var decodeWidth: Int = 0
@@ -285,19 +288,18 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
         val step = chunkStep()
         val first = ((lastViewportTop / step) - 1).coerceIn(0, bitmaps.lastIndex)
         val last = ((lastViewportBottom / step) + 1).coerceIn(0, bitmaps.lastIndex)
-        val scale = width.coerceAtLeast(1).toFloat()
-        val hTotal = height.toFloat()
-        val slotH = hTotal / cur.partCount
+        val dw = width.coerceAtLeast(1).toFloat()
+        // Display pixels per source pixel: the page fills the view's WIDTH, and each chunk keeps
+        // the height of its own source rows at that width. Drawing by source geometry (instead of
+        // stretching every chunk into an equal `height / partCount` slot) means the strip is never
+        // rescaled vertically — the decoded rows are almost never an even multiple of chunkHeight,
+        // so equal slots used to compress every full chunk and inflate the short last one to a full
+        // slot. Chunk i's display top is exactly i*step, so the chunks still tile without gaps.
+        val sx = dw / cur.srcWidth
         val dst = RectF()
         for (i in first..last) {
             val b = bitmaps[i] ?: continue
-            // Equal contiguous slots: chunk i always fills rows [i*slotH, (i+1)*slotH) (the last
-            // chunk stretches to the view's exact height). Because slotH is the REAL displayed
-            // chunk height (total view height / chunk count), chunks tile the page with no gaps —
-            // the old fixed-chunkHeight slots left a black bar between every chunk whenever the
-            // decoded chunk width overshot the view width (which sampling makes almost certain).
-            val bottom = if (i == bitmaps.lastIndex) hTotal else (i + 1) * slotH
-            dst.set(0f, i * slotH, scale, bottom)
+            dst.set(0f, cur.srcTop(i) * sx, dw, cur.srcBottom(i) * sx)
             canvas.drawBitmap(b, null, dst, null)
         }
     }
@@ -319,13 +321,16 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
         return ChunkInfo(file, srcW, srcH, sample, partCount, chunkHeight, chunkBytes)
     }
 
-    /** The display-space height (px) of one chunk slot. Equal slots that tile the page exactly:
-     *  total view height divided by the chunk count. Falls back to [chunkHeight] before the view
-     *  has a measured height. */
+    /** The display-space height (px) of one full chunk at the current view width: the chunk's real
+     *  source rows ([chunkHeight] * [ChunkInfo.sample]) scaled by the page's x scale. Chunk i's
+     *  display top is exactly `i * this` (see [onDraw]), so the decode window and the
+     *  nearest-chunk targeting are exact rather than a `viewHeight / partCount` approximation.
+     *  Falls back to [chunkHeight] before the view has a measured width. */
     private fun chunkStep(): Int {
         val cur = info ?: return chunkHeight
-        if (height > 0 && cur.partCount > 0) return (height / cur.partCount).coerceAtLeast(1)
-        return chunkHeight
+        val w = width
+        if (w <= 0 || cur.srcWidth <= 0) return chunkHeight
+        return (w.toFloat() * cur.chunkHeight * cur.sample / cur.srcWidth).toInt().coerceAtLeast(1)
     }
 
     /** Re-targets the decode window to the current viewport, trims decoded chunks to the memory

@@ -79,10 +79,16 @@ private val PillShape = RoundedCornerShape(20.dp)
 private val TypeCyan = Color(0xFF00B8D4)
 private val CompletedGreen = Color(0xFF00E676)
 
-// The lower-55% cover scrim, hoisted: an inline `Brush.verticalGradient` allocated (and re-created
-// its Shader) for every cell on every composition.
+// The cover scrim, hoisted: an inline `Brush.verticalGradient` allocated (and re-created its
+// Shader) for every cell on every composition. The gradient carries explicit stops — fully
+// transparent over the top 58% of the cover, then a gentle ramp to 50% black at the bottom edge —
+// so the artwork stays visible behind the rating star and the Read pill. (It was a
+// `Transparent -> 85% black` ramp over the lower 55%, which left the bottom third of every
+// thumbnail essentially black: ~33/255 luminance against ~118 at the top of the same cover.)
 private val CoverScrim = Brush.verticalGradient(
-    listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))
+    0.00f to Color.Transparent,
+    0.58f to Color.Transparent,
+    1.00f to Color.Black.copy(alpha = 0.5f)
 )
 
 // Exactly Type.kt's `titleMedium.copy(fontWeight = Bold, fontSize = 13.sp)` for the grid title and
@@ -228,17 +234,14 @@ fun MangaGridCard(
                 contentDescription = manga.title,
                 modifier = Modifier
                     .fillMaxSize()
-                    // The bottom scrim (over the lower ~55% of the cell, where the rating / Read
-                    // pill sit) is folded into the image's own draw instead of being a sibling Box:
-                    // one fewer layout node per cell, and the gradient shader is the hoisted,
-                    // reused [CoverScrim] rather than a per-cell `background(brush)`.
+                    // The bottom scrim is folded into the image's own draw instead of being a
+                    // sibling Box: one fewer layout node per cell, and the gradient shader is the
+                    // hoisted, reused [CoverScrim] rather than a per-cell `background(brush)`.
+                    // Drawn over the WHOLE node — [CoverScrim]'s own stops make the top 58%
+                    // transparent, so there is no offset/size arithmetic to get wrong.
                     .drawWithContent {
                         drawContent()
-                        drawRect(
-                            brush = CoverScrim,
-                            topLeft = Offset(0f, size.height * 0.45f),
-                            size = Size(size.width, size.height * 0.55f)
-                        )
+                        drawRect(brush = CoverScrim)
                     },
                 contentScale = ContentScale.Crop,
             )

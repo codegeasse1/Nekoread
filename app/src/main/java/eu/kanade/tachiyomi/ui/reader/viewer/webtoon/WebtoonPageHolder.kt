@@ -93,9 +93,7 @@ class WebtoonPageHolder(
         // coroutine below.
         WebtoonPageCache.cachedSize(label)?.let { (w, h) ->
             if (w > 0 && h > 0) {
-                val rw = viewer.recycler.width.takeIf { it > 0 }
-                    ?: frame.context.resources.displayMetrics.widthPixels
-                setFrameHeightNow((rw.toFloat() * h / w).toInt().coerceAtLeast(1))
+                setFrameHeightNow((pageWidthPx().toFloat() * h / w).toInt().coerceAtLeast(1))
             }
         }
         loadJob = scope.launch {
@@ -108,7 +106,7 @@ class WebtoonPageHolder(
                 // Unknown pages keep the viewport-height placeholder and settle once the image
                 // lands.
                 var meta = WebtoonPageCache.meta(item.desc, viewer.cacheDir)
-                val rw = viewer.recycler.width.takeIf { it > 0 } ?: frame.context.resources.displayMetrics.widthPixels
+                val rw = pageWidthPx()
                 val targetH = if (meta != null) {
                     (rw.toFloat() * meta.height / meta.width).toInt().coerceAtLeast(1)
                 } else {
@@ -130,7 +128,7 @@ class WebtoonPageHolder(
                 // the file exists the real size is known — fix the frame to the true strip height
                 // so the page isn't left cropped to the viewport.
                 if (meta != null) {
-                    val rw2 = viewer.recycler.width.takeIf { it > 0 } ?: frame.context.resources.displayMetrics.widthPixels
+                    val rw2 = pageWidthPx()
                     setFrameHeight((rw2.toFloat() * meta.height / meta.width).toInt().coerceAtLeast(1))
                 }
                 frame.decodeWidthPx = viewer.decodeWidth
@@ -155,6 +153,19 @@ class WebtoonPageHolder(
         }
         val syncDt = SystemClock.elapsedRealtime() - syncT0
         if (syncDt >= 20) ReaderDiagnostics.logFor(label, "bind sync ${syncDt}ms")
+    }
+
+    /** The width (px) the page image is actually laid out at: the recycler's width less the webtoon
+     *  side padding the frame carries on both sides. The frame height is derived from this — using
+     *  the full recycler width made every page's slot taller than the page's own aspect whenever
+     *  side padding was set, which the chunked renderer then filled by stretching vertically (and
+     *  which left a gap under every short page). */
+    private fun pageWidthPx(): Int {
+        val rw = viewer.recycler.width.takeIf { it > 0 }
+            ?: frame.context.resources.displayMetrics.widthPixels
+        val sidePadding = (viewer.config.webtoonSidePadding.coerceIn(0, 25) / 100f) *
+            frame.context.resources.displayMetrics.widthPixels
+        return (rw - 2 * sidePadding.toInt()).coerceAtLeast(1)
     }
 
     private fun refreshLayoutParams() {
