@@ -30,6 +30,7 @@ import com.example.data.reader.WebtoonPageCache
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonBorderDetector
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonChunkedImageView
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonSubsamplingImageView
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -160,15 +161,34 @@ open class ReaderPageImageView @JvmOverloads constructor(
         this.config = config
         smartFitJob?.cancel()
         smartFitJob = null
-        val dims = runCatching {
-            val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            android.graphics.BitmapFactory.decodeFile(file.absolutePath, o)
-            "${o.outWidth}x${o.outHeight}"
-        }.getOrDefault("?")
-        val decodeW = cappedDecodeWidth(
-            file,
-            if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels,
-        )
+        // Native size and the two decode widths are resolved WITHOUT touching the file when the
+        // holder supplies its cached metadata (config.nativeWidth/Height — written at download
+        // time). This matters: this runs on the MAIN thread during a bind, and the old code did up
+        // to three bounds-only decodes of the page file per bind (the dims string, plus
+        // cappedDecodeWidth twice) — pointless file I/O stutter while scrolling. Only the rare
+        // no-metadata bind falls back to a single bounds decode.
+        val requestedW = if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels
+        val cachedW = config.nativeWidth ?: 0
+        val cachedH = config.nativeHeight ?: 0
+        val nativeW: Int
+        val nativeH: Int
+        if (cachedW > 0 && cachedH > 0) {
+            nativeW = cachedW
+            nativeH = cachedH
+        } else {
+            val size = nativeSize(file)
+            nativeW = size.first
+            nativeH = size.second
+        }
+        val dims = if (nativeW > 0 && nativeH > 0) "${nativeW}x${nativeH}" else "?"
+        // Native-width cap (never upscale a ~800px source to screen width) …
+        val nativeCapW = nativeCapWidth(nativeW, requestedW)
+        // … and, for SHORT pages, the pixel-budget cap. A 1080-wide page is ~2.0M px (~7.9MB
+        // ARGB); the Coil memory cache then holds only ~4-6 of them, so the 4-ahead warm window
+        // thrashed and every scroll-in cold-decoded (300-680ms in the dx7 log, worse when several
+        // decoded at once). Capping short pages to WEBTOON_MAX_DECODE_PIXELS restores the ~4MB/page
+        // footprint that the warm window is sized for, so binds go back to being 1ms cache hits.
+        val shortW = budgetedShortWidth(nativeW, nativeH, requestedW)
         if (isAnimated) {
             ReaderDiagnostics.log("path=ANIMATED dims=$dims")
             prepareAnimatedImageView()
@@ -176,20 +196,20 @@ open class ReaderPageImageView @JvmOverloads constructor(
         } else {
             val isTall = config.isTallImage ?: isTallImageFile(file)
             if (isWebtoon && !isTall && !config.alwaysDecodeLongStripWithSSIV) {
-                ReaderDiagnostics.log("path=SHORT_WHOLE dims=$dims tall=false decodeW=$decodeW rgb565=${config.decodeRgb565}")
+                ReaderDiagnostics.log("path=SHORT_WHOLE dims=$dims tall=false decodeW=$shortW rgb565=${config.decodeRgb565}")
                 prepareShortImageView()
-                setShortImage(file, config)
+                setShortImage(file, config, shortW)
             } else if (isWebtoon && isTall && !config.cropBorders && !config.alwaysDecodeLongStripWithSSIV) {
                 if (fitsSingleDecode(file)) {
                     // Whole-strip single decode (software, memory-cached by Coil): one stable
                     // bitmap drawn per frame — no per-frame tile/chunk decode, the smooth path.
-                    ReaderDiagnostics.log("path=TALL_WHOLE dims=$dims tall=true decodeW=$decodeW rgb565=${config.decodeRgb565}")
+                    ReaderDiagnostics.log("path=TALL_WHOLE dims=$dims tall=true decodeW=$nativeCapW rgb565=${config.decodeRgb565}")
                     prepareShortImageView()
-                    setTallImage(file, config)
+                    setTallImage(file, config, nativeCapW)
                 } else {
                     // Pathological mega-strip: a single bitmap would blow the memory budget, so
                     // render it as a windowed stack of chunks instead.
-                    ReaderDiagnostics.log("path=TALL_CHUNKED dims=$dims tall=true decodeW=$decodeW (exceeds 40MB single-decode budget)")
+                    ReaderDiagnostics.log("path=TALL_CHUNKED dims=$dims tall=true decodeW=$nativeCapW (exceeds 40MB single-decode budget)")
                     prepareChunkedImageView()
                     setChunkedImage(file, config)
                 }
@@ -355,31 +375,22 @@ open class ReaderPageImageView @JvmOverloads constructor(
         addView(pageView, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
     }
 
-    /** The width to decode [file] at, capped at its native width. The comix sources are ~800px wide;
-     *  asking Coil for a wider target upscales them to screen width (~2.2x the pixels), which roughly
-     *  doubles the decode time and memory per page for zero added detail — the ImageView scales the
-     *  bitmap to fit the screen anyway. The cap uses the same min(requestedW, nativeW) formula as the
-     *  prewarm (ReaderScreen), so the memory-cache key still matches the warm and scroll-in hits stay.
-     */
-    private fun cappedDecodeWidth(file: File, requestedW: Int): Int {
-        val nativeW = try {
-            val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            android.graphics.BitmapFactory.decodeFile(file.absolutePath, o)
-            o.outWidth
-        } catch (e: Throwable) {
-            0
-        }
-        return if (nativeW in 1 until requestedW) nativeW else requestedW
+    /** Native pixel size of a page file (one bounds-only decode). Only a fallback — the holder
+     *  normally supplies its cached metadata via [Config.nativeWidth]/[Config.nativeHeight], so a
+     *  bind does no file I/O on the main thread. */
+    private fun nativeSize(file: File): Pair<Int, Int> = try {
+        val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        android.graphics.BitmapFactory.decodeFile(file.absolutePath, o)
+        o.outWidth to o.outHeight
+    } catch (e: Throwable) {
+        0 to 0
     }
 
     private fun setShortImage(
         file: File,
         config: Config,
+        decodeW: Int,
     ) = (pageView as? ImageView)?.apply {
-        val decodeW = cappedDecodeWidth(
-            file,
-            if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels,
-        )
         val t0 = SystemClock.elapsedRealtime()
         val builder = ImageRequest.Builder(context)
             .data(file)
@@ -394,6 +405,10 @@ open class ReaderPageImageView @JvmOverloads constructor(
             // reads pixels back, which hardware bitmaps can't do (that decoder returns its own
             // software bitmap anyway, so the flag is irrelevant to the crop path).
             .allowHardware(!config.cropBorders)
+            // Bounded page-decode concurrency (see readerPageDecodeDispatcher) — prevents a burst of
+            // simultaneous multi-megabyte decodes from each slowing to ~420ms. Not part of the
+            // memory-cache key, so the prewarm's warm (which sets it too) still hits.
+            .decoderDispatcher(readerPageDecodeDispatcher)
         // Only opt into the border-crop path when actually cropping. Setting the crop parameter
         // (even to false) changes Coil's memory-cache key (MemoryCacheService: parameters become
         // key extras), so an always-set parameter would make the prewarm's warm request — which
@@ -430,11 +445,8 @@ open class ReaderPageImageView @JvmOverloads constructor(
     private fun setTallImage(
         file: File,
         config: Config,
+        decodeW: Int,
     ) = (pageView as? ImageView)?.apply {
-        val decodeW = cappedDecodeWidth(
-            file,
-            if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels,
-        )
         val t0 = SystemClock.elapsedRealtime()
         val request = ImageRequest.Builder(context)
             .data(file)
@@ -537,6 +549,11 @@ open class ReaderPageImageView @JvmOverloads constructor(
         val disableZoomIn: Boolean = false,
         val zoomStartPosition: ZoomStartPosition = ZoomStartPosition.CENTER,
         val fadeIn: Boolean = false,
+        // Native pixel size of the page, when the caller already knows it (the webtoon holder
+        // caches it at download time). Supplying it keeps the decode-width maths — and therefore
+        // the Coil memory-cache key — off the file system during a bind.
+        val nativeWidth: Int? = null,
+        val nativeHeight: Int? = null,
     ) {
         enum class ZoomStartPosition { LEFT, CENTER, RIGHT }
     }
@@ -565,4 +582,47 @@ open class ReaderPageImageView @JvmOverloads constructor(
             false
         }
     }
+}
+
+/**
+ * Upper bound on the decoded pixel count of a SHORT webtoon page. Short pages are decoded whole
+ * into one bitmap and kept in Coil's memory cache so scrolling into them is a cache hit — but a
+ * source that serves 1080-wide pages produces ~2.0M px (~7.9MB ARGB) bitmaps, and the memory cache
+ * then holds only ~4-6 of them, which is fewer than the pages-ahead warm window plus the pages on
+ * screen. The warm window thrashed and every scroll-in cold-decoded (the dx7 log: 300-680ms per
+ * bind, ~420ms each when three decoded at once). Capping to ~1.0M px (~4MB) restores the footprint
+ * the warm window is sized for, so binds are cache hits again; the page is still displayed at the
+ * same size (the ImageView scales it to fill width), just sampled slightly — comparable to the
+ * ~800px-wide sources that scrolled perfectly. Pages already below the budget are untouched.
+ */
+internal const val WEBTOON_MAX_DECODE_PIXELS = 1_000_000L
+
+/**
+ * Shared, small decoder dispatcher for the reader's SHORT webtoon pages. At most two page decodes
+ * run at once. The dx7 log showed three cold page decodes landing simultaneously and each taking
+ * ~420ms, when a lone decode of the same page costs ~30-80ms — a 5-10x penalty from memory/allocator
+ * contention on a low-end GPU/CPU as several multi-megabyte bitmaps materialise at once. Bounding
+ * the reader's page decodes to two keeps a burst (a fling pulling several pages in) from collapsing
+ * throughput. It is set per-request (not on the shared loader) so the library's cover loads keep
+ * their full parallelism.
+ */
+internal val readerPageDecodeDispatcher: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(2)
+
+/** The decode width for a page: [requestedW], never upscaled past the source's [nativeW]. */
+internal fun nativeCapWidth(nativeW: Int, requestedW: Int): Int =
+    if (nativeW in 1 until requestedW) nativeW else requestedW
+
+/**
+ * The width to decode a SHORT webtoon page at: the native-width cap, further reduced so the decoded
+ * bitmap stays within [WEBTOON_MAX_DECODE_PIXELS]. Kept identical to the prewarm's formula (the
+ * caller passes the same native size and requested width) so the Coil memory-cache keys match and
+ * the warm's bitmap is exactly the one the bind hits.
+ */
+internal fun budgetedShortWidth(nativeW: Int, nativeH: Int, requestedW: Int): Int {
+    val cap = nativeCapWidth(nativeW, requestedW)
+    if (nativeW <= 0 || nativeH <= 0) return cap
+    val heightAtCap = nativeH.toLong() * cap / nativeW
+    if (cap.toLong() * heightAtCap <= WEBTOON_MAX_DECODE_PIXELS) return cap
+    val width = kotlin.math.sqrt(WEBTOON_MAX_DECODE_PIXELS.toDouble() * nativeW / nativeH).toInt()
+    return width.coerceIn(1, cap)
 }

@@ -115,6 +115,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
+import eu.kanade.tachiyomi.ui.reader.viewer.budgetedShortWidth
+import eu.kanade.tachiyomi.ui.reader.viewer.readerPageDecodeDispatcher
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.PagerConfig
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.PagerViewer
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonConfig
@@ -725,10 +727,14 @@ fun ReaderScreen(
             // fresh by the binds anyway) end up the most-recently-used; behind pages are last and
             // only get slots when the ahead set is already warm (e.g. paused), which also serves
             // backward scrolling.
-            // Gated on the viewer being idle: decodes never run while the user is actively
-            // scrolling/flinging, so scroll frames have the CPU to themselves. Warms resume the
-            // moment the user pauses to read (the read-pause is long enough to fill the window).
-            if (isWebtoon && !userScrolling) {
+            // Runs continuously (paced faster when idle, slower while the user is scrolling) rather
+            // than gated off during a scroll. A full gate felt like the right idea — don't decode
+            // during a fling — but the dx7 log showed the consequence: with the gesture occupying
+            // most of the time the warm almost never ran, so every bind cold-decoded. The pages are
+            // now small enough (WEBTOON_MAX_DECODE_PIXELS) that one warm at a time is cheap, so the
+            // window stays filled and scroll-ins are cache hits; the loop just ticks slower while a
+            // gesture is in progress to leave the scroll most of the CPU.
+            if (isWebtoon) {
                 val refreshOrder = buildList {
                     for (d in WEBTOON_MEM_HORIZON_AHEAD downTo 1) add(globCur + d)
                     for (d in 1..WEBTOON_MEM_HORIZON_BEHIND) add(globCur - d)
@@ -762,17 +768,26 @@ fun ReaderScreen(
                             runCatching {
                                 // Exact same request the page holder uses (same file, size, policies,
                                 // conditional crop parameter), so this warm's memory-cache key matches
-                                // the bind's — see ReaderPageImageView.setShortImage. The size is
-                                // capped at the source's native width exactly like the bind, so the
-                                // comix ~800px-wide sources are never upscaled to screen width
-                                // (upscaling costs ~2x the decode time and memory for no added detail).
+                                // the bind's — see ReaderPageImageView.setShortImage. The width comes
+                                // from the SAME helper the bind uses (native-width cap + the short-page
+                                // pixel budget), so the two requests can never drift apart — if they
+                                // did, every scroll-in would miss the cache and cold-decode.
                                 val res = imageLoader.execute(
                                     ImageRequest.Builder(context)
                                         .data(f)
-                                        .size(Size(minOf(displayDecodeWidth, mm.width), Dimension.Undefined))
+                                        .size(
+                                            Size(
+                                                budgetedShortWidth(mm.width, mm.height, displayDecodeWidth),
+                                                Dimension.Undefined,
+                                            ),
+                                        )
                                         .memoryCachePolicy(CachePolicy.ENABLED)
                                         .diskCachePolicy(CachePolicy.DISABLED)
                                         .allowHardware(!cropBorders)
+                                        // Same bounded page-decode dispatcher as the bind (not part
+                                        // of the cache key), so a warm and a bind can't both saturate
+                                        // the decoder and slow each other to hundreds of ms.
+                                        .decoderDispatcher(readerPageDecodeDispatcher)
                                         .apply {
                                             if (cropBorders) cropBorders(true)
                                         }
@@ -796,7 +811,10 @@ fun ReaderScreen(
                     }
                 }
             }
-            delay(60)
+            // Tick faster while reading (fills the window between page turns), slower while a
+            // gesture/fling is in progress so the scroll keeps the CPU and the warm doesn't add
+            // decode pressure to the exact frames the user is watching.
+            delay(if (userScrolling) 120 else 60)
         }
     }
 

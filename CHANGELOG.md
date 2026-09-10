@@ -4,6 +4,12 @@ All notable changes to Nekoread.
 
 ## [2.2.7] - 2026-09-09
 
+### Reader performance (comix lag — take five)
+- **The decoded page is now sized to fit the page cache.** A 1080-wide page is ~2.0M pixels (~7.9MB as a hardware bitmap), so on this device the cache held only ~4-6 of them — fewer than the pages kept warm ahead of you plus the ones on screen. The warm window therefore evicted itself and every page you scrolled onto had to be decoded cold from disk: the log showed 300-680ms per page (and ~420ms each when three landed at once) instead of the ~1ms cache hit it should be. Short pages are now decoded at a bounded ~1.0M-pixel budget (~4MB, sampled slightly — comparable to the ~800px sources that always scrolled smoothly), so the whole warm window fits the cache and scroll-ins go back to being instant hits. Pages already at or below the budget are untouched, and the on-screen display size is unchanged.
+- **Page decodes no longer stampede each other.** At most two page decodes run at once, so a fling pulling several pages in can't have a burst of 4MB decodes all slow to ~400ms from contention.
+- **The warm-up runs again, paced to the gesture.** Gating it off during a scroll was the wrong call: the log showed it then almost never ran, so nothing stayed warm. It now keeps filling the window continuously — ticking fast while you read, slower while a drag/fling is in progress so the scroll keeps the CPU.
+- **Binds no longer touch the disk on the main thread.** The page's dimensions come from the download metadata instead of up to three bounds-decode file reads per bind.
+
 ### Reader performance (comix lag — take four)
 - **The memory warm-up no longer decodes while you scroll**: warming ran continuously, and even though each warm was a small 20-80ms background decode (binds were already 1ms cache hits), on a low-end device that background decode load during a drag/fling is what still hitch-scrolled. The warm now runs only in the pauses between scrolls (when you're reading a page) — the read-pause is long enough to fill the pages-ahead window, and the scroll gesture itself has the CPU to itself.
 - **Far flings no longer outrun the pre-download window**: the window was 20 pages ahead, so a fast fling past it (the log showed a jump from page 14 to 40 waiting ~525ms at bind for the download) hit a blank page. The window is now 40 pages ahead, so the pipeline stays in front of a fling.

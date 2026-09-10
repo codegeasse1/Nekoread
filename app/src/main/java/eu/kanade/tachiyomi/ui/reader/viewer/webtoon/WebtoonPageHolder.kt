@@ -114,6 +114,8 @@ class WebtoonPageHolder(
                     viewer.pageConfig.copy(
                         isTallImage = meta?.isTall,
                         decodeRgb565 = viewer.decodeRgb565,
+                        nativeWidth = meta?.width,
+                        nativeHeight = meta?.height,
                     ),
                 )
                 frame.colorFilter = viewer.colorFilter
