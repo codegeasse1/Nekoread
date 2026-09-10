@@ -128,15 +128,15 @@ class MainActivity : ComponentActivity() {
         Coil.setImageLoader(
             ImageLoader.Builder(this)
                 .okHttpClient(NetworkHelper.getInstance().client)
-                // Memory cache sized for the reader's decode-ahead window: webtoon strips are
-                // decoded at (at most) the display width (1080px-wide pages ≈ 8MB each), so this
-                // holds the visible strips plus several pages decoded ahead. The reader's rolling
-                // refresh keeps the pages just ahead of the scroll warm and farthest-first, so the
-                // nearest pages are the freshest in the LRU cache; a larger cache just means fewer
-                // of them need re-decoding. A memory miss re-decodes from disk — never re-downloads.
+                // Memory cache sized for the reader's decode-ahead window: webtoon strips are now
+                // decoded at their native width (~760px, ≈4.3MB each — never upscaled to the 1080
+                // screen), so a 0.40 cache holds the visible strips plus a comfortable decode-ahead
+                // window without evicting the nearest pages (the churn that forced the refresh to
+                // re-decode them from disk and caused scroll jank). A memory miss re-decodes from
+                // disk — never re-downloads.
                 .memoryCache {
                     MemoryCache.Builder(this)
-                        .maxSizePercent(0.30)
+                        .maxSizePercent(0.40)
                         .build()
                 }
                 // Disk cache so a loaded cover/page stays on-device: scrolling back to a screen or

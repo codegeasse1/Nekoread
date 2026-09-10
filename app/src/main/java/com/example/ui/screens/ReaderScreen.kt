@@ -134,10 +134,14 @@ private const val WEBTOON_BATCH = 6
 
 // Rolling memory-refresh horizon: the prewarm keeps this many pages just ahead (and a couple
 // behind) of the current page warm in Coil's memory cache, re-warming each one as the user
-// advances so the pages about to scroll in are always cache hits. Sized to fit the Coil cache
-// (which holds ~6-12 decoded 1080px strips) — warming more than the cache can hold would just
-// evict the nearest pages before they're viewed.
-private const val WEBTOON_MEM_HORIZON_AHEAD = 8
+// advances so the pages about to scroll in are always cache hits. Sized to fit the Coil cache:
+// short pages are now decoded at their native width (~760px, ≈4.3MB each, not upscaled to
+// 1080), and the cache holds ~10-18 such pages — so a modest 4-ahead window PLUS the pages the
+// RecyclerView binds (2-4) fits comfortably and nothing churns. The dx5 log showed an 8-ahead
+// window on this low-end device overflowed the cache, so the nearest pages got evicted and the
+// refresh re-decoded the same page from disk 4-6 times in a row — the redundant decodes (up to
+// ~550ms each) were the remaining scroll jank even though every bind was a 1ms cache hit.
+private const val WEBTOON_MEM_HORIZON_AHEAD = 4
 private const val WEBTOON_MEM_HORIZON_BEHIND = 2
 
 // The rolling memory refresh NEVER floods the decoder: at most this many warm executes may be in
@@ -145,7 +149,9 @@ private const val WEBTOON_MEM_HORIZON_BEHIND = 2
 // weren't cached each warm took ~1.7s and the heap churned, which is what still felt like lag),
 // and a page is re-warmed only after the current position has advanced this many pages (so near
 // pages get re-touched enough to survive LRU eviction without re-decoding every 60ms tick).
-private const val WEBTOON_MEM_WARM_CONCURRENCY = 2
+// dx4 bounded it to 2, but the dx5 log showed even TWO concurrent decodes contend on this
+// device's CPU — pairs took ~545ms each while single decodes take 20-80ms — so it's 1.
+private const val WEBTOON_MEM_WARM_CONCURRENCY = 1
 private const val WEBTOON_MEM_WARM_STALE = 3
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -764,7 +770,7 @@ fun ReaderScreen(
                                 if (res is SuccessResult && res.dataSource != DataSource.MEMORY_CACHE) {
                                     ReaderDiagnostics.log(
                                         "memwarm MISS ${System.currentTimeMillis() - t0}ms " +
-                                            "src=${res.dataSource.name}",
+                                            "page=$g src=${res.dataSource.name}",
                                     )
                                 }
                             }.onFailure { if (it is CancellationException) throw it }
