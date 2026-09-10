@@ -1,7 +1,11 @@
 package com.example.ui.screens
 
 import android.app.Activity
+import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
+import android.os.Handler
+import android.os.Looper
+import android.view.FrameMetrics
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
@@ -65,6 +69,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.BlendMode
@@ -126,6 +131,7 @@ import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -412,6 +418,38 @@ fun ReaderScreen(
     // gated — pages must keep hitting the disk cache no matter how fast the user scrolls.
     var userScrolling by remember(chapter.id) { mutableStateOf(false) }
 
+    // Frame-phase probe. FrameMetrics reports, in nanoseconds, where each frame's time went on the
+    // UI thread (input / animation / layout+measure / draw / sync / command-issue) plus the frame's
+    // total. The reader loop's own `ui stall` probe can only prove that the UI thread was busy — it
+    // cannot say whether the 300ms went to our own layout/draw or to waiting on the RenderThread/GPU
+    // behind it, and a long `decoded …ms` line is equally ambiguous. This listener (the platform's
+    // own mechanism — the same one Perfetto/JankStats use) breaks a janky frame into its phases, so
+    // ONE more log run names the culprit instead of us guessing. Diagnostic only: attached while the
+    // reader is on screen, and only frames >= 100ms are logged.
+    val frameCtx = LocalContext.current
+    DisposableEffect(frameCtx) {
+        val window = frameCtx.findActivity()?.window
+        if (window == null) return@DisposableEffect onDispose { }
+        val listener = FrameMetrics.OnFrameMetricsAvailableListener { _, metrics, _ ->
+            val total = metrics.getMetric(FrameMetrics.TOTAL_DURATION)
+            if (total >= 100_000_000L) {
+                fun ms(metric: Int) = metrics.getMetric(metric) / 1_000_000
+                ReaderDiagnostics.log(
+                    "frame total=${total / 1_000_000}ms " +
+                        "input=${ms(FrameMetrics.INPUT_HANDLING_DURATION)} " +
+                        "anim=${ms(FrameMetrics.ANIMATION_DURATION)} " +
+                        "layout=${ms(FrameMetrics.LAYOUT_MEASURE_DURATION)} " +
+                        "draw=${ms(FrameMetrics.DRAW_DURATION)} " +
+                        "sync=${ms(FrameMetrics.SYNC_DURATION)} " +
+                        "cmd=${ms(FrameMetrics.COMMAND_ISSUE_DURATION)} " +
+                        "swap=${ms(FrameMetrics.SWAP_BUFFERS_DURATION)}",
+                )
+            }
+        }
+        window.addOnFrameMetricsAvailableListener(listener, Handler(Looper.getMainLooper()))
+        onDispose { window.removeOnFrameMetricsAvailableListener(listener) }
+    }
+
     // Paged reader state (chimahon pager viewer): the native viewer reports the current 1-based
     // page via onPageChanged, and a handle on the viewer lets the page slider jump to a page. The
     // viewer itself owns all paging/zoom/tap behavior (see ChimahonPagerReader).
@@ -475,10 +513,18 @@ fun ReaderScreen(
         }
     }
 
-    // Save reading progress on page / active-chapter change
-    LaunchedEffect(currentPage, activeChapter.id) {
-        if (currentPage > 0) {
-            viewModel.saveProgress(manga.id, activeChapter.id, activeChapter.name, currentPage)
+    // Save reading progress on page / active-chapter change. The page is read inside a
+    // `snapshotFlow` instead of being a LaunchedEffect KEY: a key is evaluated in the composition's
+    // own scope, so keying on `currentPage` made every page change invalidate the WHOLE ReaderScreen
+    // composable — re-running the reader's AndroidView update, every argument expression and the
+    // entire non-skippable reader subtree (List/Map params can't skip) once per page. That is the
+    // per-page long frame the dx10 log recorded as a 260-430ms `ui stall`. A snapshotFlow reads the
+    // state from a coroutine instead, so no composition scope subscribes to it.
+    LaunchedEffect(activeChapter.id) {
+        snapshotFlow { currentPage }.collect { page ->
+            if (page > 0) {
+                viewModel.saveProgress(manga.id, activeChapter.id, activeChapter.name, page)
+            }
         }
     }
 
@@ -853,9 +899,17 @@ fun ReaderScreen(
             if (now - lastCacheLog > 2000L) {
                 lastCacheLog = now
                 val mc = imageLoader.memoryCache
+                // Heap alongside the cache size: a cache pinned at its max with the heap near its
+                // ceiling is the signature of GC pressure (large-object churn from every evicted
+                // page bitmap), which would show up as main-thread stalls that no amount of decode
+                // tuning removes.
+                val rt = Runtime.getRuntime()
+                val heapUsed = (rt.totalMemory() - rt.freeMemory()) / 1048576
+                val heapMax = rt.maxMemory() / 1048576
                 ReaderDiagnostics.log(
                     "memcache max=${(mc?.maxSize ?: 0).toLong() / 1048576}MB " +
-                        "size=${(mc?.size ?: 0).toLong() / 1048576}MB",
+                        "size=${(mc?.size ?: 0).toLong() / 1048576}MB " +
+                        "heap=${heapUsed}/${heapMax}MB",
                 )
             }
             // Tick fast enough to refill the window the moment the gesture settles (the warm is
@@ -1225,8 +1279,12 @@ fun ReaderScreen(
             onPrevChapter = { prevChapter?.let { onChapterChange(it.id) } },
             nextEnabled = nextChapter != null,
             onNextChapter = { nextChapter?.let { onChapterChange(it.id) } },
-            currentPage = currentPage,
-            totalPages = pageTotal,
+            // Providers, not values: reading the page state at THIS call site is a read in
+            // ReaderScreen's own recompose scope, which would make every page change recompose the
+            // whole reader screen (see the saveProgress note above). The page indicator reads them
+            // inside its own scope, so a page change now recomposes only the indicator.
+            currentPage = { currentPage },
+            totalPages = { pageTotal },
             onSeekPage = { targetPage ->
                 coroutineScope.launch {
                     if (isWebtoon) {
@@ -1455,4 +1513,16 @@ private fun BoxScope.ReaderDiagnosticsOverlay() {
             }
         }
     }
+}
+
+
+/** Unwraps the ContextWrapper chain to the hosting Activity. FrameMetrics is attached to a Window,
+ *  and the Compose context is a wrapper (not the Activity itself). */
+private fun android.content.Context.findActivity(): Activity? {
+    var ctx: android.content.Context? = this
+    while (ctx is ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
 }

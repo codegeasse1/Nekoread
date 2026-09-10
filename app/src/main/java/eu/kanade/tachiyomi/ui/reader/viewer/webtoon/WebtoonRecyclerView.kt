@@ -205,6 +205,7 @@ class WebtoonRecyclerView @JvmOverloads constructor(
 
     /** Sets the whole-strip zoom to [scale] (clamped), used by pinch zoom and gaps smart-scaling. */
     fun scaleTo(scale: Float) {
+        val previousHeight = layoutParams?.height
         currentScale = scale
         currentScale = currentScale.coerceIn(
             minRate,
@@ -234,7 +235,13 @@ class WebtoonRecyclerView @JvmOverloads constructor(
             y = 0f
         }
 
-        requestLayout()
+        // Only a real size change requires a layout pass. This is called on every config re-apply
+        // (WebtoonViewer.applyConfig -> applyWebtoonScaleType), i.e. on every Compose recomposition
+        // of the reader, and the unconditional requestLayout() that used to be here forced a full
+        // RecyclerView measure/layout + re-draw each time — one of the per-page long frames the dx10
+        // reader log recorded as a 260-430ms `ui stall`. scaleX/scaleY and x/y invalidate by
+        // themselves, so a pure scale/pan change still redraws without a layout pass.
+        if (layoutParams?.height != previousHeight) requestLayout()
     }
 
     fun onScaleBegin() {

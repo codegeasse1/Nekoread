@@ -136,8 +136,11 @@ fun YomiReaderChrome(
     onPrevChapter: () -> Unit,
     nextEnabled: Boolean,
     onNextChapter: () -> Unit,
-    currentPage: Int,
-    totalPages: Int,
+    // Providers rather than values: the page indicator is the only thing that changes on every page
+    // turn, and reading the state here (in the caller's recompose scope) would recompose the whole
+    // reader screen once per page. The pill reads these inside its own scope instead.
+    currentPage: () -> Int,
+    totalPages: () -> Int,
     onSeekPage: (Int) -> Unit,
     readerMode: ReaderMode,
     onSelectReaderMode: (ReaderMode) -> Unit,
@@ -616,11 +619,15 @@ private fun ChapterNavigatorPill(
     onPrevChapter: () -> Unit,
     nextEnabled: Boolean,
     onNextChapter: () -> Unit,
-    currentPage: Int,
-    totalPages: Int,
+    currentPage: () -> Int,
+    totalPages: () -> Int,
     onSeekPage: (Int) -> Unit,
     showPageNumber: Boolean,
 ) {
+    // Read the page state ONCE here, inside this composable's own scope: a page change then
+    // invalidates only this pill (the enclosing chrome and the whole reader screen stay put).
+    val curPage = currentPage()
+    val pageCount = totalPages().coerceAtLeast(1)
     val buttonColors = IconButtonDefaults.filledIconButtonColors(
         containerColor = ChromeBarColor,
         disabledContainerColor = ChromeBarColor,
@@ -653,26 +660,26 @@ private fun ChapterNavigatorPill(
             if (showPageNumber) {
                 Box(contentAlignment = Alignment.CenterEnd) {
                     Text(
-                        text = "$currentPage",
+                        text = "$curPage",
                         style = MaterialTheme.typography.bodyMedium.copy(color = OnDark),
                     )
                     // Occupies the space of the total count so the slider doesn't shift as the
                     // current page length changes.
                     Text(
-                        text = "$totalPages",
+                        text = "$pageCount",
                         color = Color.Transparent,
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
             }
             Slider(
-                value = currentPage.toFloat().coerceIn(1f, totalPages.coerceAtLeast(1).toFloat()),
+                value = curPage.toFloat().coerceIn(1f, pageCount.toFloat()),
                 onValueChange = { v -> onSeekPage(v.toInt() - 1) },
-                valueRange = 1f..totalPages.coerceAtLeast(1).toFloat(),
+                valueRange = 1f..pageCount.toFloat(),
                 colors = sliderAccentColors(),
                 // One tick dot per page (yomi-style), so tapping/dragging shows exactly how far
                 // the chapter's pages stretch and how much a jump skips.
-                steps = (totalPages - 2).coerceAtLeast(0),
+                steps = (pageCount - 2).coerceAtLeast(0),
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 6.dp)
@@ -680,7 +687,7 @@ private fun ChapterNavigatorPill(
             )
             if (showPageNumber) {
                 Text(
-                    text = "$totalPages",
+                    text = "$pageCount",
                     style = MaterialTheme.typography.bodyMedium.copy(color = OnDark),
                 )
             }
