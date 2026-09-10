@@ -5,6 +5,8 @@ import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
+import android.util.Printer
 import android.view.FrameMetrics
 import android.view.Window
 import android.view.WindowManager
@@ -63,6 +65,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -183,6 +186,17 @@ fun ReaderScreen(
     }
 
     var showHud by remember { mutableStateOf(true) }
+
+    // Recomposition probe: [SideEffect] runs after every successful recomposition of this screen.
+    // If these lines appear at the same cadence as the long frames (and report ~200ms+), the
+    // blocking work is this composable's own recomposition; if they never appear, the block is
+    // outside Compose and the `msg` lines will name it instead. (The elapsed difference between
+    // the top of the body and the side-effect is the recomposition's own duration.)
+    val recomposeT0 = SystemClock.elapsedRealtime()
+    SideEffect {
+        val dt = SystemClock.elapsedRealtime() - recomposeT0
+        if (dt >= 40) ReaderDiagnostics.log("recompose ReaderScreen ${dt}ms")
+    }
 
     val globalReaderMode: ReaderMode by viewModel.readerMode.collectAsStateWithLifecycle()
     val seriesOverrideEnabled by viewModel.seriesOverrideEnabled.collectAsStateWithLifecycle()
@@ -437,6 +451,7 @@ fun ReaderScreen(
                 fun ms(metric: Int) = metrics.getMetric(metric) / 1_000_000
                 ReaderDiagnostics.log(
                     "frame total=${total / 1_000_000}ms " +
+                        "delay=${ms(FrameMetrics.UNKNOWN_DELAY_DURATION)} " +
                         "input=${ms(FrameMetrics.INPUT_HANDLING_DURATION)} " +
                         "anim=${ms(FrameMetrics.ANIMATION_DURATION)} " +
                         "layout=${ms(FrameMetrics.LAYOUT_MEASURE_DURATION)} " +
@@ -449,6 +464,29 @@ fun ReaderScreen(
         }
         window.addOnFrameMetricsAvailableListener(listener, Handler(Looper.getMainLooper()))
         onDispose { window.removeOnFrameMetricsAvailableListener(listener) }
+    }
+
+    // Main-thread message probe. The frame probe says WHICH phase ate a long frame, but not which
+    // callback did the work. Looper message logging prints a line as the main thread starts and
+    // finishes every dispatched message; timing those pairs names the exact handler + callback
+    // (a Choreographer frame callback, a RecyclerView Runnable, a coroutine continuation…) that
+    // blocks the UI thread for hundreds of milliseconds, so the next log points straight at the
+    // culprit instead of leaving us to guess. Diagnostic only: only messages >= 60ms are reported.
+    DisposableEffect(Unit) {
+        val mainLooper = Looper.getMainLooper()
+        var msgStart = 0L
+        var msgDesc = ""
+        val printer = Printer { s ->
+            if (s.startsWith(">>>>>")) {
+                msgStart = SystemClock.elapsedRealtime()
+                msgDesc = s.substringAfter("Dispatching to ", s).trim().take(150)
+            } else if (s.startsWith("<<<<<")) {
+                val dt = SystemClock.elapsedRealtime() - msgStart
+                if (dt >= 60) ReaderDiagnostics.log("msg ${dt}ms $msgDesc")
+            }
+        }
+        mainLooper.setMessageLogging(printer)
+        onDispose { mainLooper.setMessageLogging(null) }
     }
 
     // Paged reader state (chimahon pager viewer): the native viewer reports the current 1-based
@@ -683,6 +721,7 @@ fun ReaderScreen(
         var prevTick = 0L
         while (isActive) {
             val now = System.currentTimeMillis()
+            val iterT0 = SystemClock.elapsedRealtime()
             if (prevTick != 0L) {
                 val gap = now - prevTick
                 val expected = if (userScrolling) 90L else 50L
@@ -913,6 +952,8 @@ fun ReaderScreen(
                         "heap=${heapUsed}/${heapMax}MB",
                 )
             }
+            val iterDt = SystemClock.elapsedRealtime() - iterT0
+            if (iterDt >= 40) ReaderDiagnostics.log("prewarm tick ${iterDt}ms")
             // Tick fast enough to refill the window the moment the gesture settles (the warm is
             // skipped entirely while scrolling), and keep ticking during a gesture (slower) purely so
             // the loop notices the moment it ends.

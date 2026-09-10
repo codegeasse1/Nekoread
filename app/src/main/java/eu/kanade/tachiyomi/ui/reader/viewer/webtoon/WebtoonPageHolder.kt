@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.reader.viewer.webtoon
 
+import android.os.SystemClock
 import android.view.Gravity
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -64,6 +65,7 @@ class WebtoonPageHolder(
 
     /** Binds the given [page] to this holder and starts loading its cache file. */
     fun bind(item: WebtoonItem.Page) {
+        val syncT0 = SystemClock.elapsedRealtime()
         this.item = item
         ReaderDiagnostics.init(frame.context)
         ReaderDiagnostics.currentLabel = item.desc.imageUrl
@@ -74,6 +76,7 @@ class WebtoonPageHolder(
         refreshLayoutParams()
         refreshPlaceholderHeight()
         loadJob = scope.launch {
+            val bindT0 = SystemClock.elapsedRealtime()
             try {
                 // Pre-size the holder to the page's REAL height from cached metadata (the prewarm
                 // downloads pages well ahead, and meta() is cached after the first read, so nearly
@@ -119,12 +122,16 @@ class WebtoonPageHolder(
                     ),
                 )
                 frame.colorFilter = viewer.colorFilter
+                val bindDt = SystemClock.elapsedRealtime() - bindT0
+                if (bindDt >= 40) ReaderDiagnostics.log("bind work ${bindDt}ms")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
                 setError()
             }
         }
+        val syncDt = SystemClock.elapsedRealtime() - syncT0
+        if (syncDt >= 20) ReaderDiagnostics.log("bind sync ${syncDt}ms")
     }
 
     private fun refreshLayoutParams() {

@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.ui.reader.viewer.webtoon
 
 import android.graphics.Color as AndroidColor
 import android.graphics.Typeface
+import android.os.SystemClock
 import android.view.Gravity
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -91,11 +92,14 @@ class WebtoonAdapter(val viewer: WebtoonViewer) : RecyclerView.Adapter<RecyclerV
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        val t0 = SystemClock.elapsedRealtime()
         when (holder) {
             is WebtoonPageHolder -> holder.bind(items[position] as WebtoonItem.Page)
             is WebtoonDividerHolder -> holder.bind(items[position] as WebtoonItem.Divider)
             is WebtoonTrailerHolder -> holder.bind(trailer)
         }
+        val dt = SystemClock.elapsedRealtime() - t0
+        if (dt >= 20) eu.kanade.tachiyomi.ui.reader.viewer.ReaderDiagnostics.log("onBindViewHolder ${dt}ms")
     }
 
     override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
