@@ -116,7 +116,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
 import eu.kanade.tachiyomi.ui.reader.viewer.budgetedShortWidth
-import eu.kanade.tachiyomi.ui.reader.viewer.readerPageDecodeDispatcher
+import eu.kanade.tachiyomi.ui.reader.viewer.readerWarmDecodeDispatcher
+import eu.kanade.tachiyomi.ui.reader.viewer.WEBTOON_MAX_DECODE_PIXELS
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.PagerConfig
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.PagerViewer
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonConfig
@@ -134,16 +135,16 @@ import kotlinx.coroutines.launch
 // descramble (e.g. comix) — a sequential one-at-a-time loop can't keep up on slow sources.
 private const val WEBTOON_BATCH = 6
 
-// Rolling memory-refresh horizon: the prewarm keeps this many pages just ahead (and a couple
+// Rolling memory-refresh horizon: the warm keeps up to [MAX] pages just ahead (and a couple
 // behind) of the current page warm in Coil's memory cache, re-warming each one as the user
-// advances so the pages about to scroll in are always cache hits. Sized to fit the Coil cache:
-// short pages are now decoded at their native width (~760px, ≈4.3MB each, not upscaled to
-// 1080), and the cache holds ~10-18 such pages — so a modest 4-ahead window PLUS the pages the
-// RecyclerView binds (2-4) fits comfortably and nothing churns. The dx5 log showed an 8-ahead
-// window on this low-end device overflowed the cache, so the nearest pages got evicted and the
-// refresh re-decoded the same page from disk 4-6 times in a row — the redundant decodes (up to
-// ~550ms each) were the remaining scroll jank even though every bind was a 1ms cache hit.
-private const val WEBTOON_MEM_HORIZON_AHEAD = 4
+// advances so the pages about to scroll in are always cache hits. The depth is NOT fixed: it's
+// derived at runtime from the memory cache's capacity (roughly half the cache, one decoded page
+// each) and clamped to [MIN]..[MAX], so a big-heap device gets a long runway for flings while a
+// small-heap one can't overflow the cache and thrash (the dx5 failure was a FIXED 8-ahead on much
+// bigger ~7.9MB bitmaps: the window overflowed, the nearest pages evicted, and the refresh
+// re-decoded the same page from disk repeatedly).
+private const val WEBTOON_MEM_HORIZON_AHEAD_MIN = 4
+private const val WEBTOON_MEM_HORIZON_AHEAD_MAX = 8
 private const val WEBTOON_MEM_HORIZON_BEHIND = 2
 
 // The rolling memory refresh NEVER floods the decoder: at most this many warm executes may be in
@@ -624,6 +625,7 @@ fun ReaderScreen(
         // refresh from flooding the decoder — see WEBTOON_MEM_WARM_CONCURRENCY). Main-dispatcher
         // only: the loop and the warm children all run here, so no synchronization needed.
         var memWarmInFlight = 0
+        var lastCacheLog = 0L
         while (isActive) {
             val now = System.currentTimeMillis()
             val segs = streamSegments
@@ -735,8 +737,23 @@ fun ReaderScreen(
             // window stays filled and scroll-ins are cache hits; the loop just ticks slower while a
             // gesture is in progress to leave the scroll most of the CPU.
             if (isWebtoon) {
+                // Decode the pages ahead of the reader into the memory cache, DEEP ENOUGH to cover a
+                // fling. The window used to be a hard 4; the dx8 log showed a fling still outran it
+                // (pages 16-19 entered together and cold-decoded ~380ms each), because 4 pages of
+                // runway is under a second of scrolling. Derive the depth from what the memory cache
+                // can actually hold — roughly half the cache, one ~4MB decoded page each — so the
+                // runway fills as far as the device allows without overflowing the cache and
+                // thrashing (the dx5 failure at a fixed 8-ahead on much bigger bitmaps).
+                val cacheBytes = imageLoader.memoryCache?.maxSize ?: 0L
+                val estPageBytes = WEBTOON_MAX_DECODE_PIXELS * 4L
+                val aheadPages = if (cacheBytes > 0L) {
+                    (cacheBytes / (estPageBytes * 2L)).toInt()
+                        .coerceIn(WEBTOON_MEM_HORIZON_AHEAD_MIN, WEBTOON_MEM_HORIZON_AHEAD_MAX)
+                } else {
+                    WEBTOON_MEM_HORIZON_AHEAD_MIN
+                }
                 val refreshOrder = buildList {
-                    for (d in WEBTOON_MEM_HORIZON_AHEAD downTo 1) add(globCur + d)
+                    for (d in aheadPages downTo 1) add(globCur + d)
                     for (d in 1..WEBTOON_MEM_HORIZON_BEHIND) add(globCur - d)
                 }
                 val warmSlots = (WEBTOON_MEM_WARM_CONCURRENCY - memWarmInFlight).coerceAtLeast(0)
@@ -772,22 +789,23 @@ fun ReaderScreen(
                                 // from the SAME helper the bind uses (native-width cap + the short-page
                                 // pixel budget), so the two requests can never drift apart — if they
                                 // did, every scroll-in would miss the cache and cold-decode.
+                                val warmW = budgetedShortWidth(mm.width, mm.height, displayDecodeWidth)
                                 val res = imageLoader.execute(
                                     ImageRequest.Builder(context)
                                         .data(f)
                                         .size(
                                             Size(
-                                                budgetedShortWidth(mm.width, mm.height, displayDecodeWidth),
+                                                warmW,
                                                 Dimension.Undefined,
                                             ),
                                         )
                                         .memoryCachePolicy(CachePolicy.ENABLED)
                                         .diskCachePolicy(CachePolicy.DISABLED)
                                         .allowHardware(!cropBorders)
-                                        // Same bounded page-decode dispatcher as the bind (not part
-                                        // of the cache key), so a warm and a bind can't both saturate
-                                        // the decoder and slow each other to hundreds of ms.
-                                        .decoderDispatcher(readerPageDecodeDispatcher)
+                                        // The warm's OWN one-at-a-time dispatcher (not the bind's, and
+                                        // not part of the cache key), so a page scrolling in is never
+                                        // queued behind an in-flight warm decode.
+                                        .decoderDispatcher(readerWarmDecodeDispatcher)
                                         .apply {
                                             if (cropBorders) cropBorders(true)
                                         }
@@ -801,7 +819,7 @@ fun ReaderScreen(
                                 if (res is SuccessResult && res.dataSource != DataSource.MEMORY_CACHE) {
                                     ReaderDiagnostics.log(
                                         "memwarm MISS ${System.currentTimeMillis() - t0}ms " +
-                                            "page=$g src=${res.dataSource.name}",
+                                            "page=$g size=$warmW src=${res.dataSource.name}",
                                     )
                                 }
                             }.onFailure { if (it is CancellationException) throw it }
@@ -811,10 +829,20 @@ fun ReaderScreen(
                     }
                 }
             }
-            // Tick faster while reading (fills the window between page turns), slower while a
-            // gesture/fling is in progress so the scroll keeps the CPU and the warm doesn't add
-            // decode pressure to the exact frames the user is watching.
-            delay(if (userScrolling) 120 else 60)
+            // Log the memory-cache pressure occasionally: `max` is what Coil allows, `size` is what
+            // it currently holds. If `size` sits pinned at `max` the cache is full and the warm's
+            // misses are evictions — the signal to shrink the window or the decoded page size.
+            if (now - lastCacheLog > 2000L) {
+                lastCacheLog = now
+                val mc = imageLoader.memoryCache
+                ReaderDiagnostics.log(
+                    "memcache max=${(mc?.maxSize ?: 0L) / 1048576}MB size=${(mc?.size ?: 0L) / 1048576}MB",
+                )
+            }
+            // Tick faster than before so the decode-ahead window refills quickly the moment the
+            // reader pauses, and keep ticking during a gesture (slower) so a fling still finds the
+            // pages ahead already warm.
+            delay(if (userScrolling) 90 else 50)
         }
     }
 

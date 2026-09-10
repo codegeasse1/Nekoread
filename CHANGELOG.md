@@ -4,6 +4,12 @@ All notable changes to Nekoread.
 
 ## [2.2.7] - 2026-09-09
 
+### Reader performance (comix lag — take six)
+- **Page binds no longer queue behind background warm-ups.** The warm and the on-screen bind shared one small decode dispatcher, so during a fling a page scrolling in had to wait behind whatever warm decodes were in flight and its own decode was reported as 300-680ms, even though a lone decode of the same page costs ~60ms. Warm-ups now run on their own one-at-a-time dispatcher, so a bind is never blocked by a warm (and total decode concurrency stays bounded: 2 binds + 1 warm).
+- **The decode-ahead window now grows to cover a fling.** It was a fixed 4 pages, which the log showed a fast fling still outran (pages 16-19 entered together and cold-decoded ~380ms each). The depth is now derived from the memory-cache capacity — roughly half the cache, one decoded page each, clamped to 4-8 — so a big-heap device gets a long runway while a small-heap one can't overflow the cache and thrash. The warm tick is also faster (50ms idle / 90ms while scrolling) so the window refills the moment you pause.
+- **Memory cache given a floor** so a small-heap device still holds the whole decode-ahead window instead of evicting the nearest pages (a 128MB heap at the old 40% held only ~13 pages).
+- The diagnostics log now prints the memory-cache pressure (`memcache max=…MB size=…MB`) every couple of seconds, and each warm miss records its decoded size — so the next log pinpoints whether pages are still being evicted.
+
 ### Reader performance (comix lag — take five)
 - **The decoded page is now sized to fit the page cache.** A 1080-wide page is ~2.0M pixels (~7.9MB as a hardware bitmap), so on this device the cache held only ~4-6 of them — fewer than the pages kept warm ahead of you plus the ones on screen. The warm window therefore evicted itself and every page you scrolled onto had to be decoded cold from disk: the log showed 300-680ms per page (and ~420ms each when three landed at once) instead of the ~1ms cache hit it should be. Short pages are now decoded at a bounded ~1.0M-pixel budget (~4MB, sampled slightly — comparable to the ~800px sources that always scrolled smoothly), so the whole warm window fits the cache and scroll-ins go back to being instant hits. Pages already at or below the budget are untouched, and the on-screen display size is unchanged.
 - **Page decodes no longer stampede each other.** At most two page decodes run at once, so a fling pulling several pages in can't have a burst of 4MB decodes all slow to ~400ms from contention.

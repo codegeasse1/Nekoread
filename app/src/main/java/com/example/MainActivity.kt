@@ -135,8 +135,15 @@ class MainActivity : ComponentActivity() {
                 // re-decode them from disk and caused scroll jank). A memory miss re-decodes from
                 // disk — never re-downloads.
                 .memoryCache {
+                    // Size the cache by hand so a small-heap device still holds the reader's
+                    // decode-ahead window: on a 128MB heap 40% is only ~13 decoded pages, which the
+                    // window plus the on-screen pages can outrun, so pages evict and the next bind
+                    // cold-decodes. Floor it at 48MB, and never exceed 45% of the heap.
+                    val heap = Runtime.getRuntime().maxMemory()
+                    val bytes = maxOf((heap * 0.40).toLong(), 48L * 1024 * 1024)
+                        .coerceAtMost((heap * 0.45).toLong())
                     MemoryCache.Builder(this)
-                        .maxSizePercent(0.40)
+                        .maxSizeBytes(bytes)
                         .build()
                 }
                 // Disk cache so a loaded cover/page stays on-device: scrolling back to a screen or

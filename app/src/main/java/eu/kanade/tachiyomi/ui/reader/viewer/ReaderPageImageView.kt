@@ -608,6 +608,17 @@ internal const val WEBTOON_MAX_DECODE_PIXELS = 1_000_000L
  */
 internal val readerPageDecodeDispatcher: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(2)
 
+/**
+ * Dispatcher for the reader's BACKGROUND memory-warms, deliberately separate from
+ * [readerPageDecodeDispatcher] (which serves the on-screen page binds). The two used to share one
+ * bounded dispatcher, so on a fling a page binding had to queue behind whatever warms were in
+ * flight and its own decode was reported as 300-680ms even though a lone decode of the same page
+ * costs ~60ms (the dx8 log showed exactly that). One warm at a time on its own dispatcher means a
+ * bind is never blocked by a warm, while total page-decode concurrency stays bounded (2 binds +
+ * 1 warm) so a burst of multi-megabyte decodes can't collapse throughput on this low-end device.
+ */
+internal val readerWarmDecodeDispatcher: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(1)
+
 /** The decode width for a page: [requestedW], never upscaled past the source's [nativeW]. */
 internal fun nativeCapWidth(nativeW: Int, requestedW: Int): Int =
     if (nativeW in 1 until requestedW) nativeW else requestedW
