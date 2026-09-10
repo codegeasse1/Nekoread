@@ -165,7 +165,10 @@ open class ReaderPageImageView @JvmOverloads constructor(
             android.graphics.BitmapFactory.decodeFile(file.absolutePath, o)
             "${o.outWidth}x${o.outHeight}"
         }.getOrDefault("?")
-        val decodeW = if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels
+        val decodeW = cappedDecodeWidth(
+            file,
+            if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels,
+        )
         if (isAnimated) {
             ReaderDiagnostics.log("path=ANIMATED dims=$dims")
             prepareAnimatedImageView()
@@ -352,11 +355,31 @@ open class ReaderPageImageView @JvmOverloads constructor(
         addView(pageView, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
     }
 
+    /** The width to decode [file] at, capped at its native width. The comix sources are ~800px wide;
+     *  asking Coil for a wider target upscales them to screen width (~2.2x the pixels), which roughly
+     *  doubles the decode time and memory per page for zero added detail — the ImageView scales the
+     *  bitmap to fit the screen anyway. The cap uses the same min(requestedW, nativeW) formula as the
+     *  prewarm (ReaderScreen), so the memory-cache key still matches the warm and scroll-in hits stay.
+     */
+    private fun cappedDecodeWidth(file: File, requestedW: Int): Int {
+        val nativeW = try {
+            val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            android.graphics.BitmapFactory.decodeFile(file.absolutePath, o)
+            o.outWidth
+        } catch (e: Throwable) {
+            0
+        }
+        return if (nativeW in 1 until requestedW) nativeW else requestedW
+    }
+
     private fun setShortImage(
         file: File,
         config: Config,
     ) = (pageView as? ImageView)?.apply {
-        val decodeW = if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels
+        val decodeW = cappedDecodeWidth(
+            file,
+            if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels,
+        )
         val t0 = SystemClock.elapsedRealtime()
         val builder = ImageRequest.Builder(context)
             .data(file)
@@ -408,7 +431,10 @@ open class ReaderPageImageView @JvmOverloads constructor(
         file: File,
         config: Config,
     ) = (pageView as? ImageView)?.apply {
-        val decodeW = if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels
+        val decodeW = cappedDecodeWidth(
+            file,
+            if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels,
+        )
         val t0 = SystemClock.elapsedRealtime()
         val request = ImageRequest.Builder(context)
             .data(file)
