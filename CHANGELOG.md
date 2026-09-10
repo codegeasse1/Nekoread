@@ -4,6 +4,10 @@ All notable changes to Nekoread.
 
 ## [2.2.7] - 2026-09-09
 
+### Reader performance (comix lag — take four)
+- **The memory warm-up no longer decodes while you scroll**: warming ran continuously, and even though each warm was a small 20-80ms background decode (binds were already 1ms cache hits), on a low-end device that background decode load during a drag/fling is what still hitch-scrolled. The warm now runs only in the pauses between scrolls (when you're reading a page) — the read-pause is long enough to fill the pages-ahead window, and the scroll gesture itself has the CPU to itself.
+- **Far flings no longer outrun the pre-download window**: the window was 20 pages ahead, so a fast fling past it (the log showed a jump from page 14 to 40 waiting ~525ms at bind for the download) hit a blank page. The window is now 40 pages ahead, so the pipeline stays in front of a fling.
+
 ### Reader performance (comix lag — take three)
 - **Long manhwa strips now decode ONCE, whole, at the display width** and are shown as a single stable bitmap — no more per-chunk region decoding / recycling while you scroll, which was the remaining jank even after the chunked-view rewrite. The render thread tiles the single software bitmap and caches its textures, so a fling through a long strip is now just one cached image being drawn each frame.
 - **Fixed the black bars breaking long strips**: the old chunked view drew each chunk into fixed 2048px slots while the chunk's real displayed height was smaller (power-of-two sampling almost always overshot the view width), leaving a solid black gap between every chunk — the "images are breaking" bars. Tall strips no longer use the chunked view at all except for pathological mega-strips, whose chunk slots are now equal and seamless (each chunk tiles its exact display slot, so there are never gaps).

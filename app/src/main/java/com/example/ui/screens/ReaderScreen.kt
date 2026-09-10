@@ -400,6 +400,16 @@ fun ReaderScreen(
     var viewerNearEnd by remember(chapter.id) { mutableStateOf(false) }
     val viewerRef = remember(chapter.id) { mutableStateOf<WebtoonViewer?>(null) }
 
+    // True while the yomi viewer is actively scrolling (finger down, flinging, or settling).
+    // The rolling memory-warm is gated on this: warming decodes during scroll motion adds
+    // background CPU load that hitches the frames on low-end devices even though the binds
+    // themselves are 1ms cache hits (the dx6 log showed a clean 20-80ms warm right before each
+    // bind, yet the user still felt lag). Warming only during the read-pauses between scrolls
+    // keeps the pages just ahead warm (a pause is long enough to fill the 4-ahead window) while
+    // the scroll gesture itself runs with zero competing decodes. The download pipeline is NOT
+    // gated — pages must keep hitting the disk cache no matter how fast the user scrolls.
+    var userScrolling by remember(chapter.id) { mutableStateOf(false) }
+
     // Paged reader state (chimahon pager viewer): the native viewer reports the current 1-based
     // page via onPageChanged, and a handle on the viewer lets the page slider jump to a page. The
     // viewer itself owns all paging/zoom/tap behavior (see ChimahonPagerReader).
@@ -623,15 +633,18 @@ fun ReaderScreen(
             val segIdx = if (isWebtoon) streamPosition.first.coerceIn(0, segs.lastIndex) else 0
             val segSize = segs[segIdx].size
             val globCur = (starts[segIdx] + (currentPage - 1).coerceIn(0, segSize - 1)).coerceIn(0, total - 1)
-            // Preload window: 8 pages behind and 20 ahead of the current page are made
+            // Preload window: 8 pages behind and 40 ahead of the current page are made
             // display-ready (Coil memory-cache warm for short pages, cache-file download for tall
             // strips) so that scrolling — and jumping straight to any page — shows the neighbours
             // instantly instead of decoding them on first scroll-in. The webtoon window leans
             // further AHEAD because that's the direction the user scrolls; the extra lead time is
             // what lets slow sources (comix's big descrambled images) finish downloading before a
             // page enters the viewport, so its holder never binds against a placeholder height.
+            // The 20-ahead window in dx6 let a fast fling outrun it (the log showed page 40-41
+            // still `cachedBeforeBind=false` after a jump from page 14 — a ~525ms bind-time
+            // download wait); 40 ahead gives the pipeline room to stay in front of a fling.
             val warmFrom = (globCur - 8).coerceAtLeast(0)
-            val warmTo = (if (isWebtoon) globCur + 20 else globCur + 8).coerceAtMost(total - 1)
+            val warmTo = (if (isWebtoon) globCur + 40 else globCur + 8).coerceAtMost(total - 1)
 
             // Collect the nearest not-yet-downloaded pages, walking outward from the current
             // page (current, +1, -1, +2, -2, ...), then launch a small CONCURRENT batch of
@@ -712,7 +725,10 @@ fun ReaderScreen(
             // fresh by the binds anyway) end up the most-recently-used; behind pages are last and
             // only get slots when the ahead set is already warm (e.g. paused), which also serves
             // backward scrolling.
-            if (isWebtoon) {
+            // Gated on the viewer being idle: decodes never run while the user is actively
+            // scrolling/flinging, so scroll frames have the CPU to themselves. Warms resume the
+            // moment the user pauses to read (the read-pause is long enough to fill the window).
+            if (isWebtoon && !userScrolling) {
                 val refreshOrder = buildList {
                     for (d in WEBTOON_MEM_HORIZON_AHEAD downTo 1) add(globCur + d)
                     for (d in 1..WEBTOON_MEM_HORIZON_BEHIND) add(globCur - d)
@@ -998,6 +1014,7 @@ fun ReaderScreen(
                         },
                         onMenuTap = { showHud = !showHud },
                         onUserScroll = { viewModel.setAutoScroll(false) },
+                        onScrollingChanged = { userScrolling = it },
                         onTrailerRetry = {
                             webtoonError = null
                             streamNextChapter?.let { loadNextIntoStream(it) }

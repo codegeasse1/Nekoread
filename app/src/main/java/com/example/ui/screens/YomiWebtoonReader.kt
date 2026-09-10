@@ -59,6 +59,7 @@ fun YomiWebtoonReader(
     onNearEndChanged: (Boolean) -> Unit,
     onMenuTap: () -> Unit,
     onUserScroll: () -> Unit,
+    onScrollingChanged: (Boolean) -> Unit,
     onTrailerRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -112,6 +113,7 @@ fun YomiWebtoonReader(
             v.onNearEndChanged = { near -> onNearEndChanged(near) }
             v.onMenuTap = { onMenuTap() }
             v.onUserScroll = { onUserScroll() }
+            v.onScrollingChanged = { onScrollingChanged(it) }
             v.onTrailerRetry = { onTrailerRetry() }
             v.setTheme(bgColor.toArgb(), textColor.toArgb())
             v.setItems(items, segSizes, trailer, initialPageIndex)

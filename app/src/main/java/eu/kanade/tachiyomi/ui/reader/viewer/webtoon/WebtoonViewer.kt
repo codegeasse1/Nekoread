@@ -127,6 +127,9 @@ class WebtoonViewer(context: Context) {
     /** Called on any user touch (drag or tap) — used to stop auto-scroll. */
     var onUserScroll: (() -> Unit)? = null
 
+    /** Called when the recycler enters/leaves a scrolling state (drag, fling or settling). */
+    var onScrollingChanged: ((Boolean) -> Unit)? = null
+
     /** Called when a fast scroll should hide the reader menu (threshold from config). */
     var onHideMenu: (() -> Unit)? = null
 
@@ -171,7 +174,9 @@ class WebtoonViewer(context: Context) {
                 }
 
                 override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
-                    scrolling = newState != RecyclerView.SCROLL_STATE_IDLE
+                    val next = newState != RecyclerView.SCROLL_STATE_IDLE
+                    if (next != scrolling) onScrollingChanged?.invoke(next)
+                    scrolling = next
                     if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
                         onUserScroll?.invoke()
                     }
