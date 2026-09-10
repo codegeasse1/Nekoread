@@ -42,10 +42,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -403,13 +401,6 @@ private const val TAG_SEARCH_PATTERN = "tag_search?sourceId={sourceId}&tag={tag}
 private const val GLOBAL_TAG_SEARCH_ROUTE = "global_tag_search"
 private const val GLOBAL_TAG_SEARCH_PATTERN = "global_tag_search?tag={tag}"
 
-/** The tag whose search options are currently being chosen, and the source it came from. */
-private data class TagChoice(
-    val sourceId: String,
-    val sourceName: String,
-    val tag: String
-)
-
 @Composable
 fun MainAppScreen(viewModel: MainViewModel) {
     val navController = rememberNavController()
@@ -429,11 +420,6 @@ fun MainAppScreen(viewModel: MainViewModel) {
     val tagSearchRoutePatterns = setOf(TAG_SEARCH_PATTERN, GLOBAL_TAG_SEARCH_PATTERN)
     val showBottomBar =
         currentRoute in bottomNavScreens.map { it.route } || currentRoute in tagSearchRoutePatterns
-
-    // Genre chip chooser: tapping a tag offers "Search in <source>" or a search across every
-    // installed extension.
-    var tagChooser by remember { mutableStateOf<TagChoice?>(null) }
-    val extensionSources by viewModel.extensionSources.collectAsStateWithLifecycle()
 
     // The reader is a true fullscreen experience (like Tadami): page content draws behind the
     // system bars, with the reader's own chrome handling the safe-area insets.
@@ -614,16 +600,24 @@ fun MainAppScreen(viewModel: MainViewModel) {
                     onChapterClick = { chapterId ->
                         navController.navigate("reader/$mangaId/$chapterId")
                     },
-                    onTagClick = { tag ->
+                    onTagSearch = { tag ->
                         val srcId = mangaState?.sourceId?.takeIf { it.isNotBlank() }
                             ?: mangaState?.id?.substringBefore(":")
                             ?: ""
                         AppDiagnostics.log(
-                            "tag click tag=$tag src=$srcId from=${navController.currentDestination?.route}"
+                            "tag search (this extension) tag=$tag src=$srcId from=${navController.currentDestination?.route}"
                         )
-                        val sourceName = extensionSources.firstOrNull { it.id == srcId }?.name
-                            ?.takeIf { it.isNotBlank() } ?: "this extension"
-                        tagChooser = TagChoice(srcId, sourceName, tag)
+                        if (srcId.isNotBlank()) {
+                            navController.navigateToTagSearch(srcId, tag)
+                        } else {
+                            navController.navigateToGlobalTagSearch(tag)
+                        }
+                    },
+                    onGlobalTagSearch = { tag ->
+                        AppDiagnostics.log(
+                            "global tag search tag=$tag from=${navController.currentDestination?.route}"
+                        )
+                        navController.navigateToGlobalTagSearch(tag)
                     }
                 )
             }
@@ -680,47 +674,6 @@ fun MainAppScreen(viewModel: MainViewModel) {
             }
         }
     }
-    // Genre chip chooser: "Search in <source>" (this extension's tag listing) or "Global search"
-    // (the tag across every installed extension).
-    tagChooser?.let { choice ->
-        AlertDialog(
-            onDismissRequest = { tagChooser = null },
-            title = { Text(choice.tag) },
-            text = {
-                Text("Search this tag in the current extension, or across all installed extensions?")
-            },
-            confirmButton = {
-                if (choice.sourceId.isNotBlank()) {
-                    Button(
-                        onClick = {
-                            val c = choice
-                            tagChooser = null
-                            navController.navigateToTagSearch(c.sourceId, c.tag)
-                        }
-                    ) {
-                        Text("Search in ${choice.sourceName}")
-                    }
-                }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(
-                        onClick = {
-                            val c = choice
-                            tagChooser = null
-                            navController.navigateToGlobalTagSearch(c.tag)
-                        }
-                    ) {
-                        Text("Global search")
-                    }
-                    TextButton(onClick = { tagChooser = null }) {
-                        Text("Cancel")
-                    }
-                }
-            }
-        )
-    }
-
     // In-app "update available" dialog (shown from the notification tap, or the Settings banner).
     updateInfo?.let { info ->
         AlertDialog(

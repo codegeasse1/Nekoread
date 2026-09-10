@@ -4,6 +4,10 @@ All notable changes to Nekoread.
 
 ## [2.2.7] - 2026-09-09
 
+### Tag search chooser is now a small chip menu (take twenty-two)
+- **Tapping a genre chip opens a lightweight menu anchored to the chip, not a centred dialog.** take twenty-one's chooser was a Material3 `AlertDialog` in the middle of the screen - a title, an explanatory sentence, a filled "Search in &lt;source&gt;" button and "Global search"/"Cancel" text buttons, four pieces of chrome for a two-way choice. The chip now opens a plain `DropdownMenu` right under the tag with exactly two items, **Search** (this extension) and **Global search** (every installed extension), matching the standard manga-reader idiom.
+- Both items route to the same pushed screens as before (`tag_search` / `global_tag_search`), so back still returns to the manga detail screen and the floating bottom nav stays visible on the results. The old `TagChoice` state, the `extensionSources` collection it needed for the button label, and the dialog itself are gone; the "Search" item falls back to a global search if the manga's source id cannot be resolved.
+
 ### Tag search is a real screen you can come back from, with a search/global-search chooser (take twenty-one)
 - **Back from a tag search now returns to the manga you tapped the tag on.** The dx23 fix opened the tag results by *mutating the Browse tab's state*, which meant the tag search did not exist as its own back-stack entry - so back fell through to the extension/Sources list (and, from there, all the way out), never to the manga detail. Tag results now open on a dedicated `tag_search` nav route **pushed on top of the manga detail entry**, so the system back button and the on-screen back arrow both pop straight back to the manga. The same is true after opening another manga from the results and tapping one of its tags.
 - **Tapping a tag now asks where to search.** The chip opens a small chooser with two options:

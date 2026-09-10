@@ -40,6 +40,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -120,7 +122,8 @@ fun MangaDetailScreen(
     onRetry: () -> Unit,
     onBackClick: () -> Unit,
     onChapterClick: (String) -> Unit,
-    onTagClick: (String) -> Unit = {},
+    onTagSearch: (String) -> Unit = {},
+    onGlobalTagSearch: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (manga == null) {
@@ -162,6 +165,9 @@ fun MangaDetailScreen(
     // chapter first, and "Read" to open it, not the newest/last chapter at the bottom.
     var isSortAscending by remember { mutableStateOf(true) }
     var showCategoryDialog by remember { mutableStateOf(false) }
+    // Which genre chip's small search menu is open (null = none). A menu anchored to the chip
+    // itself, rather than a centered dialog, so picking "Search"/"Global search" is one tap.
+    var menuTag by remember { mutableStateOf<String?>(null) }
 
     val categories: List<CategoryEntity> by viewModel.categories.collectAsStateWithLifecycle()
 
@@ -502,28 +508,50 @@ fun MangaDetailScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(6.dp))
-                        // Tapping a tag opens this source's catalog filtered to that tag/genre.
+                        // Tapping a tag opens a small menu: "Search" this source's catalog for the
+                        // tag, or "Global search" across every installed extension.
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             genres.forEach { tag ->
-                                // Plain clickable Box instead of `Surface(onClick = ...)`: a
-                                // Surface brings its own surface modifier node, interaction
-                                // source and content-colour provider for a small static chip.
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .background(MaterialTheme.colorScheme.primaryContainer)
-                                        .border(1.dp, GlassCardBorder, RoundedCornerShape(16.dp))
-                                        .clickable { onTagClick(tag) }
-                                        .testTag("genre_tag_$tag")
-                                ) {
-                                    Text(
-                                        text = tag,
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
-                                        style = MaterialTheme.typography.labelMedium.copy(
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            fontWeight = FontWeight.Bold
+                                Box {
+                                    // Plain clickable Box instead of `Surface(onClick = ...)`: a
+                                    // Surface brings its own surface modifier node, interaction
+                                    // source and content-colour provider for a small static chip.
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(MaterialTheme.colorScheme.primaryContainer)
+                                            .border(1.dp, GlassCardBorder, RoundedCornerShape(16.dp))
+                                            .clickable { menuTag = tag }
+                                            .testTag("genre_tag_$tag")
+                                    ) {
+                                        Text(
+                                            text = tag,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                                            style = MaterialTheme.typography.labelMedium.copy(
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                fontWeight = FontWeight.Bold
+                                            )
                                         )
-                                    )
+                                    }
+                                    DropdownMenu(
+                                        expanded = menuTag == tag,
+                                        onDismissRequest = { menuTag = null }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Search") },
+                                            onClick = {
+                                                menuTag = null
+                                                onTagSearch(tag)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Global search") },
+                                            onClick = {
+                                                menuTag = null
+                                                onGlobalTagSearch(tag)
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
