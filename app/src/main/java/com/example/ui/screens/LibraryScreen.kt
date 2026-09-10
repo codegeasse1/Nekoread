@@ -21,8 +21,10 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -75,6 +77,7 @@ import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
 import com.example.data.local.CategoryEntity
 import com.example.data.local.MangaEntity
+import com.example.diagnostics.AppScrollProbe
 import com.example.ui.MainViewModel
 import com.example.ui.components.FloatingTopAppBar
 import com.example.ui.components.GlassSearchBar
@@ -363,8 +366,11 @@ fun LibraryScreen(
                 }
             } else {
                 if (isGridView) {
+                    val libraryGridState = rememberLazyGridState()
+                    AppScrollProbe("library", libraryGridState)
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = 130.dp),
+                        state = libraryGridState,
                         contentPadding = PaddingValues(12.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -410,7 +416,10 @@ fun LibraryScreen(
                         }
                     }
                 } else {
+                    val libraryListState = rememberLazyListState()
+                    AppScrollProbe("library", libraryListState)
                     LazyColumn(
+                        state = libraryListState,
                         contentPadding = PaddingValues(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxSize()

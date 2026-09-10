@@ -89,6 +89,7 @@ import com.example.data.local.ExtensionEntity
 import com.example.data.local.ExtensionRepoEntity
 import com.example.data.local.ExtensionSourceEntity
 import com.example.data.local.MangaEntity
+import com.example.diagnostics.AppScrollProbe
 import com.example.ui.GlobalSearchSection
 import com.example.ui.MainViewModel
 import com.example.ui.components.FloatingTopAppBar
@@ -1237,6 +1238,7 @@ fun CatalogTabContent(
 
             else -> {
                 val gridState = rememberLazyGridState()
+                AppScrollProbe("catalog", gridState)
                 // Infinite scroll: when the user scrolls near the bottom and there are more real
                 // pages (page 2, page 3, ...) to load, fetch the next one and append it.
                 val shouldLoadMore by remember {

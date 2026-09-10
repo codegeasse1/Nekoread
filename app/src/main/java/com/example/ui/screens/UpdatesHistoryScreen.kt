@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -56,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.local.MangaEntity
+import com.example.diagnostics.AppScrollProbe
 import com.example.ui.components.FloatingTopAppBar
 import com.example.ui.theme.GlassCardBorder
 import com.example.ui.MainViewModel
@@ -206,7 +208,10 @@ fun HistoryList(
             }
         }
     } else {
+        val historyListState = rememberLazyListState()
+        AppScrollProbe("history", historyListState)
         LazyColumn(
+            state = historyListState,
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxSize()

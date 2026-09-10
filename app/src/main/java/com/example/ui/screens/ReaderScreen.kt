@@ -6,7 +6,6 @@ import android.content.pm.ActivityInfo
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.util.Printer
 import android.view.FrameMetrics
 import android.view.Window
 import android.view.WindowManager
@@ -140,9 +139,11 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 // How many in-window webtoon pages the prewarm fetches/decodes at once. A small concurrent batch
-// keeps the ±8/±20 page window filled ahead of the scroll even when every page costs a full download +
+// keeps the ±N page window filled ahead of the scroll even when every page costs a full download +
 // descramble (e.g. comix) — a sequential one-at-a-time loop can't keep up on slow sources.
-private const val WEBTOON_BATCH = 6
+// dx14: raised 6 -> 8 now that the per-page recompose stall is gone (the downloads were never the
+// jank; they only had to look like it because every page flip blocked the UI thread).
+private const val WEBTOON_BATCH = 8
 
 // Rolling memory-refresh horizon: the warm keeps up to [MAX] pages just ahead (and a couple
 // behind) of the current page warm in Coil's memory cache, re-warming each one as the user
@@ -152,9 +153,9 @@ private const val WEBTOON_BATCH = 6
 // small-heap one can't overflow the cache and thrash (the dx5 failure was a FIXED 8-ahead on much
 // bigger ~7.9MB bitmaps: the window overflowed, the nearest pages evicted, and the refresh
 // re-decoded the same page from disk repeatedly).
-private const val WEBTOON_MEM_HORIZON_AHEAD_MIN = 4
-private const val WEBTOON_MEM_HORIZON_AHEAD_MAX = 8
-private const val WEBTOON_MEM_HORIZON_BEHIND = 2
+private const val WEBTOON_MEM_HORIZON_AHEAD_MIN = 6
+private const val WEBTOON_MEM_HORIZON_AHEAD_MAX = 12
+private const val WEBTOON_MEM_HORIZON_BEHIND = 3
 
 // The rolling memory refresh NEVER floods the decoder: at most this many warm executes may be in
 // flight at once (dx3 launched up to 11 concurrent full decodes every tick — when the pages
@@ -163,8 +164,15 @@ private const val WEBTOON_MEM_HORIZON_BEHIND = 2
 // pages get re-touched enough to survive LRU eviction without re-decoding every 60ms tick).
 // dx4 bounded it to 2, but the dx5 log showed even TWO concurrent decodes contend on this
 // device's CPU — pairs took ~545ms each while single decodes take 20-80ms — so it's 1.
+// dx14: those "contended" measurements were taken while every page flip still blocked the main
+// thread for ~250ms (the take-ten recompose bug), so they were inflated by the blocked UI thread
+// delaying each decode's callback. Even so, concurrency stays 1: the 2-wide decode dispatcher is
+// shared with the visible-page binds, and one warm in flight guarantees a bind always has a free
+// slot. The dx14 preload increase is depth (deeper horizon/window), not parallelism.
 private const val WEBTOON_MEM_WARM_CONCURRENCY = 1
-private const val WEBTOON_MEM_WARM_STALE = 3
+// Re-warm a page sooner (3 -> 2) so the pages just ahead are re-touched more often and survive LRU
+// eviction on the now-deeper window.
+private const val WEBTOON_MEM_WARM_STALE = 2
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -466,28 +474,11 @@ fun ReaderScreen(
         onDispose { window.removeOnFrameMetricsAvailableListener(listener) }
     }
 
-    // Main-thread message probe. The frame probe says WHICH phase ate a long frame, but not which
-    // callback did the work. Looper message logging prints a line as the main thread starts and
-    // finishes every dispatched message; timing those pairs names the exact handler + callback
-    // (a Choreographer frame callback, a RecyclerView Runnable, a coroutine continuation…) that
-    // blocks the UI thread for hundreds of milliseconds, so the next log points straight at the
-    // culprit instead of leaving us to guess. Diagnostic only: only messages >= 60ms are reported.
-    DisposableEffect(Unit) {
-        val mainLooper = Looper.getMainLooper()
-        var msgStart = 0L
-        var msgDesc = ""
-        val printer = Printer { s ->
-            if (s.startsWith(">>>>>")) {
-                msgStart = SystemClock.elapsedRealtime()
-                msgDesc = s.substringAfter("Dispatching to ", s).trim().take(150)
-            } else if (s.startsWith("<<<<<")) {
-                val dt = SystemClock.elapsedRealtime() - msgStart
-                if (dt >= 60) ReaderDiagnostics.log("msg ${dt}ms $msgDesc")
-            }
-        }
-        mainLooper.setMessageLogging(printer)
-        onDispose { mainLooper.setMessageLogging(null) }
-    }
+    // Main-thread message logging is now owned by AppDiagnostics (installed once in MainActivity),
+    // which routes each slow message to whichever diagnostics is on screen — the reader's buffer
+    // while a reader route is active, the app's otherwise. That keeps the process-wide
+    // `Looper.setMessageLogging` slot from being fought over by the reader and the app tracker, and
+    // the reader still gets its `msg …ms` lines (see AppDiagnostics.installMessageProbe).
 
     // Paged reader state (chimahon pager viewer): the native viewer reports the current 1-based
     // page via onPageChanged, and a handle on the viewer lets the page slider jump to a page. The
@@ -737,7 +728,7 @@ fun ReaderScreen(
             val segIdx = if (isWebtoon) streamPosition.first.coerceIn(0, segs.lastIndex) else 0
             val segSize = segs[segIdx].size
             val globCur = (starts[segIdx] + (currentPage - 1).coerceIn(0, segSize - 1)).coerceIn(0, total - 1)
-            // Preload window: 8 pages behind and 40 ahead of the current page are made
+            // Preload window: 12 pages behind and 60 ahead of the current page are made
             // display-ready (Coil memory-cache warm for short pages, cache-file download for tall
             // strips) so that scrolling — and jumping straight to any page — shows the neighbours
             // instantly instead of decoding them on first scroll-in. The webtoon window leans
@@ -746,13 +737,15 @@ fun ReaderScreen(
             // page enters the viewport, so its holder never binds against a placeholder height.
             // The 20-ahead window in dx6 let a fast fling outrun it (the log showed page 40-41
             // still `cachedBeforeBind=false` after a jump from page 14 — a ~525ms bind-time
-            // download wait); 40 ahead gives the pipeline room to stay in front of a fling.
-            val warmFrom = (globCur - 8).coerceAtLeast(0)
-            val warmTo = (if (isWebtoon) globCur + 40 else globCur + 8).coerceAtMost(total - 1)
+            // download wait); dx14 widens it further (40 -> 60 ahead, 8 -> 12 behind) now that the
+            // per-page main-thread stall is gone and the prewarm pipeline is the reader's real
+            // look-ahead again.
+            val warmFrom = (globCur - 12).coerceAtLeast(0)
+            val warmTo = (if (isWebtoon) globCur + 60 else globCur + 12).coerceAtMost(total - 1)
 
             // Collect the nearest not-yet-downloaded pages, walking outward from the current
             // page (current, +1, -1, +2, -2, ...), then launch a small CONCURRENT batch of
-            // downloads so the ±8 window fills ahead of the scroll.
+            // downloads so the window fills ahead of the scroll.
             val maxDist = maxOf(globCur - warmFrom, warmTo - globCur)
             val collected = mutableListOf<Triple<Int, Int, MangaSource.PageDescriptor>>()
             walk@ for (d in 0..maxDist) {

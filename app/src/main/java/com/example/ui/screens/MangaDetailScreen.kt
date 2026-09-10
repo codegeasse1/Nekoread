@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -76,6 +77,7 @@ import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.example.data.local.CategoryEntity
 import com.example.data.local.ChapterEntity
+import com.example.diagnostics.AppScrollProbe
 import com.example.data.local.MangaEntity
 import com.example.ui.MainViewModel
 import com.example.ui.theme.GlassCardBorder
@@ -229,7 +231,10 @@ fun MangaDetailScreen(
         },
         modifier = modifier.fillMaxSize()
     ) { innerPadding ->
+        val chapterListState = rememberLazyListState()
+        AppScrollProbe("chapters", chapterListState)
         LazyColumn(
+            state = chapterListState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(bottom = innerPadding.calculateBottomPadding())

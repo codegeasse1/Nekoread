@@ -70,10 +70,55 @@ class WebtoonAdapter(val viewer: WebtoonViewer) : RecyclerView.Adapter<RecyclerV
 
     /** Updates this adapter with the given [newItems] and [newTrailer], dispatching delta updates. */
     fun submit(newItems: List<WebtoonItem>, newTrailer: WebtoonTrailer) {
+        val t0 = SystemClock.elapsedRealtime()
+        // Fast path: a streaming reader only ever APPENDS to the item list (the next chapter's
+        // divider + pages are added at the end), so when the old list is a prefix of the new one we
+        // dispatch a single range-insert instead of running DiffUtil over every page. The dx13 log
+        // showed the DiffUtil pass costing ~500ms at each chapter boundary (`recompose ReaderScreen
+        // 506ms` / `ui stall 595ms`) — the last remaining scroll stall.
+        val oldSize = items.size
+        if (trailer != WebtoonTrailer.None && newTrailer != WebtoonTrailer.None &&
+            newItems.size >= oldSize && isPrefixOf(items, newItems)
+        ) {
+            val added = newItems.size - oldSize
+            val trailerChanged = trailer != newTrailer
+            items = newItems
+            trailer = newTrailer
+            if (added > 0) notifyItemRangeInserted(oldSize, added)
+            if (trailerChanged) notifyItemChanged(newItems.size)
+            val dt = SystemClock.elapsedRealtime() - t0
+            if (dt >= 40) {
+                eu.kanade.tachiyomi.ui.reader.viewer.ReaderDiagnostics.log(
+                    "adapter append ${dt}ms (+$added pages)"
+                )
+            }
+            return
+        }
         val result = DiffUtil.calculateDiff(Callback(items, trailer, newItems, newTrailer))
         items = newItems
         trailer = newTrailer
         result.dispatchUpdatesTo(this)
+        val dt = SystemClock.elapsedRealtime() - t0
+        if (dt >= 40) {
+            eu.kanade.tachiyomi.ui.reader.viewer.ReaderDiagnostics.log(
+                "adapter diff ${dt}ms (n=${newItems.size})"
+            )
+        }
+    }
+
+    /** True when [old] is a prefix of [new], comparing stable identity only (cheap string compare). */
+    private fun isPrefixOf(old: List<WebtoonItem>, new: List<WebtoonItem>): Boolean {
+        for (i in old.indices) {
+            val same = when {
+                old[i] is WebtoonItem.Page && new[i] is WebtoonItem.Page ->
+                    (old[i] as WebtoonItem.Page).key == (new[i] as WebtoonItem.Page).key
+                old[i] is WebtoonItem.Divider && new[i] is WebtoonItem.Divider ->
+                    (old[i] as WebtoonItem.Divider).chapterId == (new[i] as WebtoonItem.Divider).chapterId
+                else -> false
+            }
+            if (!same) return false
+        }
+        return true
     }
 
     override fun getItemCount(): Int = items.size + if (trailer != WebtoonTrailer.None) 1 else 0

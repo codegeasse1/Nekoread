@@ -40,6 +40,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -68,6 +69,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.view.MotionEvent
 import android.widget.Toast
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -88,6 +90,8 @@ import com.example.data.source.ExtensionCoverImageFetcherFactory
 import com.example.data.source.ExtensionPageImageFetcherFactory
 import com.example.data.source.ExtensionPageImageKeyer
 import com.example.data.source.ExtensionCoverImageKeyer
+import com.example.diagnostics.AppDiagnostics
+import com.example.diagnostics.AppDiagnosticsOverlay
 import com.example.ui.MainViewModel
 import com.example.BuildConfig
 import com.example.ui.screens.BrowseScreen
@@ -178,6 +182,12 @@ class MainActivity : ComponentActivity() {
         )
 
         enableEdgeToEdge()
+
+        // Whole-app scroll-jank diagnostics (see AppDiagnostics): installs the app-wide frame and
+        // main-thread probes and opens its own log file. The reader keeps its specialised tracker;
+        // this one skips the reader route so the two never double-log.
+        AppDiagnostics.install(this)
+
         setContent {
             NekoReadTheme {
                 // Ambient gradient + glow spots behind the whole app: the translucent
@@ -214,6 +224,10 @@ class MainActivity : ComponentActivity() {
                             )
                     )
                     MainAppScreen(viewModel = viewModel)
+
+                    // Whole-app scroll diagnostics, drawn above every screen except the reader
+                    // (which has its own overlay). Same look and copy/clear buttons as the reader's.
+                    AppDiagnosticsOverlay()
 
                     // If a previous session crashed, surface the captured stack trace so the user
                     // can copy it and report it (this is how the reader-settings crash gets fixed).
@@ -337,6 +351,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // Every touch flows through here before any view sees it, so AppDiagnostics can recognize a
+    // scroll drag (and group the frames it causes into a named session) on ANY screen — Compose
+    // lists, native RecyclerViews, WebViews alike. Mouse-wheel/trackpad scrolling is fed the same
+    // way. Both handlers are pure pass-throughs; the diagnostics only read the event.
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        AppDiagnostics.onTouchEvent(ev)
+        return super.dispatchTouchEvent(ev)
+    }
+
+    override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
+        AppDiagnostics.onGenericMotionEvent(ev)
+        return super.dispatchGenericMotionEvent(ev)
+    }
+
     companion object {
         private const val REQ_NOTIF = 2001
 
@@ -381,6 +409,13 @@ fun MainAppScreen(viewModel: MainViewModel) {
     // The reader is a true fullscreen experience (like Tadami): page content draws behind the
     // system bars, with the reader's own chrome handling the safe-area insets.
     val isReader = (currentRoute ?: "").startsWith("reader/")
+
+    // Tag every app-diagnostic line with the current route, and show the app overlay everywhere
+    // except the reader (the reader's own overlay occupies that slot).
+    SideEffect {
+        AppDiagnostics.screen = currentRoute ?: "-"
+        AppDiagnostics.overlayVisible = !isReader
+    }
 
     val libraryManga by viewModel.libraryManga.collectAsStateWithLifecycle()
     val historyManga by viewModel.readingHistory.collectAsStateWithLifecycle()
