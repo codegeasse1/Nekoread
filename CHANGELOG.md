@@ -2,7 +2,7 @@
 
 All notable changes to Nekoread.
 
-## [2.2.7] - 2026-09-09
+## [2.2.5] - 2026-09-09
 
 ### Tag search chooser is now a small chip menu (take twenty-two)
 - **Tapping a genre chip opens a lightweight menu anchored to the chip, not a centred dialog.** take twenty-one's chooser was a Material3 `AlertDialog` in the middle of the screen - a title, an explanatory sentence, a filled "Search in &lt;source&gt;" button and "Global search"/"Cancel" text buttons, four pieces of chrome for a two-way choice. The chip now opens a plain `DropdownMenu` right under the tag with exactly two items, **Search** (this extension) and **Global search** (every installed extension), matching the standard manga-reader idiom.
