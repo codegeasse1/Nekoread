@@ -2,7 +2,6 @@ package com.example.ui.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
@@ -10,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -28,8 +26,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -40,6 +45,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -47,6 +53,7 @@ import coil.request.ImageRequest
 import com.example.data.local.MangaEntity
 import com.example.data.source.SourceRegistry
 import com.example.diagnostics.AppDiagnostics
+import com.example.diagnostics.cellCost
 import com.example.ui.theme.SleekGoldBadge
 import com.example.ui.theme.SleekVioletPrimary
 import com.example.ui.theme.GlassCardBorder
@@ -69,7 +76,6 @@ private val CardShape = RoundedCornerShape(16.dp)
 private val ChipShape = RoundedCornerShape(6.dp)
 private val BadgeShape = RoundedCornerShape(10.dp)
 private val PillShape = RoundedCornerShape(20.dp)
-private val ProgressShape = RoundedCornerShape(2.dp)
 private val TypeCyan = Color(0xFF00B8D4)
 private val CompletedGreen = Color(0xFF00E676)
 
@@ -116,6 +122,34 @@ private val LabelSmall = TextStyle(
 )
 private val LabelSmallWhite = LabelSmall.copy(color = Color.White)
 
+// One node instead of two: `border(...) + background(color, shape)` each build a modifier node per
+// card and each re-create their paint/shader whenever the size changes. `drawWithCache` builds the
+// fill + inset stroke once per size and draws them *behind* the content; the `.clip(CardShape)`
+// that follows a call site still clips children to the rounded rect.
+private fun Modifier.cardSurface(
+    fill: Color,
+    stroke: Color,
+    strokeWidth: Dp,
+    cornerRadius: Dp = 16.dp
+): Modifier = this.drawWithCache {
+    val r = cornerRadius.toPx()
+    val sw = strokeWidth.toPx()
+    val fillRadius = CornerRadius(r, r)
+    val inset = sw / 2f
+    val strokeRadius = CornerRadius((r - inset).coerceAtLeast(0f), (r - inset).coerceAtLeast(0f))
+    val strokeSize = Size(size.width - sw, size.height - sw)
+    onDrawBehind {
+        drawRoundRect(color = fill, size = Size(size.width, size.height), cornerRadius = fillRadius)
+        drawRoundRect(
+            color = stroke,
+            topLeft = Offset(inset, inset),
+            size = strokeSize,
+            cornerRadius = strokeRadius,
+            style = Stroke(width = sw)
+        )
+    }
+}
+
 @Composable
 internal fun coverModelFor(manga: MangaEntity): Any? {
     // Extension-sourced covers load through the extension's own client + headers (Referer/Origin),
@@ -149,13 +183,13 @@ fun MangaGridCard(
     // explicitly.
     Column(
         modifier = modifier
+            .cellCost("card")
             .fillMaxWidth()
-            .border(
-                if (selected) 2.dp else 1.dp,
-                if (selected) SleekVioletPrimary else GlassCardBorder,
-                CardShape
+            .cardSurface(
+                fill = MaterialTheme.colorScheme.surfaceVariant,
+                stroke = if (selected) SleekVioletPrimary else GlassCardBorder,
+                strokeWidth = if (selected) 2.dp else 1.dp
             )
-            .background(MaterialTheme.colorScheme.surfaceVariant, CardShape)
             .clip(CardShape)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .testTag("manga_card_${manga.id}")
@@ -192,19 +226,21 @@ fun MangaGridCard(
             AsyncImage(
                 model = coverRequest,
                 contentDescription = manga.title,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
-
-            // Bottom scrim only, over the lower ~55% of the cell where the rating / Read pill
-            // sit. Previously a full-cell gradient (startY=150) drew an extra full tile every
-            // frame while flinging for no visual gain.
-            Box(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.55f)
-                    .background(CoverScrim)
+                    .fillMaxSize()
+                    // The bottom scrim (over the lower ~55% of the cell, where the rating / Read
+                    // pill sit) is folded into the image's own draw instead of being a sibling Box:
+                    // one fewer layout node per cell, and the gradient shader is the hoisted,
+                    // reused [CoverScrim] rather than a per-cell `background(brush)`.
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(
+                            brush = CoverScrim,
+                            topLeft = Offset(0f, size.height * 0.45f),
+                            size = Size(size.width, size.height * 0.55f)
+                        )
+                    },
+                contentScale = ContentScale.Crop,
             )
 
             // Top Type Chip (MANHWA / MANGA)
@@ -299,43 +335,41 @@ fun MangaGridCard(
                 overflow = TextOverflow.Ellipsis
             )
 
-            Spacer(modifier = Modifier.height(2.dp))
-
             Text(
                 text = manga.sourceName,
                 style = CardSourceSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 2.dp)
             )
 
-            // Always reserve the progress row (7dp) even when there is no progress to show, so
-            // the cell height stays constant in both cases — see the `minLines` note above.
+            // Always reserve the progress row (7dp) even when there is no progress to show, so the
+            // cell height stays constant in both cases. The bar is now drawn by a single node's
+            // `drawBehind` (two rounded rects) instead of a track Box wrapping a clipped inner Box:
+            // three layout nodes + a clip layer per cell before, zero extra nodes now.
+            val progressTrack = MaterialTheme.colorScheme.surfaceVariant
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(7.dp)
-            ) {
-                if (manga.lastReadPage > 1) {
-                    // Hand-drawn two-Box bar instead of Material3's LinearProgressIndicator, whose
-                    // state holder + progress semantics + draw-with-cache machinery cost several
-                    // nodes per cell for a static 0.6 fraction.
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(3.dp)
-                            .clip(ProgressShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(0.6f)
-                                .fillMaxHeight()
-                                .background(SleekVioletPrimary)
-                        )
+                    .drawBehind {
+                        if (manga.lastReadPage > 1) {
+                            val barHeight = 3.dp.toPx()
+                            val radius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+                            drawRoundRect(
+                                color = progressTrack,
+                                size = Size(size.width, barHeight),
+                                cornerRadius = radius
+                            )
+                            drawRoundRect(
+                                color = SleekVioletPrimary,
+                                size = Size(size.width * 0.6f, barHeight),
+                                cornerRadius = radius
+                            )
+                        }
                     }
-                }
-            }
+            )
         }
     }
 }
@@ -352,13 +386,13 @@ fun MangaListCard(
     AppDiagnostics.noteCompose("listCard")
     Row(
         modifier = modifier
+            .cellCost("listCard")
             .fillMaxWidth()
-            .border(
-                if (selected) 2.dp else 1.dp,
-                if (selected) SleekVioletPrimary else GlassCardBorder,
-                CardShape
+            .cardSurface(
+                fill = MaterialTheme.colorScheme.surface,
+                stroke = if (selected) SleekVioletPrimary else GlassCardBorder,
+                strokeWidth = if (selected) 2.dp else 1.dp
             )
-            .background(MaterialTheme.colorScheme.surface, CardShape)
             .clip(CardShape)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .testTag("manga_list_item_${manga.id}")

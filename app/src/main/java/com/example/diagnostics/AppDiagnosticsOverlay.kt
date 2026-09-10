@@ -21,7 +21,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,6 +49,25 @@ fun AppScrollProbe(label: String, state: ScrollableState) {
         onDispose { AppDiagnostics.endScroll(label) }
     }
 }
+
+/**
+ * Reports how long this node spent measuring/laying out (`"$tag.m"`) and drawing (`"$tag.d"`) into
+ * [AppDiagnostics]' per-frame cell digest. Layout- and drawing-neutral: the measure pass simply
+ * times the delegate, and the draw pass wraps `drawContent()` — no extra layers, no recomposition.
+ * Drop it on a lazy item's root to find out whether the item is expensive to measure or to draw.
+ */
+fun Modifier.cellCost(tag: String): Modifier = this
+    .layout { measurable, constraints ->
+        val t0 = System.nanoTime()
+        val placeable = measurable.measure(constraints)
+        AppDiagnostics.noteCellCost("$tag.m", System.nanoTime() - t0)
+        layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+    }
+    .drawWithContent {
+        val t0 = System.nanoTime()
+        drawContent()
+        AppDiagnostics.noteCellCost("$tag.d", System.nanoTime() - t0)
+    }
 
 /** App-wide diagnostics overlay: live scroll/frame history with one-tap copy + clear. */
 @Composable

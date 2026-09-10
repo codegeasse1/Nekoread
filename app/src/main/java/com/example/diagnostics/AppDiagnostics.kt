@@ -264,6 +264,38 @@ object AppDiagnostics {
         return sb.toString().trim()
     }
 
+    // ---- per-frame item cost attribution (main thread only) ----
+    // How long the lazy lists' items spend in their measure pass and in draw recording, aggregated per
+    // frame: `tag -> [count, totalNs, maxNs]`. The frame phases say *when* the time went (anim =
+    // Compose's own frame = recomposition+measure+layout, input = touch dispatch incl. the lazy
+    // layout's forceRemeasure, draw = RenderThread), but not *what* spent it: `composed=gridCardx2`
+    // with a 250ms frame says "two cells recomposed", which cannot be 250ms of work on its own —
+    // the aggregate says whether the same frame really was 16 cells measuring 12ms each, or two
+    // cells cold-composing at 30ms, which are completely different fixes. One HashMap bump per item
+    // per pass; fed by `Modifier.cellCost`.
+    private val cellCosts = HashMap<String, LongArray>(8)
+
+    /** Records one item's measure/draw time in nanoseconds (via `Modifier.cellCost`). */
+    fun noteCellCost(tag: String, ns: Long) {
+        if (!ENABLED) return
+        val a = cellCosts[tag] ?: LongArray(3).also { cellCosts[tag] = it }
+        a[0]++
+        a[1] += ns
+        if (ns > a[2]) a[2] = ns
+    }
+
+    /** Drains the item cost aggregates into `tag 16x12ms(max 3)`. */
+    private fun takeCellDigest(): String {
+        if (cellCosts.isEmpty()) return ""
+        val sb = StringBuilder()
+        for ((tag, a) in cellCosts.entries.sortedBy { it.key }) {
+            sb.append(tag).append(' ').append(a[0]).append('x')
+                .append(a[1] / 1_000_000).append("ms(max ").append(a[2] / 1_000_000).append(") ")
+        }
+        cellCosts.clear()
+        return sb.toString().trim()
+    }
+
     fun copy(context: Context) {
         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         cm.setPrimaryClip(ClipData.newPlainText("nekoread-app-diagnostic", fullText()))
@@ -301,7 +333,10 @@ object AppDiagnostics {
                     // in our code at all. The digest drained here is therefore not repeated on the
                     // next frame line.
                     val composed = if (screen.startsWith("reader/")) "" else takeComposeDigest()
-                    val line = "msg ${dt}ms $msgDesc" + if (composed.isEmpty()) "" else " composed=$composed"
+                    val cells = if (screen.startsWith("reader/")) "" else takeCellDigest()
+                    val line = "msg ${dt}ms $msgDesc" +
+                        (if (composed.isEmpty()) "" else " composed=$composed") +
+                        (if (cells.isEmpty()) "" else " cells=$cells")
                     if (screen.startsWith("reader/")) ReaderDiagnostics.log(line) else log(line)
                 }
             }
@@ -320,6 +355,7 @@ object AppDiagnostics {
     private fun onFrame(metrics: FrameMetrics) {
         // Attribute the compositions that happened since the previous frame to this one, then clear.
         val composed = takeComposeDigest()
+        val cells = takeCellDigest()
         // The reader has its own (more detailed) frame probe — don't double-report its frames.
         if (screen.startsWith("reader/")) return
         val totalMs = metrics.getMetric(FrameMetrics.TOTAL_DURATION) / 1_000_000
@@ -347,7 +383,8 @@ object AppDiagnostics {
                 "sync=${ms(FrameMetrics.SYNC_DURATION)} " +
                 "cmd=${ms(FrameMetrics.COMMAND_ISSUE_DURATION)} " +
                 "swap=${ms(FrameMetrics.SWAP_BUFFERS_DURATION)}" +
-                if (composed.isEmpty()) "" else " composed=$composed",
+                (if (composed.isEmpty()) "" else " composed=$composed") +
+                (if (cells.isEmpty()) "" else " cells=$cells"),
         )
     }
 

@@ -1,7 +1,7 @@
 package com.example.ui.screens
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,14 +33,10 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -63,15 +59,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -79,6 +80,7 @@ import com.example.data.local.CategoryEntity
 import com.example.data.local.MangaEntity
 import com.example.diagnostics.AppDiagnostics
 import com.example.diagnostics.AppScrollProbe
+import com.example.diagnostics.cellCost
 import com.example.ui.MainViewModel
 import com.example.ui.components.FloatingTopAppBar
 import com.example.ui.components.GlassSearchBar
@@ -535,6 +537,44 @@ fun LibraryScreen(
 // Hoisted out of the hero composable: an identical `Brush` allocation (and shader) per recomposition
 // is pure waste, and this one never changes.
 private val heroScrim = Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000)))
+private val HeroShape = RoundedCornerShape(22.dp)
+private val HeroResumeShape = RoundedCornerShape(20.dp)
+// The hero's four text styles, hoisted exactly as Type.kt defines them (labelLarge and
+// headlineSmall are NOT overridden by the theme, so they keep Material's default metrics;
+// bodyMedium IS overridden). Rebuilding `MaterialTheme.typography.x.copy(...)` per composition
+// also allocates a TextStyle and walks the CompositionLocal.
+private val HeroKickerStyle = TextStyle(
+    fontFamily = FontFamily.SansSerif,
+    fontWeight = FontWeight.Bold,
+    fontSize = 14.sp,
+    lineHeight = 20.sp,
+    letterSpacing = 0.1.sp,
+)
+private val HeroTitleStyle = TextStyle(
+    fontFamily = FontFamily.SansSerif,
+    fontWeight = FontWeight.Bold,
+    fontSize = 24.sp,
+    lineHeight = 32.sp,
+    letterSpacing = 0.sp,
+    color = Color.White,
+)
+private val HeroChapterStyle = TextStyle(
+    fontFamily = FontFamily.SansSerif,
+    fontWeight = FontWeight.Normal,
+    fontSize = 13.sp,
+    lineHeight = 18.sp,
+    letterSpacing = 0.2.sp,
+    color = Color(0xFFB9C0D6),
+)
+private val HeroResumeStyle = TextStyle(
+    fontFamily = FontFamily.SansSerif,
+    fontWeight = FontWeight.Medium,
+    fontSize = 14.sp,
+    lineHeight = 20.sp,
+    letterSpacing = 0.1.sp,
+    color = Color.White,
+)
+
 
 /** Tadami-style hero banner: the manga you were most recently reading, with a Resume button. */
 @Composable
@@ -545,94 +585,96 @@ private fun ContinueReadingHero(
     modifier: Modifier = Modifier
 ) {
     AppDiagnostics.noteCompose("hero")
-    Card(
+    // Plain surface instead of Material3 `Card`: a Card is a pointerInput + `Modifier.surface`
+    // + elevation shadow + a CompositionLocalProvider for its content colour — several nodes per
+    // hero for what is a static rounded rectangle. The app-level frame logs showed the library
+    // hero costing ~140ms to compose (`msg 143ms composed=herox1` -> `frame anim=145ms`), and the
+    // hero is the one big cell that is always on screen, so cutting all of it is worth it.
+    Box(
         modifier = modifier
+            .cellCost("hero")
             .fillMaxWidth()
             .height(210.dp)
+            .clip(HeroShape)
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, GlassCardBorder, HeroShape)
             .clickable { onOpen() }
-            .testTag("continue_reading_hero"),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, GlassCardBorder),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            .testTag("continue_reading_hero")
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            val ctx = LocalContext.current
-            val coverModel = coverModelFor(manga)
-            // Bounded request + plain `AsyncImage` instead of `SubcomposeAsyncImage` with no size:
-            // this is the widest cell on the screen, so an unbounded model decoded and uploaded far
-            // more pixels than it can display (and a SubcomposeLayout is the most expensive layout in
-            // Compose). The tinted Box under it is the placeholder/error state.
-            val heroRequest = remember(manga.id, coverModel) {
-                ImageRequest.Builder(ctx)
-                    .data(coverModel)
-                    .size(1080, 560)
-                    // Its own memory-cache key: shared with the grid/list "cover:<id>" key it would
-                    // hand a 1080x560 bitmap to a 130dp grid cell (and keep ~600k pixels resident
-                    // per manga) — the grid must cache its own small bitmap.
-                    .memoryCacheKey("cover-hero:${manga.id}")
-                    .diskCacheKey("cover:${manga.id}:${manga.coverUrl}")
-                    .build()
-            }
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            )
-            AsyncImage(
-                model = heroRequest,
-                contentDescription = manga.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-            // Bottom scrim so the title/Resume stay readable over any cover.
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(heroScrim)
-            )
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                Text(
-                    text = "CONTINUE READING",
-                    style = MaterialTheme.typography.labelLarge.copy(
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
-                    )
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = manga.title,
-                    style = MaterialTheme.typography.headlineSmall.copy(
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Chapter ${manga.lastReadChapterName ?: "1"}",
-                    style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFFB9C0D6)),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Button(
-                    onClick = onResume,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Resume")
+        val ctx = LocalContext.current
+        val coverModel = coverModelFor(manga)
+        // Bounded request + plain `AsyncImage` instead of `SubcomposeAsyncImage` with no size:
+        // this is the widest cell on the screen, so an unbounded model decoded and uploaded far
+        // more pixels than it can display. The tinted Box under it is the placeholder/error state.
+        val heroRequest = remember(manga.id, coverModel) {
+            ImageRequest.Builder(ctx)
+                .data(coverModel)
+                .size(1080, 560)
+                // Its own memory-cache key: shared with the grid/list "cover:<id>" key it would
+                // hand a 1080x560 bitmap to a 130dp grid cell (and keep ~600k pixels resident
+                // per manga) — the grid must cache its own small bitmap.
+                .memoryCacheKey("cover-hero:${manga.id}")
+                .diskCacheKey("cover:${manga.id}:${manga.coverUrl}")
+                .build()
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        )
+        AsyncImage(
+            model = heroRequest,
+            contentDescription = manga.title,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxSize()
+                // The bottom scrim (so the title/Resume stay readable over any cover) rides the
+                // image's own draw instead of a second full-size Box: one fewer layout node per
+                // hero, and the gradient shader is the hoisted [heroScrim] rather than a
+                // per-composition `background(brush)`.
+                .drawWithContent {
+                    drawContent()
+                    drawRect(brush = heroScrim)
                 }
+        )
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = "CONTINUE READING",
+                style = HeroKickerStyle.copy(color = MaterialTheme.colorScheme.primary)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = manga.title,
+                style = HeroTitleStyle,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Chapter ${manga.lastReadChapterName ?: "1"}",
+                style = HeroChapterStyle,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            // Hand-drawn pill instead of a Material3 `Button`: a Button is a Surface + Row +
+            // minimum-interactive-size + ripple indication + a content-colour
+            // CompositionLocalProvider for a single label. Same primary pill with a white label,
+            // now one clickable Box + Text.
+            Box(
+                modifier = Modifier
+                    .clip(HeroResumeShape)
+                    .background(MaterialTheme.colorScheme.primary)
+                    .clickable { onResume() }
+                    .padding(horizontal = 24.dp, vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(text = "▶ Resume", style = HeroResumeStyle)
             }
         }
     }

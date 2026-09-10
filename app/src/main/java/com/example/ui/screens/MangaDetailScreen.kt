@@ -1,7 +1,7 @@
 package com.example.ui.screens
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -37,8 +38,6 @@ import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -49,7 +48,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -63,20 +61,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.data.local.CategoryEntity
 import com.example.data.local.ChapterEntity
 import com.example.diagnostics.AppScrollProbe
+import com.example.diagnostics.cellCost
 import com.example.data.local.MangaEntity
 import com.example.ui.MainViewModel
 import com.example.ui.theme.GlassCardBorder
@@ -88,6 +91,24 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+
+// Chapter-row text styles, hoisted out of composition: `MaterialTheme.typography.titleMedium`
+// overridden exactly as Type.kt does (SansSerif / 16sp / 22sp / 0.15sp) plus the read/unread weight
+// variants, and the default `bodySmall` metrics for the subtitle. Every chapter row recomposes
+// while the list scrolls, so going through `.copy(...)` per row is real per-frame allocation.
+private val ChapterTitleStyle = TextStyle(
+    fontFamily = FontFamily.SansSerif,
+    fontWeight = FontWeight.Bold,
+    fontSize = 16.sp,
+    lineHeight = 22.sp,
+    letterSpacing = 0.15.sp
+)
+private val ChapterTitleReadStyle = ChapterTitleStyle.copy(fontWeight = FontWeight.Normal)
+private val ChapterSubtitleStyle = TextStyle(
+    fontSize = 12.sp,
+    lineHeight = 16.sp,
+    letterSpacing = 0.4.sp
+)
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun MangaDetailScreen(
@@ -155,6 +176,46 @@ fun MangaDetailScreen(
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var webviewTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
+    val coverModel = coverModelFor(manga)
+    // Hoisted image requests. These used to be built inline at every call site
+    // (`ImageRequest.Builder(ctx).data(coverModelFor(manga)).crossfade(true).build()`), so each
+    // recomposition of the hero, and each recomposition of *every* chapter row, allocated a fresh
+    // request, re-resolved the cover model, and started a new crossfade. The chapter list reuses a
+    // single thumbnail for all rows, so one shared request covers the whole list. None of them
+    // crossfade now: a fade is a Choreographer animation per image landing, which the
+    // `[scroll chapters]` logs showed as `anim` cost. Sizes are bounded, and the hero card request
+    // deliberately uses the grid key/size (`cover:<id>`, 360x500) so it reuses the exact bitmap
+    // the library grid already decoded for this manga instead of decoding its own.
+    val heroBgRequest = remember(manga.id, coverModel) {
+        ImageRequest.Builder(ctx)
+            .data(coverModel)
+            .size(1080, 620)
+            .memoryCacheKey("detailHero:${manga.id}")
+            .diskCacheKey("cover:${manga.id}:${manga.coverUrl}")
+            .build()
+    }
+    val heroCoverRequest = remember(manga.id, coverModel) {
+        ImageRequest.Builder(ctx)
+            .data(coverModel)
+            .size(360, 500)
+            .memoryCacheKey("cover:${manga.id}")
+            .diskCacheKey("cover:${manga.id}:${manga.coverUrl}")
+            .build()
+    }
+    val chapterThumbRequest = remember(manga.id, coverModel) {
+        ImageRequest.Builder(ctx)
+            .data(coverModel)
+            .size(100, 140)
+            .memoryCacheKey("chapterThumb:${manga.id}")
+            .diskCacheKey("cover:${manga.id}:${manga.coverUrl}")
+            .build()
+    }
+    // The hero gradient used to be rebuilt (Brush + Shader) on every recomposition of the hero
+    // item; hoist it against the one theme colour it depends on.
+    val heroBottomColor = MaterialTheme.colorScheme.background
+    val heroGradient = remember(heroBottomColor) {
+        Brush.verticalGradient(colors = listOf(Color.Black.copy(alpha = 0.4f), heroBottomColor))
+    }
 
     fun openVerifyWebView() {
         scope.launch {
@@ -249,25 +310,20 @@ fun MangaDetailScreen(
                     // re-blur while the list scrolls, which is a major scroll-stutter source on
                     // many devices — the gradient overlay below already keeps the text readable).
                     AsyncImage(
-                        model = ImageRequest.Builder(ctx).data(coverModelFor(manga)).crossfade(true).build(),
+                        model = heroBgRequest,
                         contentDescription = null,
                         modifier = Modifier
-                            .fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                    )
-
-                    // Gradient Overlay
-                    Box(
-                        modifier = Modifier
                             .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Black.copy(alpha = 0.4f),
-                                        MaterialTheme.colorScheme.background
-                                    )
-                                )
-                            )
+                            // The gradient overlay (so the white title/author text stays
+                            // readable) is drawn by the image itself rather than by a second
+                            // full-height Box: one fewer layout node per hero, and the gradient
+                            // is the hoisted [heroGradient] rather than a fresh
+                            // Brush.verticalGradient (and its shader) rebuilt per recomposition.
+                            .drawWithContent {
+                                drawContent()
+                                drawRect(brush = heroGradient)
+                            },
+                        contentScale = ContentScale.Crop,
                     )
 
                     // Cover Card & Details Row
@@ -277,19 +333,18 @@ fun MangaDetailScreen(
                             .padding(top = 70.dp, start = 16.dp, end = 16.dp, bottom = 16.dp),
                         verticalAlignment = Alignment.Bottom
                     ) {
-                        Card(
-                            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(ctx).data(coverModelFor(manga)).crossfade(true).build(),
-                                contentDescription = manga.title,
-                                modifier = Modifier
-                                    .width(110.dp)
-                                    .height(160.dp),
-                                contentScale = ContentScale.Crop,
-                            )
-                        }
+                        // Plain clipped image instead of a Material3 `Card(elevation = 8.dp)`:
+                        // the elevation shadow is a real offscreen layer rebuilt as the hero
+                        // recomposes, and all the Card added here was the 12dp rounded corners.
+                        AsyncImage(
+                            model = heroCoverRequest,
+                            contentDescription = manga.title,
+                            modifier = Modifier
+                                .width(110.dp)
+                                .height(160.dp)
+                                .clip(RoundedCornerShape(12.dp)),
+                            contentScale = ContentScale.Crop,
+                        )
 
                         Spacer(modifier = Modifier.width(16.dp))
 
@@ -305,7 +360,7 @@ fun MangaDetailScreen(
                             Spacer(modifier = Modifier.height(4.dp))
 
                             Text(
-                                text = "${manga.author} â¢ ${manga.artist}",
+                                text = "${manga.author} • ${manga.artist}",
                                 style = MaterialTheme.typography.bodyMedium.copy(color = Color.LightGray),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -314,32 +369,28 @@ fun MangaDetailScreen(
                             Spacer(modifier = Modifier.height(8.dp))
 
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Surface(
-                                    color = if (manga.type == "MANHWA") NekoVioletPrimary else Color(0xFF009688),
-                                    shape = RoundedCornerShape(4.dp)
-                                ) {
-                                    Text(
-                                        text = manga.type,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                        style = MaterialTheme.typography.labelSmall.copy(color = Color.White, fontWeight = FontWeight.Bold)
-                                    )
-                                }
+                                Text(
+                                    text = manga.type,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(if (manga.type == "MANHWA") NekoVioletPrimary else Color(0xFF009688))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelSmall.copy(color = Color.White, fontWeight = FontWeight.Bold)
+                                )
 
                                 Spacer(modifier = Modifier.width(8.dp))
 
-                                Surface(
-                                    color = MaterialTheme.colorScheme.surfaceVariant,
-                                    shape = RoundedCornerShape(4.dp)
-                                ) {
-                                    Text(
-                                        text = manga.status,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            color = if (manga.status == "COMPLETED") Color(0xFF00E676) else NekoGoldBadge,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                Text(
+                                    text = manga.status,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = if (manga.status == "COMPLETED") Color(0xFF00E676) else NekoGoldBadge,
+                                        fontWeight = FontWeight.Bold
                                     )
-                                }
+                                )
                             }
 
                             Spacer(modifier = Modifier.height(6.dp))
@@ -454,12 +505,16 @@ fun MangaDetailScreen(
                         // Tapping a tag opens this source's catalog filtered to that tag/genre.
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             genres.forEach { tag ->
-                                Surface(
-                                    onClick = { onTagClick(tag) },
-                                    shape = RoundedCornerShape(16.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    border = BorderStroke(1.dp, GlassCardBorder),
-                                    modifier = Modifier.testTag("genre_tag_$tag")
+                                // Plain clickable Box instead of `Surface(onClick = ...)`: a
+                                // Surface brings its own surface modifier node, interaction
+                                // source and content-colour provider for a small static chip.
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(MaterialTheme.colorScheme.primaryContainer)
+                                        .border(1.dp, GlassCardBorder, RoundedCornerShape(16.dp))
+                                        .clickable { onTagClick(tag) }
+                                        .testTag("genre_tag_$tag")
                                 ) {
                                     Text(
                                         text = tag,
@@ -527,20 +582,20 @@ fun MangaDetailScreen(
             items(sortedChapters, key = { it.id }) { chapter ->
                 Row(
                     modifier = Modifier
+                        .cellCost("chrow")
                         .fillMaxWidth()
                         .clickable { onChapterClick(chapter.id) }
                         .padding(horizontal = 16.dp, vertical = 10.dp)
                         .testTag("chapter_item_${chapter.id}"),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Chimahon-style chapter row: every row carries the manga's cover as a small
-                    // thumbnail (crossfades in like chimahon's image loading; cached on disk so it
-                    // reappears instantly), and tapping the row selects that chapter.
-                    // Plain `AsyncImage` over a tinted Box, not `SubcomposeAsyncImage`: the log
-                    // showed the chapter list spending 100-670ms per scroll frame, and a
-                    // SubcomposeLayout on *every* row (same cover thumbnail repeated down the list)
-                    // was the dominant composition cost. The Box's surfaceVariant tint is the
-                    // placeholder/error state — `AsyncImage` draws nothing until the cover lands.
+                    // Chimahon-style chapter row: every row carries the cover as a small
+                    // thumbnail (cached on disk so it reappears instantly), and tapping the row
+                    // selects that chapter. Plain `AsyncImage` over a tinted Box, not
+                    // `SubcomposeAsyncImage` (a SubcomposeLayout on every row was the dominant
+                    // composition cost), and the request is the screen-level [chapterThumbRequest]:
+                    // one shared, non-crossfading request for the whole list, rather than one
+                    // rebuilt (and one fade started) per row per recomposition.
                     Box(
                         modifier = Modifier
                             .width(50.dp)
@@ -549,13 +604,7 @@ fun MangaDetailScreen(
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         AsyncImage(
-                            model = ImageRequest.Builder(ctx)
-                                .data(coverModelFor(manga))
-                                .size(100, 140)
-                                .crossfade(true)
-                                .memoryCacheKey("chapterThumb:${manga.id}")
-                                .diskCacheKey("chapterThumb:${manga.id}:${manga.coverUrl}")
-                                .build(),
+                            model = chapterThumbRequest,
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),
@@ -564,8 +613,16 @@ fun MangaDetailScreen(
 
                     Spacer(modifier = Modifier.width(12.dp))
 
-                    IconButton(
-                        onClick = { viewModel.toggleChapterRead(chapter.id) }
+                    // Plain clickable Box instead of a Material3 `IconButton`: an IconButton is a
+                    // Box + minimum-interactive-size + ripple + a content-colour provider per
+                    // icon, twice per row, down a list that recomposes constantly while
+                    // scrolling. Same 44dp touch target, same icon and tint.
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .clickable { viewModel.toggleChapterRead(chapter.id) },
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = if (chapter.read) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
@@ -579,10 +636,8 @@ fun MangaDetailScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = chapter.name,
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = if (chapter.read) FontWeight.Normal else FontWeight.Bold,
-                                color = if (chapter.read) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-                            ),
+                            style = if (chapter.read) ChapterTitleReadStyle else ChapterTitleStyle,
+                            color = if (chapter.read) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -590,13 +645,18 @@ fun MangaDetailScreen(
                         Spacer(modifier = Modifier.height(2.dp))
 
                         Text(
-                            text = "${chapter.releaseDate} â¢ ${chapter.scanlator}",
-                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            text = "${chapter.releaseDate} • ${chapter.scanlator}",
+                            style = ChapterSubtitleStyle,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
-                    IconButton(
-                        onClick = { viewModel.toggleChapterBookmark(chapter.id) }
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .clickable { viewModel.toggleChapterBookmark(chapter.id) },
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = if (chapter.bookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
