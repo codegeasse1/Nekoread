@@ -61,7 +61,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -116,7 +115,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
 import eu.kanade.tachiyomi.ui.reader.viewer.budgetedShortWidth
-import eu.kanade.tachiyomi.ui.reader.viewer.readerWarmDecodeDispatcher
+import eu.kanade.tachiyomi.ui.reader.viewer.readerPageDecodeDispatcher
 import eu.kanade.tachiyomi.ui.reader.viewer.WEBTOON_MAX_DECODE_PIXELS
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.PagerConfig
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.PagerViewer
@@ -577,13 +576,16 @@ fun ReaderScreen(
     // fetches every in-window page's bytes ONCE into WebtoonPageCache's on-device cache dir (see the
     // loop below), and the visible items render from those files — so a scroll never re-fetches a
     // page. The visible item has its own retry + button if it wins the race with the prewarm.
-    val webtoonDownloaded = remember { mutableStateMapOf<String, Boolean>() }
+    // Plain maps (not Compose snapshot state): only the prewarm loop reads/writes them and it does
+    // so entirely on the main dispatcher, so snapshot bookkeeping on every download start/finish
+    // would be pure main-thread waste during a scroll (see warmPos below).
+    val webtoonDownloaded = remember { HashMap<String, Boolean>() }
     // Pages currently being downloaded by the prewarm pipeline (tracked so the non-stalling loop
     // never launches the same page twice while a download is in flight).
-    val webtoonInFlight = remember { mutableStateMapOf<String, Boolean>() }
+    val webtoonInFlight = remember { HashMap<String, Boolean>() }
     // imageUrl -> time of last failed download. The prewarm backs off on these for a few seconds so
     // a transient failure doesn't spin in a hot loop; the visible item has its own retry + button.
-    val downloadFailed = remember { mutableStateMapOf<String, Long>() }
+    val downloadFailed = remember { HashMap<String, Long>() }
     // imageUrl -> the current-page position it was last memory-warmed for. The rolling refresh
     // (below) re-warms each page just ahead of the scroll as the position advances, so the pages
     // about to scroll in are the freshest in Coil's LRU memory cache instead of evicted-then-cold.
@@ -626,8 +628,20 @@ fun ReaderScreen(
         // only: the loop and the warm children all run here, so no synchronization needed.
         var memWarmInFlight = 0
         var lastCacheLog = 0L
+        // Main-thread stall probe: a LaunchedEffect body runs on the main dispatcher, so when the
+        // reader's UI thread is congested (long frames, GC, or disk I/O inside a bind callback) this
+        // loop's own tick arrives late. A tick gap far above the requested delay therefore means the
+        // UI thread was blocked for ~that long — the direct signal that separates main-thread jank
+        // from genuinely slow page decodes (both used to show up as a large `decoded …ms` line).
+        var prevTick = 0L
         while (isActive) {
             val now = System.currentTimeMillis()
+            if (prevTick != 0L) {
+                val gap = now - prevTick
+                val expected = if (userScrolling) 90L else 50L
+                if (gap > expected + 120L) ReaderDiagnostics.log("ui stall ${gap}ms")
+            }
+            prevTick = now
             val segs = streamSegments
             if (segs.isEmpty() || segs.any { it.isEmpty() }) { delay(120); continue }
             val starts = IntArray(segs.size)
@@ -729,13 +743,14 @@ fun ReaderScreen(
             // fresh by the binds anyway) end up the most-recently-used; behind pages are last and
             // only get slots when the ahead set is already warm (e.g. paused), which also serves
             // backward scrolling.
-            // Runs continuously (paced faster when idle, slower while the user is scrolling) rather
-            // than gated off during a scroll. A full gate felt like the right idea — don't decode
-            // during a fling — but the dx7 log showed the consequence: with the gesture occupying
-            // most of the time the warm almost never ran, so every bind cold-decoded. The pages are
-            // now small enough (WEBTOON_MAX_DECODE_PIXELS) that one warm at a time is cheap, so the
-            // window stays filled and scroll-ins are cache hits; the loop just ticks slower while a
-            // gesture is in progress to leave the scroll most of the CPU.
+            // Runs while the reader is at rest and stops while a scroll gesture is in progress: the
+            // page decodes it does cost 40-400ms each, and on this device those decodes compete with
+            // the ones the visible pages need — the dx9 log's three-at-once bursts took 644-722ms
+            // each. So during a gesture the whole shared decoder pool belongs to the binds (warmSlots
+            // is forced to 0); the moment the gesture settles the window refills. A cold bind decode
+            // is only ~50ms, so a page entering the viewport mid-gesture is quick even when it wasn't
+            // pre-warmed, which is what makes gating safe here (the dx7 attempt failed because its
+            // warms shared the binds' dispatcher and competed with them, not because of the gate).
             if (isWebtoon) {
                 // Decode the pages ahead of the reader into the memory cache, DEEP ENOUGH to cover a
                 // fling. The window used to be a hard 4; the dx8 log showed a fling still outran it
@@ -756,7 +771,9 @@ fun ReaderScreen(
                     for (d in aheadPages downTo 1) add(globCur + d)
                     for (d in 1..WEBTOON_MEM_HORIZON_BEHIND) add(globCur - d)
                 }
-                val warmSlots = (WEBTOON_MEM_WARM_CONCURRENCY - memWarmInFlight).coerceAtLeast(0)
+                val warmSlots =
+                    if (userScrolling) 0
+                    else (WEBTOON_MEM_WARM_CONCURRENCY - memWarmInFlight).coerceAtLeast(0)
                 var claimed = 0
                 for (g in refreshOrder) {
                     if (claimed >= warmSlots) break
@@ -802,10 +819,11 @@ fun ReaderScreen(
                                         .memoryCachePolicy(CachePolicy.ENABLED)
                                         .diskCachePolicy(CachePolicy.DISABLED)
                                         .allowHardware(!cropBorders)
-                                        // The warm's OWN one-at-a-time dispatcher (not the bind's, and
-                                        // not part of the cache key), so a page scrolling in is never
-                                        // queued behind an in-flight warm decode.
-                                        .decoderDispatcher(readerWarmDecodeDispatcher)
+                                        // The SAME bounded dispatcher the visible-page binds use (see
+                                        // READER_PAGE_DECODE_PARALLELISM): with at most one warm in
+                                        // flight a bind always has a free slot, and the reader never
+                                        // runs more page decodes at once than the device can take.
+                                        .decoderDispatcher(readerPageDecodeDispatcher)
                                         .apply {
                                             if (cropBorders) cropBorders(true)
                                         }
@@ -840,9 +858,9 @@ fun ReaderScreen(
                         "size=${(mc?.size ?: 0).toLong() / 1048576}MB",
                 )
             }
-            // Tick faster than before so the decode-ahead window refills quickly the moment the
-            // reader pauses, and keep ticking during a gesture (slower) so a fling still finds the
-            // pages ahead already warm.
+            // Tick fast enough to refill the window the moment the gesture settles (the warm is
+            // skipped entirely while scrolling), and keep ticking during a gesture (slower) purely so
+            // the loop notices the moment it ends.
             delay(if (userScrolling) 90 else 50)
         }
     }

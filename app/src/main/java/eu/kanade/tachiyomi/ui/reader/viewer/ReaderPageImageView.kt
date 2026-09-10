@@ -598,26 +598,23 @@ open class ReaderPageImageView @JvmOverloads constructor(
 internal const val WEBTOON_MAX_DECODE_PIXELS = 1_000_000L
 
 /**
- * Shared, small decoder dispatcher for the reader's SHORT webtoon pages. At most two page decodes
- * run at once. The dx7 log showed three cold page decodes landing simultaneously and each taking
- * ~420ms, when a lone decode of the same page costs ~30-80ms — a 5-10x penalty from memory/allocator
- * contention on a low-end GPU/CPU as several multi-megabyte bitmaps materialise at once. Bounding
- * the reader's page decodes to two keeps a burst (a fling pulling several pages in) from collapsing
- * throughput. It is set per-request (not on the shared loader) so the library's cover loads keep
- * their full parallelism.
+ * Shared, small decoder dispatcher for the reader's pages (short-page binds AND the background
+ * memory-warms run on it). The dx7 log showed three cold page decodes landing simultaneously and
+ * each taking ~420ms, when a lone decode of the same page costs ~30-80ms — a 5-10x penalty from
+ * memory/allocator contention on a low-end GPU/CPU as several multi-megabyte bitmaps materialise at
+ * once. Bounding the reader's page decodes to two keeps a burst (a fling pulling several pages in)
+ * from collapsing throughput. It is set per-request (not on the shared loader) so the library's
+ * cover loads keep their full parallelism.
+ *
+ * The dx9 log showed the burst problem getting *worse* (644-722ms each) because the warms had been
+ * given their own dispatcher, letting three decodes run at once; the warm loop now uses this same
+ * dispatcher (and pauses while the user is scrolling), so total reader page-decode concurrency
+ * never exceeds [READER_PAGE_DECODE_PARALLELISM].
  */
-internal val readerPageDecodeDispatcher: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(2)
+internal const val READER_PAGE_DECODE_PARALLELISM = 2
 
-/**
- * Dispatcher for the reader's BACKGROUND memory-warms, deliberately separate from
- * [readerPageDecodeDispatcher] (which serves the on-screen page binds). The two used to share one
- * bounded dispatcher, so on a fling a page binding had to queue behind whatever warms were in
- * flight and its own decode was reported as 300-680ms even though a lone decode of the same page
- * costs ~60ms (the dx8 log showed exactly that). One warm at a time on its own dispatcher means a
- * bind is never blocked by a warm, while total page-decode concurrency stays bounded (2 binds +
- * 1 warm) so a burst of multi-megabyte decodes can't collapse throughput on this low-end device.
- */
-internal val readerWarmDecodeDispatcher: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(1)
+internal val readerPageDecodeDispatcher: CoroutineDispatcher =
+    Dispatchers.IO.limitedParallelism(READER_PAGE_DECODE_PARALLELISM)
 
 /** The decode width for a page: [requestedW], never upscaled past the source's [nativeW]. */
 internal fun nativeCapWidth(nativeW: Int, requestedW: Int): Int =
