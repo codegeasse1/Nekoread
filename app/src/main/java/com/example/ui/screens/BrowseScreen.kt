@@ -199,7 +199,14 @@ private fun ExtensionIconView(
 fun BrowseScreen(
     viewModel: MainViewModel,
     onMangaClick: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // Set by the tag-search / global-tag-search navigation routes (pushed on top of a manga detail
+    // screen when a genre chip is tapped). When non-null the screen opens straight onto that
+    // search, and its back affordances return to the screen underneath (the manga) instead of
+    // resetting to the Sources list.
+    tagSearch: Pair<String, String>? = null,
+    globalTagSearch: String? = null,
+    onBack: () -> Unit = {}
 ) {
     // rememberSaveable (not remember): the user's tab/source/search must survive navigating to a
     // manga detail screen and back — with plain `remember` the whole Browse composable resets to
@@ -230,6 +237,9 @@ fun BrowseScreen(
 
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var globalQuery by rememberSaveable { mutableStateOf("") }
+    // The query the global search currently reflects, so the debounced effect below doesn't re-issue
+    // a search that was already started directly (e.g. when a global tag-search screen opens).
+    var lastAppliedGlobalQuery by remember { mutableStateOf<String?>(null) }
     var activeSourceId by rememberSaveable { mutableStateOf("") }
     var activeSourceBaseUrl by rememberSaveable { mutableStateOf("") }
     var showAddRepoDialog by remember { mutableStateOf(false) }
@@ -264,34 +274,43 @@ fun BrowseScreen(
         }
     }
 
-    // A tag/genre chip tapped on a manga detail screen routes here: open that source's catalog
-    // pre-filled with the tag as the search query (e.g. "tag:Action" -> all Action manga).
-    val pendingSearch by viewModel.pendingCatalogSearch.collectAsStateWithLifecycle()
-    LaunchedEffect(pendingSearch) {
-        val ps = pendingSearch
-        if (ps != null) {
-            viewModel.consumePendingCatalogSearch()
-            val (sourceId, tag) = ps
-            AppDiagnostics.log("tag search apply src=$sourceId tag=$tag")
-            if (sourceId.isNotBlank()) {
-                // Drop any cached load state so the fresh tag search always runs (never swallowed
-                // by the same-key no-op guard), then jump straight to the catalog with the tag.
-                viewModel.clearCatalog()
-                activeSourceId = sourceId
-                activeSourceBaseUrl = extensionSources.firstOrNull { it.id == sourceId }?.baseUrl ?: ""
-                searchQuery = "tag:$tag"
-                selectedTabIndex = TAB_CATALOG
-                // "filter" so the catalog's Filter chip matches the filtered results being shown
-                // (the tag branch of searchCatalog ignores the mode, but the chip is the user's
-                // only hint about what the grid is showing).
-                viewModel.loadCatalog(sourceId, "tag:$tag", 1, "filter")
-            }
-        }
+    // A tag/genre chip tapped on a manga detail screen routes here (via the tag_search nav route):
+    // open that source's catalog pre-filled with the tag as the search query (e.g. "tag:Action" ->
+    // all Action manga).
+    LaunchedEffect(tagSearch) {
+        val ps = tagSearch ?: return@LaunchedEffect
+        val (sourceId, tag) = ps
+        if (sourceId.isBlank()) return@LaunchedEffect
+        AppDiagnostics.log("tag search apply src=$sourceId tag=$tag (route)")
+        // Drop any cached load state so the fresh tag search always runs (never swallowed by the
+        // same-key no-op guard), then jump straight to the catalog with the tag.
+        viewModel.clearCatalog()
+        activeSourceId = sourceId
+        activeSourceBaseUrl = extensionSources.firstOrNull { it.id == sourceId }?.baseUrl ?: ""
+        searchQuery = "tag:$tag"
+        selectedTabIndex = TAB_CATALOG
+        // "filter" so the catalog's Filter chip matches the filtered results being shown (the tag
+        // branch of searchCatalog ignores the mode, but the chip is the user's only hint about what
+        // the grid is showing).
+        viewModel.loadCatalog(sourceId, "tag:$tag", 1, "filter")
+    }
+
+    // The "Global search" option from the tag chooser: search the tag across every installed
+    // extension. The query is kept as "tag:<name>" so it flows through the same tag-aware branch of
+    // [MainViewModel.globalSearch], and so the search bar shows what is actually being searched.
+    LaunchedEffect(globalTagSearch) {
+        val tag = globalTagSearch ?: return@LaunchedEffect
+        if (tag.isBlank()) return@LaunchedEffect
+        AppDiagnostics.log("global tag search apply tag=$tag (route)")
+        selectedTabIndex = TAB_GLOBAL
+        globalQuery = "tag:$tag"
+        lastAppliedGlobalQuery = "tag:$tag"
+        viewModel.globalSearch("tag:$tag")
     }
 
     // Debounced real search against the active source. Tag/genre searches jump straight in via the
-    // pending-search handler above (no debounce), so they're skipped here — a tag search is never
-    // delayed or overwritten by a stale default-catalog reload.
+    // tagSearch effect above (no debounce), so they're skipped here — a tag search is never delayed
+    // or overwritten by a stale default-catalog reload.
     LaunchedEffect(searchQuery, activeSourceId, catalogMode) {
         if (selectedTabIndex == TAB_CATALOG && activeSourceId.isNotBlank() && !searchQuery.startsWith("tag:")) {
             delay(350)
@@ -304,8 +323,10 @@ fun BrowseScreen(
         if (selectedTabIndex == TAB_GLOBAL) {
             if (globalQuery.isBlank()) {
                 viewModel.clearGlobalSearch()
-            } else {
+                lastAppliedGlobalQuery = null
+            } else if (globalQuery != lastAppliedGlobalQuery) {
                 delay(400)
+                lastAppliedGlobalQuery = globalQuery
                 viewModel.globalSearch(globalQuery)
             }
         }
@@ -326,22 +347,40 @@ fun BrowseScreen(
     // and shows a minimal Tadami-style bar: back arrow + the source's name.
     val inExtensionMode = selectedTabIndex == TAB_CATALOG && activeSourceId.isNotBlank()
 
-    // While inside a source's catalog, the system back button must exit back to the Sources list
-    // (exactly like the on-screen back arrow) — not pop the whole Browse tab and land on Library.
-    BackHandler(enabled = inExtensionMode) {
-        activeSourceId = ""
-        activeSourceBaseUrl = ""
-        searchQuery = ""
-        selectedTabIndex = TAB_SOURCES
+    // True while this BrowseScreen instance is a pushed tag-search screen (opened from a genre chip
+    // on a manga detail). Those screens show the minimal bar too, and their back affordances must
+    // return to the manga they were opened from, not reset to the Sources list.
+    val isTagSearchRoute = tagSearch != null
+    val isGlobalTagSearchRoute = globalTagSearch != null
+    val isPushedSearch = isTagSearchRoute || isGlobalTagSearchRoute
+
+    // Leaving a pushed tag search pops back to the manga detail underneath; leaving a normal
+    // in-source browse resets to the Sources list (the source-selection screen).
+    val exitSearch: () -> Unit = {
+        if (isPushedSearch) {
+            onBack()
+        } else {
+            activeSourceId = ""
+            activeSourceBaseUrl = ""
+            searchQuery = ""
+            selectedTabIndex = TAB_SOURCES
+        }
     }
+
+    val minimalBar = inExtensionMode || isGlobalTagSearchRoute
+
+    // While inside a source's catalog (or a pushed tag search), the system back button must exit
+    // through [exitSearch] — not pop the whole Browse tab and land on Library.
+    BackHandler(enabled = isPushedSearch) { exitSearch() }
+    BackHandler(enabled = !isPushedSearch && inExtensionMode) { exitSearch() }
 
     Scaffold(
         containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0),
         topBar = {
-            if (inExtensionMode) {
+            if (minimalBar) {
                 // Floating rounded glass pill (Hikari/taskbar style), matching the bottom nav pill:
-                // back arrow + the search bar with the site-verify globe on its side.
+                // back arrow + the search bar (with the site-verify globe in source mode).
                 FloatingTopAppBar {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -350,40 +389,37 @@ fun BrowseScreen(
                             .padding(start = 4.dp, end = 8.dp)
                     ) {
                         IconButton(
-                            onClick = {
-                                activeSourceId = ""
-                                activeSourceBaseUrl = ""
-                                searchQuery = ""
-                                selectedTabIndex = TAB_SOURCES
-                            },
+                            onClick = exitSearch,
                             modifier = Modifier.size(40.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back to sources",
+                                contentDescription = "Back",
                                 tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
                         GlassSearchBar(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            placeholder = "Search $catalogSourceName...",
+                            value = if (isGlobalTagSearchRoute) globalQuery else searchQuery,
+                            onValueChange = { if (isGlobalTagSearchRoute) globalQuery = it else searchQuery = it },
+                            placeholder = if (isGlobalTagSearchRoute) "Search all sources..." else "Search $catalogSourceName...",
                             modifier = Modifier.weight(1f)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        IconButton(
-                            onClick = {
-                                if (activeSourceBaseUrl.isNotBlank()) {
-                                    webviewTarget = activeSourceBaseUrl to sourceUserAgent(activeSourceId)
-                                }
-                            },
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Language,
-                                contentDescription = "Cloudflare check",
-                                tint = NekoVioletPrimary
-                            )
+                        if (!isGlobalTagSearchRoute) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            IconButton(
+                                onClick = {
+                                    if (activeSourceBaseUrl.isNotBlank()) {
+                                        webviewTarget = activeSourceBaseUrl to sourceUserAgent(activeSourceId)
+                                    }
+                                },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Language,
+                                    contentDescription = "Cloudflare check",
+                                    tint = NekoVioletPrimary
+                                )
+                            }
                         }
                     }
                 }
@@ -498,7 +534,8 @@ fun BrowseScreen(
                     searchedSources = globalSearchedSources,
                     totalSources = globalTotalSources,
                     onStopSearch = { viewModel.stopGlobalSearch() },
-                    onMangaClick = onMangaClick
+                    onMangaClick = onMangaClick,
+                    minimal = isGlobalTagSearchRoute
                 )
                 TAB_CATALOG -> CatalogTabContent(
                     searchQuery = searchQuery,
@@ -863,15 +900,20 @@ fun GlobalSearchTabContent(
     searchedSources: Int,
     totalSources: Int,
     onStopSearch: () -> Unit,
-    onMangaClick: (String) -> Unit
+    onMangaClick: (String) -> Unit,
+    // True when the outer (pushed tag-search) bar already hosts the search field, so this tab must
+    // not render a second one.
+    minimal: Boolean = false
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            GlassSearchBar(
-                value = query,
-                onValueChange = onQueryChange,
-                placeholder = "Search all installed sources (e.g. \"reincarnate\")..."
-            )
+            if (!minimal) {
+                GlassSearchBar(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    placeholder = "Search all installed sources (e.g. \"reincarnate\")..."
+                )
+            }
             Spacer(modifier = Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (query.isNotBlank() && searchedSources > 0) {

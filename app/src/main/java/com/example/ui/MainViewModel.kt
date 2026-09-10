@@ -476,25 +476,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         lastCatalogKey = null
     }
 
-    // A tag/genre chip tapped on a detail screen: stash (sourceId, tag) so BrowseScreen can open
-    // that source's catalog pre-filled with the tag search when it next composes.
-    private val _pendingCatalogSearch = MutableStateFlow<Pair<String, String>?>(null)
-    val pendingCatalogSearch: StateFlow<Pair<String, String>?> = _pendingCatalogSearch.asStateFlow()
-
-    fun openTagSearch(sourceId: String, tag: String) {
-        _pendingCatalogSearch.value = sourceId to tag
-    }
-
-    fun consumePendingCatalogSearch(): Pair<String, String>? {
-        val v = _pendingCatalogSearch.value
-        _pendingCatalogSearch.value = null
-        return v
-    }
+    // A genre/tag chip tapped on a detail screen now opens a dedicated tag_search nav route (pushed
+    // on top of the detail), whose BrowseScreen instance receives the (sourceId, tag) directly as a
+    // composable parameter - so there is no shared "pending search" state here any more.
 
     fun globalSearch(query: String) {
         val q = query.trim()
         stopGlobalSearch()
         if (q.isBlank()) {
+            _globalSections.value = emptyList()
+            _globalSearchedSources.value = 0
+            _globalTotalSources.value = 0
+            _globalError.value = null
+            _globalLoading.value = false
+            return
+        }
+        // A "tag:<name>" query (used by the global tag-search screen opened from a genre chip)
+        // searches every source by TAG rather than by keyword, so a tap on "Shounen" surfaces each
+        // installed extension's Shounen listing instead of a literal "Shounen" title search.
+        val isTagQuery = q.startsWith("tag:")
+        val term = if (isTagQuery) q.removePrefix("tag:").trim() else q
+        if (term.isBlank()) {
             _globalSections.value = emptyList()
             _globalSearchedSources.value = 0
             _globalTotalSources.value = 0
@@ -519,7 +521,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val children = adapters.map { adapter ->
                     launch(Dispatchers.IO) {
                         val manga = try {
-                            adapter.search(q, 1).distinctBy { it.id }.take(20)
+                            val results =
+                                if (isTagQuery) adapter.searchByTag(term, 1) else adapter.search(term, 1)
+                            results.distinctBy { it.id }.take(20)
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Throwable) {

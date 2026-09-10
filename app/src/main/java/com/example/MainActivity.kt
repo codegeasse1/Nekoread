@@ -42,8 +42,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -68,6 +70,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.view.MotionEvent
 import android.widget.Toast
@@ -393,6 +396,20 @@ sealed class Screen(val route: String, val title: String, val icon: @Composable 
     })
 }
 
+// Routes for a genre/tag tap: pushed on top of the manga detail screen so that back returns to
+// that manga (rather than unwinding to the Browse/Sources tab).
+private const val TAG_SEARCH_ROUTE = "tag_search"
+private const val TAG_SEARCH_PATTERN = "tag_search?sourceId={sourceId}&tag={tag}"
+private const val GLOBAL_TAG_SEARCH_ROUTE = "global_tag_search"
+private const val GLOBAL_TAG_SEARCH_PATTERN = "global_tag_search?tag={tag}"
+
+/** The tag whose search options are currently being chosen, and the source it came from. */
+private data class TagChoice(
+    val sourceId: String,
+    val sourceName: String,
+    val tag: String
+)
+
 @Composable
 fun MainAppScreen(viewModel: MainViewModel) {
     val navController = rememberNavController()
@@ -406,7 +423,17 @@ fun MainAppScreen(viewModel: MainViewModel) {
         Screen.Settings
     )
 
-    val showBottomBar = currentRoute in bottomNavScreens.map { it.route }
+    // The pushed tag-search screens keep the bottom nav pill visible (they're a Browse deep-dive),
+    // so the user can still jump to Library/History/Settings from them. Note: a destination's route
+    // is the full pattern (with its argument placeholders), so match on the patterns here.
+    val tagSearchRoutePatterns = setOf(TAG_SEARCH_PATTERN, GLOBAL_TAG_SEARCH_PATTERN)
+    val showBottomBar =
+        currentRoute in bottomNavScreens.map { it.route } || currentRoute in tagSearchRoutePatterns
+
+    // Genre chip chooser: tapping a tag offers "Search in <source>" or a search across every
+    // installed extension.
+    var tagChooser by remember { mutableStateOf<TagChoice?>(null) }
+    val extensionSources by viewModel.extensionSources.collectAsStateWithLifecycle()
 
     // The reader is a true fullscreen experience (like Tadami): page content draws behind the
     // system bars, with the reader's own chrome handling the safe-area insets.
@@ -460,7 +487,8 @@ fun MainAppScreen(viewModel: MainViewModel) {
                                             style = MaterialTheme.typography.labelSmall
                                         )
                                     },
-                                    selected = currentRoute == screen.route,
+                                    selected = currentRoute == screen.route ||
+                                        (screen == Screen.Browse && currentRoute in tagSearchRoutePatterns),
                                     onClick = {
                                         navController.navigateToTab(screen.route)
                                     },
@@ -519,6 +547,45 @@ fun MainAppScreen(viewModel: MainViewModel) {
                 )
             }
 
+            // A genre chip tapped on a manga detail screen pushes one of these two screens ON TOP of
+            // the detail entry, so back (or the on-screen arrow) returns to that manga instead of
+            // unwinding to the Browse/Sources tab.
+            composable(
+                route = TAG_SEARCH_PATTERN,
+                arguments = listOf(
+                    navArgument("sourceId") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("tag") { type = NavType.StringType; defaultValue = "" }
+                )
+            ) { backStackEntry ->
+                val sourceId = backStackEntry.arguments?.getString("sourceId") ?: ""
+                val tag = backStackEntry.arguments?.getString("tag") ?: ""
+                BrowseScreen(
+                    viewModel = viewModel,
+                    onMangaClick = { mangaId ->
+                        navController.navigate("manga_detail/$mangaId")
+                    },
+                    tagSearch = sourceId to tag,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(
+                route = GLOBAL_TAG_SEARCH_PATTERN,
+                arguments = listOf(
+                    navArgument("tag") { type = NavType.StringType; defaultValue = "" }
+                )
+            ) { backStackEntry ->
+                val tag = backStackEntry.arguments?.getString("tag") ?: ""
+                BrowseScreen(
+                    viewModel = viewModel,
+                    onMangaClick = { mangaId ->
+                        navController.navigate("manga_detail/$mangaId")
+                    },
+                    globalTagSearch = tag,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
             composable(Screen.Settings.route) {
                 SettingsScreen(viewModel = viewModel)
             }
@@ -550,13 +617,13 @@ fun MainAppScreen(viewModel: MainViewModel) {
                     onTagClick = { tag ->
                         val srcId = mangaState?.sourceId?.takeIf { it.isNotBlank() }
                             ?: mangaState?.id?.substringBefore(":")
-                        if (srcId != null) {
-                            AppDiagnostics.log(
-                                "tag click tag=$tag src=$srcId from=${navController.currentDestination?.route}"
-                            )
-                            viewModel.openTagSearch(srcId, tag)
-                        }
-                        navController.navigateToTagSearch()
+                            ?: ""
+                        AppDiagnostics.log(
+                            "tag click tag=$tag src=$srcId from=${navController.currentDestination?.route}"
+                        )
+                        val sourceName = extensionSources.firstOrNull { it.id == srcId }?.name
+                            ?.takeIf { it.isNotBlank() } ?: "this extension"
+                        tagChooser = TagChoice(srcId, sourceName, tag)
                     }
                 )
             }
@@ -613,6 +680,47 @@ fun MainAppScreen(viewModel: MainViewModel) {
             }
         }
     }
+    // Genre chip chooser: "Search in <source>" (this extension's tag listing) or "Global search"
+    // (the tag across every installed extension).
+    tagChooser?.let { choice ->
+        AlertDialog(
+            onDismissRequest = { tagChooser = null },
+            title = { Text(choice.tag) },
+            text = {
+                Text("Search this tag in the current extension, or across all installed extensions?")
+            },
+            confirmButton = {
+                if (choice.sourceId.isNotBlank()) {
+                    Button(
+                        onClick = {
+                            val c = choice
+                            tagChooser = null
+                            navController.navigateToTagSearch(c.sourceId, c.tag)
+                        }
+                    ) {
+                        Text("Search in ${choice.sourceName}")
+                    }
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(
+                        onClick = {
+                            val c = choice
+                            tagChooser = null
+                            navController.navigateToGlobalTagSearch(c.tag)
+                        }
+                    ) {
+                        Text("Global search")
+                    }
+                    TextButton(onClick = { tagChooser = null }) {
+                        Text("Cancel")
+                    }
+                }
+            }
+        )
+    }
+
     // In-app "update available" dialog (shown from the notification tap, or the Settings banner).
     updateInfo?.let { info ->
         AlertDialog(
@@ -649,33 +757,36 @@ fun MainAppScreen(viewModel: MainViewModel) {
 }
 
 /**
- * Open the Browse tab for a genre/tag tapped on a manga detail screen.
+ * Open a source's tag listing for a genre chip tapped on a manga detail screen.
  *
- * Deliberately NOT [navigateToTab]: that helper navigates with
- * `popUpTo(startDestination) { saveState = true }` + `restoreState = true`, and the restored state
- * is the tab's whole saved back stack - which, when the detail was reached from Browse, still
- * contained that detail screen on top. So the tag search was applied to the Browse entry *behind*
- * the restored detail entry, and you only saw the results after pressing back (which popped it).
- * Popping straight back to the existing Browse entry drops everything above it, so the results are
- * the visible screen immediately; if Browse is not on the stack (detail opened from Library or
- * History), push a fresh one.
+ * This is a real nav route pushed ON TOP of the detail entry (not a switch to the Browse tab), so
+ * pressing back - or the on-screen arrow on the results screen - returns to the manga the tag was
+ * tapped on. The earlier approach mutated the Browse tab's state instead, which meant back fell
+ * through to the Sources/extension list with the detail screen already dropped from the stack.
  */
-private fun NavHostController.navigateToTagSearch() {
-    if (popBackStack(Screen.Browse.route, inclusive = false)) {
-        AppDiagnostics.log("tag click -> popped back to browse")
-        return
-    }
-    navigate(Screen.Browse.route) {
-        popUpTo(graph.findStartDestination().id)
-        launchSingleTop = true
-    }
-    AppDiagnostics.log("tag click -> pushed browse (not on the stack)")
+private fun NavHostController.navigateToTagSearch(sourceId: String, tag: String) {
+    AppDiagnostics.log("tag search -> $TAG_SEARCH_ROUTE src=$sourceId tag=$tag")
+    navigate("$TAG_SEARCH_ROUTE?sourceId=${Uri.encode(sourceId)}&tag=${Uri.encode(tag)}")
 }
 
-/** Switch to a bottom-nav tab, always landing on its top-level screen. */
+/** Search a tag across every installed extension, pushed on top of the manga detail screen. */
+private fun NavHostController.navigateToGlobalTagSearch(tag: String) {
+    AppDiagnostics.log("global tag search -> $GLOBAL_TAG_SEARCH_ROUTE tag=$tag")
+    navigate("$GLOBAL_TAG_SEARCH_ROUTE?tag=${Uri.encode(tag)}")
+}
+
+/**
+ * Switch to a bottom-nav tab, always landing on its top-level screen.
+ *
+ * The save/restore pattern preserves each tab's own state, but it can silently no-op (for example
+ * right after a tag-search push reshaped the back stack) - which looked like the tapped tab button
+ * doing nothing. So after navigating we verify the destination actually changed and, if it didn't,
+ * force the switch by popping to the tab's entry or pushing it directly.
+ */
 private fun NavHostController.navigateToTab(route: String) {
+    AppDiagnostics.log("tab click $route from=${currentDestination?.route}")
     if (currentDestination?.route == route) {
-        // Already on this tab Ã¢ÂÂ pop back to its top-level screen if we went deeper.
+        // Already on this tab - pop back to its top-level screen if we went deeper.
         popBackStack(route, inclusive = false)
         return
     }
@@ -685,5 +796,14 @@ private fun NavHostController.navigateToTab(route: String) {
         }
         launchSingleTop = true
         restoreState = true
+    }
+    if (currentDestination?.route != route) {
+        AppDiagnostics.log("tab click fallback -> $route")
+        if (!popBackStack(route, inclusive = false)) {
+            navigate(route) {
+                popUpTo(graph.findStartDestination().id) { inclusive = false }
+                launchSingleTop = true
+            }
+        }
     }
 }
