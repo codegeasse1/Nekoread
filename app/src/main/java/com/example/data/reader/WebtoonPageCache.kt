@@ -68,6 +68,13 @@ object WebtoonPageCache {
     fun targetFile(key: String, dir: File): File = File(dir, "$key.img")
 
     /**
+     * Intrinsic size of [imageUrl] if it is already known in memory, else null. Deliberately
+     * synchronous and IO-free: the page holder calls it during a bind (main thread, mid-layout) to
+     * size a prewarmed page's frame on the first layout pass instead of after an IO hop.
+     */
+    fun cachedSize(imageUrl: String): Pair<Int, Int>? = dims[keyFor(imageUrl)]
+
+    /**
      * Ensures the page's image bytes are on disk and returns the file. The download goes through
      * the source's own client + imageRequest headers (Referer/Origin etc.), exactly like Tadami's
      * HttpPageLoader, so hotlink-protected CDNs and signed URLs work.
@@ -177,6 +184,17 @@ object WebtoonPageCache {
                 PageMeta(d.first, d.second, anim, isTallPage(d.first, d.second))
             }
         }
+    }
+
+    /**
+     * Warms the in-memory metadata (dims + animated flag) for [desc] right after its download
+     * lands. The prewarm loop calls this so that by the time the page is bound, [cachedSize] can
+     * answer the bind synchronously — the holder then sizes the frame on the first layout pass and
+     * the page never lays out at the viewport placeholder and snaps to its real height a frame
+     * later. Cheap: [meta] returns from [dims] with at most one small header read on IO.
+     */
+    suspend fun prime(desc: MangaSource.PageDescriptor, dir: File) {
+        meta(desc, dir)
     }
 
     /** True if [file] looks like an animated GIF or animated WebP (cheap 32-byte header read). */

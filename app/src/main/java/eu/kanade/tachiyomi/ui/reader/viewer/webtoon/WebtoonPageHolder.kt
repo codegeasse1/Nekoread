@@ -51,8 +51,17 @@ class WebtoonPageHolder(
     /** Job for loading the page. */
     private var loadJob: Job? = null
 
+    /**
+     * The frame's placeholder height while a page loads: the recycler's viewport height. The
+     * recycler is not necessarily measured yet when the FIRST holders are created (the adapter is
+     * built during the initial layout), so fall back to the display height rather than 0 — a 0
+     * placeholder is coerced to 1px, which collapses every not-yet-loaded page to a sliver and
+     * makes the whole chapter fit the layout window at once (the dx15 log binds all 18 pages of the
+     * chapter in one burst on open).
+     */
     private val parentHeight
-        get() = viewer.recycler.height
+        get() = viewer.recycler.height.takeIf { it > 0 }
+            ?: frame.context.resources.displayMetrics.heightPixels
 
     init {
         refreshLayoutParams()
@@ -67,14 +76,28 @@ class WebtoonPageHolder(
     fun bind(item: WebtoonItem.Page) {
         val syncT0 = SystemClock.elapsedRealtime()
         this.item = item
+        val label = item.desc.imageUrl
         ReaderDiagnostics.init(frame.context)
-        ReaderDiagnostics.currentLabel = item.desc.imageUrl
-        ReaderDiagnostics.log("bind seg=${item.segIndex} page=${item.number}")
+        ReaderDiagnostics.currentLabel = label
+        frame.debugLabel = label
+        ReaderDiagnostics.logFor(label, "bind seg=${item.segIndex} page=${item.number}")
         loadJob?.cancel()
         removeErrorLayout()
         progressContainer.isVisible = true
         refreshLayoutParams()
         refreshPlaceholderHeight()
+        // If the prewarm already knows this page's size (in memory), size the frame NOW — this bind
+        // runs during RecyclerView layout, so the first layout pass reserves the page's true height
+        // and the list does not relayout a frame later (the viewport-placeholder snap that reads as
+        // scroll jitter). Pages whose size is not yet known keep the placeholder and settle in the
+        // coroutine below.
+        WebtoonPageCache.cachedSize(label)?.let { (w, h) ->
+            if (w > 0 && h > 0) {
+                val rw = viewer.recycler.width.takeIf { it > 0 }
+                    ?: frame.context.resources.displayMetrics.widthPixels
+                setFrameHeightNow((rw.toFloat() * h / w).toInt().coerceAtLeast(1))
+            }
+        }
         loadJob = scope.launch {
             val bindT0 = SystemClock.elapsedRealtime()
             try {
@@ -98,7 +121,7 @@ class WebtoonPageHolder(
                     viewer.cacheDir,
                 ).exists()
                 val file = viewer.loadPage(item)
-                ReaderDiagnostics.log("file ready ${file.length() / 1024}KB cachedBeforeBind=$wasCached")
+                ReaderDiagnostics.logFor(label, "file ready ${file.length() / 1024}KB cachedBeforeBind=$wasCached")
                 // Everything the render needs (dims, animated, tall) comes from cached metadata —
                 // no bounds decode, no header read, no isTallPage sniff during the bind.
                 if (meta == null) meta = WebtoonPageCache.meta(item.desc, viewer.cacheDir)
@@ -123,7 +146,7 @@ class WebtoonPageHolder(
                 )
                 frame.colorFilter = viewer.colorFilter
                 val bindDt = SystemClock.elapsedRealtime() - bindT0
-                if (bindDt >= 40) ReaderDiagnostics.log("bind work ${bindDt}ms")
+                if (bindDt >= 40) ReaderDiagnostics.logFor(label, "bind work ${bindDt}ms")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -131,7 +154,7 @@ class WebtoonPageHolder(
             }
         }
         val syncDt = SystemClock.elapsedRealtime() - syncT0
-        if (syncDt >= 20) ReaderDiagnostics.log("bind sync ${syncDt}ms")
+        if (syncDt >= 20) ReaderDiagnostics.logFor(label, "bind sync ${syncDt}ms")
     }
 
     private fun refreshLayoutParams() {
@@ -168,6 +191,19 @@ class WebtoonPageHolder(
         } else {
             frame.requestLayout()
         }
+    }
+
+    /**
+     * Sizes the frame to [targetH] immediately, safe to call from inside a bind (RecyclerView is
+     * mid-layout there). Mutating the existing params in place and letting the in-progress layout
+     * measure the child is correct and costs no extra pass; a layout request is only issued when the
+     * recycler is NOT currently laying out (otherwise the request would schedule a redundant pass).
+     */
+    private fun setFrameHeightNow(targetH: Int) {
+        val lp = frame.layoutParams as? ViewGroup.MarginLayoutParams ?: return
+        if (lp.height == targetH) return
+        lp.height = targetH
+        if (!viewer.recycler.isComputingLayout) frame.requestLayout()
     }
 
     /** Pre-sizes the frame to [targetH] without layout thrash (WRAP_CONTENT = unknown page). */

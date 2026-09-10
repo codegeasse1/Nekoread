@@ -120,10 +120,22 @@ object ReaderDiagnostics {
         notifyNow()
     }
 
-    fun log(msg: String) {
+    fun log(msg: String) = logFor(currentLabel, msg)
+
+    /**
+     * Like [log], but tags the line with an explicit [label] instead of the mutable [currentLabel].
+     *
+     * Async lines (a page's download finishing, its decode landing) are written well after the
+     * bind that started them, and [currentLabel] is whatever page was bound MOST RECENTLY by then —
+     * so a `file ready`/`decoded` line used to be tagged with the wrong page, which made the log
+     * look like the same page was bound twice (the dx14 reader log had two `file ready` lines with
+     * different sizes under one URL). Callers that log from a coroutine/Coil callback must pass the
+     * label captured at bind time.
+     */
+    fun logFor(label: String, msg: String) {
         if (!ENABLED) return
         val since = SystemClock.elapsedRealtime() - startMs
-        val line = "+${since}ms [${currentLabel}] $msg"
+        val line = "+${since}ms [$label] $msg"
         synchronized(lock) {
             lines.addLast(line)
             while (lines.size > MAX_LINES) lines.removeFirst()

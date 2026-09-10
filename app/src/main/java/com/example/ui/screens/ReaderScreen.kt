@@ -789,6 +789,9 @@ fun ReaderScreen(
                     try {
                         if (source != null) {
                             WebtoonPageCache.fileFor(m, source, webtoonCacheDir)
+                            // Warm the in-memory metadata now (dims + animated flag) so a later
+                            // bind can size the frame synchronously and skip the placeholder snap.
+                            WebtoonPageCache.prime(m, webtoonCacheDir)
                             webtoonDownloaded[key] = true
                         }
                     } catch (e: Throwable) {

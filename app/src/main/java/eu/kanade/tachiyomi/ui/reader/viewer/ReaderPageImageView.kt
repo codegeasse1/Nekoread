@@ -123,6 +123,14 @@ open class ReaderPageImageView @JvmOverloads constructor(
     /** Target decode width (px) for short webtoon pages decoded by Coil (yomi's fast path). */
     var decodeWidthPx: Int = 0
 
+    /**
+     * Page label for diagnostics lines emitted from ASYNC callbacks (download ready, decode
+     * success/failure). Set by the page holder at bind time. Using the holder's own label here
+     * instead of [ReaderDiagnostics.currentLabel] means a `decoded` line is attributed to the page
+     * it actually decoded even though other pages have since bound (see logFor's KDoc).
+     */
+    var debugLabel: String = "-"
+
     /** Whole-strip single decodes larger than this (bytes, at the quality-scaled decode width) are
      *  rendered as windowed chunks by [WebtoonChunkedImageView] instead, so a pathological
      *  mega-strip can't OOM the reader (a few live pages at this size is already ~150MB of heap).
@@ -190,31 +198,31 @@ open class ReaderPageImageView @JvmOverloads constructor(
         // footprint that the warm window is sized for, so binds go back to being 1ms cache hits.
         val shortW = budgetedShortWidth(nativeW, nativeH, requestedW)
         if (isAnimated) {
-            ReaderDiagnostics.log("path=ANIMATED dims=$dims")
+            ReaderDiagnostics.logFor(debugLabel, "path=ANIMATED dims=$dims")
             prepareAnimatedImageView()
             setAnimatedImage(file, config)
         } else {
             val isTall = config.isTallImage ?: isTallImageFile(file)
             if (isWebtoon && !isTall && !config.alwaysDecodeLongStripWithSSIV) {
-                ReaderDiagnostics.log("path=SHORT_WHOLE dims=$dims tall=false decodeW=$shortW rgb565=${config.decodeRgb565}")
+                ReaderDiagnostics.logFor(debugLabel, "path=SHORT_WHOLE dims=$dims tall=false decodeW=$shortW rgb565=${config.decodeRgb565}")
                 prepareShortImageView()
                 setShortImage(file, config, shortW)
             } else if (isWebtoon && isTall && !config.cropBorders && !config.alwaysDecodeLongStripWithSSIV) {
                 if (fitsSingleDecode(file)) {
                     // Whole-strip single decode (software, memory-cached by Coil): one stable
                     // bitmap drawn per frame — no per-frame tile/chunk decode, the smooth path.
-                    ReaderDiagnostics.log("path=TALL_WHOLE dims=$dims tall=true decodeW=$nativeCapW rgb565=${config.decodeRgb565}")
+                    ReaderDiagnostics.logFor(debugLabel, "path=TALL_WHOLE dims=$dims tall=true decodeW=$nativeCapW rgb565=${config.decodeRgb565}")
                     prepareShortImageView()
                     setTallImage(file, config, nativeCapW)
                 } else {
                     // Pathological mega-strip: a single bitmap would blow the memory budget, so
                     // render it as a windowed stack of chunks instead.
-                    ReaderDiagnostics.log("path=TALL_CHUNKED dims=$dims tall=true decodeW=$nativeCapW (exceeds 40MB single-decode budget)")
+                    ReaderDiagnostics.logFor(debugLabel, "path=TALL_CHUNKED dims=$dims tall=true decodeW=$nativeCapW (exceeds 40MB single-decode budget)")
                     prepareChunkedImageView()
                     setChunkedImage(file, config)
                 }
             } else {
-                ReaderDiagnostics.log("path=SSIV dims=$dims tall=$isTall cropBorders=${config.cropBorders} alwaysSSIV=${config.alwaysDecodeLongStripWithSSIV}")
+                ReaderDiagnostics.logFor(debugLabel, "path=SSIV dims=$dims tall=$isTall cropBorders=${config.cropBorders} alwaysSSIV=${config.alwaysDecodeLongStripWithSSIV}")
                 prepareNonAnimatedImageView()
                 setNonAnimatedImage(file, config)
             }
@@ -279,13 +287,13 @@ open class ReaderPageImageView @JvmOverloads constructor(
         setOnImageEventListener(
             object : SubsamplingScaleImageView.DefaultOnImageEventListener() {
                 override fun onReady() {
-                    ReaderDiagnostics.log("SSIV ready ${SystemClock.elapsedRealtime() - t0}ms (tile-decode from file)")
+                    ReaderDiagnostics.logFor(debugLabel, "SSIV ready ${SystemClock.elapsedRealtime() - t0}ms (tile-decode from file)")
                     this@ReaderPageImageView.onImageLoaded()
                     setupZoom(config)
                 }
 
                 override fun onImageLoadError(e: Exception) {
-                    ReaderDiagnostics.log("SSIV ERROR after ${SystemClock.elapsedRealtime() - t0}ms: ${e.message}")
+                    ReaderDiagnostics.logFor(debugLabel, "SSIV ERROR after ${SystemClock.elapsedRealtime() - t0}ms: ${e.message}")
                     this@ReaderPageImageView.onImageLoadError()
                 }
             },
@@ -419,7 +427,8 @@ open class ReaderPageImageView @JvmOverloads constructor(
                 onSuccess = { drawable ->
                     setImageDrawable(drawable)
                     isVisible = true
-                    ReaderDiagnostics.log(
+                    ReaderDiagnostics.logFor(
+                        debugLabel,
                         "decoded ${SystemClock.elapsedRealtime() - t0}ms " +
                             "bitmap=${drawable.intrinsicWidth}x${drawable.intrinsicHeight} " +
                             "config=${(drawable as? BitmapDrawable)?.bitmap?.config?.name ?: "?"}",
@@ -427,7 +436,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
                     this@ReaderPageImageView.onImageLoaded()
                 },
                 onError = {
-                    ReaderDiagnostics.log("decode ERROR after ${SystemClock.elapsedRealtime() - t0}ms")
+                    ReaderDiagnostics.logFor(debugLabel, "decode ERROR after ${SystemClock.elapsedRealtime() - t0}ms")
                     this@ReaderPageImageView.onImageLoadError()
                 },
             )
@@ -459,7 +468,8 @@ open class ReaderPageImageView @JvmOverloads constructor(
                 onSuccess = { drawable ->
                     setImageDrawable(drawable)
                     isVisible = true
-                    ReaderDiagnostics.log(
+                    ReaderDiagnostics.logFor(
+                        debugLabel,
                         "decoded ${SystemClock.elapsedRealtime() - t0}ms " +
                             "bitmap=${drawable.intrinsicWidth}x${drawable.intrinsicHeight} " +
                             "config=${(drawable as? BitmapDrawable)?.bitmap?.config?.name ?: "?"} " +
@@ -468,7 +478,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
                     this@ReaderPageImageView.onImageLoaded()
                 },
                 onError = {
-                    ReaderDiagnostics.log("decode ERROR after ${SystemClock.elapsedRealtime() - t0}ms (whole-strip)")
+                    ReaderDiagnostics.logFor(debugLabel, "decode ERROR after ${SystemClock.elapsedRealtime() - t0}ms (whole-strip)")
                     this@ReaderPageImageView.onImageLoadError()
                 },
             )
