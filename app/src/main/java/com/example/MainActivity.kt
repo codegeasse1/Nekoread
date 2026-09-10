@@ -41,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,8 +79,11 @@ import com.example.updater.UpdateDownloadService
 import com.example.updater.UpdateInfo
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
+import com.example.data.local.ChapterEntity
+import com.example.data.local.MangaEntity
 import com.example.data.source.ExtensionCoverImageFetcherFactory
 import com.example.data.source.ExtensionPageImageFetcherFactory
 import com.example.data.source.ExtensionPageImageKeyer
@@ -527,15 +531,33 @@ fun MainAppScreen(viewModel: MainViewModel) {
                 val chapterId = backStackEntry.arguments?.getString("chapterId") ?: ""
                 val startAtBeginning = backStackEntry.arguments?.getBoolean("startAtBeginning") ?: false
 
-                val mangaState by viewModel.repository.getMangaFlow(mangaId).collectAsStateWithLifecycle(initialValue = null)
-                val chaptersState by viewModel.repository.getChaptersFlow(mangaId).collectAsStateWithLifecycle(initialValue = emptyList())
-                val currentChapter = chaptersState.firstOrNull { it.id == chapterId }
+                // Reader inputs are a stable SNAPSHOT, not the live Room flows. Saving reading
+                // progress writes the manga row AND the chapter row on every page flip
+                // (MangaRepository.saveReadingProgress -> mangaDao.updateReadProgress +
+                // chapterDao.updateChapterReadState), and both rows are Room-observable — so
+                // collecting them live here made the route re-read a changed manga/list on every
+                // page, handing ReaderScreen a brand-new `List`/`MangaEntity` instance and
+                // recomposing the ENTIRE reader screen once per page. The dx12 log measured that
+                // as a `recompose ReaderScreen` of 230-425ms sitting inside a Choreographer frame
+                // callback, once per page bind — the ~250ms per-page scroll stall. The reader only
+                // needs a snapshot: it re-reads when you open the reader or change chapter, and
+                // nothing it draws should react to the row it just wrote itself.
+                val readerData by produceState<Pair<MangaEntity?, List<ChapterEntity>>>(
+                    initialValue = null to emptyList(),
+                    mangaId,
+                    chapterId,
+                ) {
+                    val manga = viewModel.repository.getMangaFlow(mangaId).first()
+                    val chapters = viewModel.repository.getChaptersFlow(mangaId).first()
+                    value = manga to chapters
+                }
+                val currentChapter = readerData.second.firstOrNull { it.id == chapterId }
 
                 ReaderScreen(
                     viewModel = viewModel,
-                    manga = mangaState,
+                    manga = readerData.first,
                     chapter = currentChapter,
-                    allChapters = chaptersState,
+                    allChapters = readerData.second,
                     onBackClick = { navController.popBackStack() },
                     startAtBeginning = startAtBeginning,
                     onChapterChange = { newChapterId ->
