@@ -134,8 +134,21 @@ open class ReaderPageImageView @JvmOverloads constructor(
     /** Whole-strip single decodes larger than this (bytes, at the quality-scaled decode width) are
      *  rendered as windowed chunks by [WebtoonChunkedImageView] instead, so a pathological
      *  mega-strip can't OOM the reader (a few live pages at this size is already ~150MB of heap).
+     *
+     *  Raised 40MB → 48MB in dx22. The Comix source serves 720-wide strips running 13.7k-17.0k px
+     *  tall, i.e. whole-strip bitmaps of 37.7-46.7 MiB — squarely across the old 40MB line. The
+     *  shortest of them (003/008) decoded fine whole (`decoded 0-2ms … tallWhole=true`), while every
+     *  taller one fell to the chunked renderer and came out black (the dx21 screenshot shows page 6,
+     *  `path=TALL_CHUNKED`, as one solid black field with no error and no spinner). 48MB covers the
+     *  whole realistic range at the source's own 720px resolution, and it is still a per-bitmap cap:
+     *  the total is bounded by Coil's memory cache (~102MB on this device, which already held two
+     *  39.5MB strips), so the reader's footprint does not grow without bound.
      */
-    private val TALL_SINGLE_DECODE_BYTES: Long = 40L * 1024 * 1024
+    private val TALL_SINGLE_DECODE_BYTES: Long = 48L * 1024 * 1024
+
+    /** Smallest width a whole-strip decode may be reduced to (see [wholeStripDecodeWidth]) before
+     *  the strip is handed to the chunked renderer. */
+    private val TALL_WHOLE_MIN_DECODE_WIDTH: Int = 256
 
     @CallSuper
     open fun onImageLoaded() {
@@ -208,16 +221,19 @@ open class ReaderPageImageView @JvmOverloads constructor(
                 prepareShortImageView()
                 setShortImage(file, config, shortW)
             } else if (isWebtoon && isTall && !config.cropBorders && !config.alwaysDecodeLongStripWithSSIV) {
-                if (fitsSingleDecode(file)) {
+                val wholeW = wholeStripDecodeWidth(file, config)
+                if (wholeW != null) {
                     // Whole-strip single decode (software, memory-cached by Coil): one stable
                     // bitmap drawn per frame — no per-frame tile/chunk decode, the smooth path.
-                    ReaderDiagnostics.logFor(debugLabel, "path=TALL_WHOLE dims=$dims tall=true decodeW=$nativeCapW rgb565=${config.decodeRgb565}")
+                    // `wholeW` is the native-width cap unless a strip that big would exceed the
+                    // memory budget, in which case it is the largest reduced width that fits.
+                    ReaderDiagnostics.logFor(debugLabel, "path=TALL_WHOLE dims=$dims tall=true decodeW=$wholeW (cap=$nativeCapW) rgb565=${config.decodeRgb565}")
                     prepareShortImageView()
-                    setTallImage(file, config, nativeCapW)
+                    setTallImage(file, config, wholeW)
                 } else {
-                    // Pathological mega-strip: a single bitmap would blow the memory budget, so
-                    // render it as a windowed stack of chunks instead.
-                    ReaderDiagnostics.logFor(debugLabel, "path=TALL_CHUNKED dims=$dims tall=true decodeW=$nativeCapW (exceeds 40MB single-decode budget)")
+                    // Pathological mega-strip: even a reduced-width single bitmap would blow the
+                    // memory budget, so render it as a windowed stack of chunks instead.
+                    ReaderDiagnostics.logFor(debugLabel, "path=TALL_CHUNKED dims=$dims tall=true decodeW=$nativeCapW (no whole-strip decode fits ${TALL_SINGLE_DECODE_BYTES / (1024 * 1024)}MB, min width $TALL_WHOLE_MIN_DECODE_WIDTH)")
                     prepareChunkedImageView()
                     setChunkedImage(file, config)
                 }
@@ -346,6 +362,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
         onReady = { this@ReaderPageImageView.onImageLoaded() }
         onError = { this@ReaderPageImageView.onImageLoadError() }
         val decodeW = if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels
+        debugLabel = this@ReaderPageImageView.debugLabel
         setChunkedImage(file, decodeW, config.decodeRgb565)
         // The holder's recycle() hides the page view when the view scrolls off; a rebound (or
         // fresh) chunked view must be visible again or the page stays blank after re-entering.
@@ -486,26 +503,55 @@ open class ReaderPageImageView @JvmOverloads constructor(
         context.imageLoader.enqueue(request)
     }
 
-    /** True if [file]'s whole-strip decode at the display width fits within the memory budget (the
-     *  smooth single-decode path). Strips whose single decode would exceed the budget are rendered
-     *  as windowed chunks instead, so a pathological mega-strip can't OOM the reader.
+    /** The decode width to use for a TALL strip's whole-strip (single-bitmap) decode, or null when
+     *  even the smallest sensible whole-strip decode would exceed [TALL_SINGLE_DECODE_BYTES] (only
+     *  then is the strip handed to the windowed-chunk renderer).
+     *
+     *  Starts at the native-width cap, so the common 720/800px-wide source is decoded at its own
+     *  resolution (never upscaled). If that bitmap would exceed the budget the width is halved in
+     *  steps: Coil's `BitmapFactoryDecoder` only subsamples by powers of two and picks the largest
+     *  sample whose result still meets the requested width, so requesting half the last width is
+     *  what actually halves the decoded bitmap (`decodedW` below models that: the decoded size is
+     *  the requested width, clamped to the source width). A strip that is only a little over the
+     *  budget therefore still renders through the proven whole-strip path at slightly reduced
+     *  resolution, instead of through the chunked renderer — whose shared, cancellable decode state
+     *  is what left long strips black.
      */
-    private fun fitsSingleDecode(file: File): Boolean {
-        val cfg = config ?: return true
-        val decodeW = if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels
+    private fun wholeStripDecodeWidth(file: File, cfg: Config): Int? {
         return try {
+            val requestedW = if (decodeWidthPx > 0) decodeWidthPx else context.resources.displayMetrics.widthPixels
             val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
             android.graphics.BitmapFactory.decodeFile(file.absolutePath, opts)
             val w = opts.outWidth
             val h = opts.outHeight
-            if (w <= 0 || h <= 0) return false
-            val bpp = if (cfg.decodeRgb565) 2 else 4
-            val decodedW = minOf(w, decodeW)
-            val decodedH = decodedW.toLong() * h / w
-            decodedW.toLong() * decodedH * bpp <= TALL_SINGLE_DECODE_BYTES
+            if (w <= 0 || h <= 0) {
+                null
+            } else {
+                val bpp = if (cfg.decodeRgb565) 2 else 4
+                var chosen: Int? = null
+                var width = nativeCapWidth(w, requestedW).coerceAtLeast(TALL_WHOLE_MIN_DECODE_WIDTH)
+                while (true) {
+                    if (fitsDecodeBudget(minOf(w, width), w, h, bpp)) {
+                        chosen = width
+                        break
+                    }
+                    if (width <= TALL_WHOLE_MIN_DECODE_WIDTH) break
+                    width = (width / 2).coerceAtLeast(TALL_WHOLE_MIN_DECODE_WIDTH)
+                }
+                chosen
+            }
         } catch (e: Throwable) {
-            false
+            null
         }
+    }
+
+    /** True if a whole-strip decode of a [srcW]x[srcH] source at [decodedW] fits the page bitmap
+     *  budget. [decodedW] is never upscaled past the source, so it is clamped to [srcW] as well. */
+    private fun fitsDecodeBudget(decodedW: Int, srcW: Int, srcH: Int, bpp: Int): Boolean {
+        if (decodedW <= 0 || srcW <= 0 || srcH <= 0) return false
+        val width = minOf(decodedW, srcW)
+        val height = width.toLong() * srcH / srcW
+        return width.toLong() * height * bpp <= TALL_SINGLE_DECODE_BYTES
     }
 
     private fun prepareAnimatedImageView() {

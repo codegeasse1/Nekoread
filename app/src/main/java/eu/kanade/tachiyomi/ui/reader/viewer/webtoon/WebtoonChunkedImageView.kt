@@ -97,6 +97,9 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
     private val failed = mutableSetOf<Int>()
     private var errorFired = false
 
+    /** Chunk indices that already got their one retry after a failure (see [updateVisible]). */
+    private val retried = mutableSetOf<Int>()
+
     /** How many chunk-decode workers run in parallel per page. The global [decodeSemaphore] still
      *  bounds the total across all live pages, so several pages can't multiply this. */
     private val decodeWorkers = 2
@@ -136,6 +139,12 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
      *  so the load is started from [onAttachedToWindow] instead of being dropped. */
     private var pendingFile: File? = null
 
+    /** Page label for the diagnostics lines this view emits, set by [ReaderPageImageView] at bind
+     *  time so a `chunked …` line is attributed to the page it actually belongs to (the shared
+     *  [ReaderDiagnostics.currentLabel] is whatever page bound most recently, which made the earlier
+     *  logs look like page 6's chunk build never ran when it was simply relabelled). */
+    var debugLabel: String = "-"
+
     var onReady: (() -> Unit)? = null
     var onError: (() -> Unit)? = null
 
@@ -148,6 +157,10 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
      *  range overlapping them, and any pass that sees the viewport move re-targets decoding. */
     private var lastViewportTop = 0
     private var lastViewportBottom = 0
+
+    /** Rate-limits the "visible chunk missing" diagnostic emitted from the draw path. */
+    private var lastGapKey = ""
+    private var lastGapLoggedAt = 0L
 
     /** Coalesced re-target: at most one updateVisible is queued at a time, so a scroll burst (or
      *  the per-draw viewport check) never floods the main thread with redundant window passes. */
@@ -175,8 +188,14 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
         }
         recyclerView?.addOnScrollListener(scrollListener!!)
         // A setChunkedImage that landed before we were attached starts here (the scope it needed
-        // didn't exist yet, and without this the first-bound page would stay blank forever).
-        if (info == null) pendingFile?.let { startLoad(generation, it) }
+        // didn't exist yet, and without this the first-bound page would stay blank forever). If the
+        // layout was already built before a detach/re-attach cycle, just resume decoding into it —
+        // rebuilding from scratch on every detach is what left long strips permanently black.
+        if (info == null) {
+            pendingFile?.let { startLoad(generation, it) }
+        } else {
+            scheduleUpdateVisible()
+        }
     }
 
     override fun onDetachedFromWindow() {
@@ -186,10 +205,22 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
         recyclerView = null
         removeCallbacks(visibleUpdateRunnable)
         visibleUpdatePosted = false
-        cancelAll()
+        // A RecyclerView detaches a child every time it scrolls out of view — even briefly, into its
+        // view cache — and re-attaches it on the way back. Tearing the whole load down here (the old
+        // behaviour: cancel + info = null + releaseChunks) meant a 15k-px strip restarted from a
+        // bounds-decode and a fresh chunk layout every time it left the screen, so during normal
+        // scrolling it never accumulated more than a chunk or two and read as black. Stop the jobs
+        // (the scope is per-attach) but KEEP the built layout: re-attaching resumes decoding into it.
+        // The decoded chunk bitmaps themselves are still released here so cached/off-screen holders
+        // can't pin up to [maxRetainedBytes] each; they re-decode quickly from the known layout.
+        infoJob?.cancel()
+        infoJob = null
+        decodeJob?.cancel()
+        decodeJob = null
+        inFlight.clear()
+        releaseChunks()
         scope?.cancel()
         scope = null
-        releaseChunks()
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
@@ -199,14 +230,30 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
         if (info != null) scheduleUpdateVisible()
     }
 
-    /** Starts (re)loading [file] as display-width chunks. Any previous load is cancelled and its
-     *  bitmaps recycled (holder rebound to another page). */
+    /** Starts (re)loading [file] as display-width chunks.
+     *
+     *  Idempotent for the same page: a RecyclerView re-binds and re-attaches holders constantly
+     *  (the dx21 log shows page 1's chunk layout built five times in a few seconds), and the reader
+     *  re-binds every visible holder whenever a render setting changes. The old code tore the load
+     *  down on every one of those calls (`cancelAll()` + `info = null`), which discarded every
+     *  decoded chunk — and because a 15k-px strip's chunks take longer to decode than the gap
+     *  between re-binds, the page never got past a chunk or two and stayed black. When the same file
+     *  with the same decode parameters is already built or being built, keep the work and just
+     *  re-target the window. Any previous load of a DIFFERENT page is still cancelled and released.
+     */
     fun setChunkedImage(file: File, decodeWidthPx: Int, decodeRgb565: Boolean) {
+        val width = decodeWidthPx.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+        val sameRequest = pendingFile == file && decodeWidth == width && rgb565 == decodeRgb565
+        if (sameRequest && (info != null || infoJob?.isActive == true)) {
+            pendingFile = file
+            scheduleUpdateVisible()
+            invalidate()
+            return
+        }
         cancelAll()
         generation++
         val gen = generation
-        this.decodeWidth = decodeWidthPx.takeIf { it > 0 }
-            ?: resources.displayMetrics.widthPixels
+        this.decodeWidth = width
         this.rgb565 = decodeRgb565
         readyFired = false
         invalidate()
@@ -230,7 +277,8 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
             bitmaps.clear()
             repeat(built.partCount) { bitmaps.add(null) }
             decodeWindow = null
-            ReaderDiagnostics.log(
+            ReaderDiagnostics.logFor(
+                debugLabel,
                 "chunked info: decodeW=${built.srcWidth / built.sample} " +
                     "sample=${built.sample} partCount=${built.partCount} " +
                     "chunkBytes=${built.chunkBytes / 1024}KB",
@@ -244,6 +292,7 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
     fun recycle() {
         cancelAll()
         generation++
+        pendingFile = null
         releaseChunks()
         invalidate()
     }
@@ -255,14 +304,21 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
         decodeJob = null
         inFlight.clear()
         failed.clear()
+        retried.clear()
         errorFired = false
         info = null
         decodeWindow = null
     }
 
+    /** Recycles every decoded chunk. The slot list keeps its length so a view whose layout survived a
+     *  detach/re-attach cycle can resume decoding into the same positions (see
+     *  [onDetachedFromWindow]) — clearing the list would make [updateVisible] bail out and the page
+     *  never fill in. */
     private fun releaseChunks() {
-        for (b in bitmaps) if (b != null) recycleChunk(b)
-        bitmaps.clear()
+        for (i in bitmaps.indices) {
+            bitmaps[i]?.let { recycleChunk(it) }
+            bitmaps[i] = null
+        }
     }
 
     private fun recycleChunk(b: Bitmap) {
@@ -297,11 +353,34 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
         // slot. Chunk i's display top is exactly i*step, so the chunks still tile without gaps.
         val sx = dw / cur.srcWidth
         val dst = RectF()
+        var missing = 0
         for (i in first..last) {
-            val b = bitmaps[i] ?: continue
+            val b = bitmaps[i]
+            if (b == null) {
+                missing++
+                continue
+            }
             dst.set(0f, cur.srcTop(i) * sx, dw, cur.srcBottom(i) * sx)
             canvas.drawBitmap(b, null, dst, null)
         }
+        // A not-yet-decoded (or failed) chunk is invisible in the log — the page just shows a black
+        // field — so record it (rate-limited) to pin any remaining black band to exact chunk indices.
+        if (missing > 0) logMissingChunks(first, last, missing)
+    }
+
+    /** Rate-limited diagnostic for a black region: the visible chunk range has undecoded chunks. */
+    private fun logMissingChunks(first: Int, last: Int, missing: Int) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        val key = "$first-$last-$missing"
+        if (key == lastGapKey && now - lastGapLoggedAt < 2000) return
+        lastGapKey = key
+        lastGapLoggedAt = now
+        ReaderDiagnostics.logFor(
+            debugLabel,
+            "chunked GAP ${missing}/${last - first + 1} drawn chunks missing " +
+                "(range $first..$last) decoded=${bitmaps.count { it != null }}/${bitmaps.size} " +
+                "failed=${failed.size}",
+        )
     }
 
     /** Computes the decode-space row layout for [file]: power-of-two sample so the decoded width
@@ -348,6 +427,18 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
         val first = ((vTop / step) - decodeBehindChunks).coerceIn(0, partCount - 1)
         val last = ((vBottom / step) + decodeAheadChunks).coerceIn(0, partCount - 1)
         decodeWindow = first..last
+        // Give a chunk that failed while it was outside the window one more chance now that it is
+        // entering it: a transient failure (a memory spike, a decode that lost its permit when a
+        // re-bind cancelled the page) must not leave a permanent black hole in the strip. Each chunk
+        // is retried at most once, so a genuinely undecodable region can't spin.
+        if (failed.isNotEmpty()) {
+            for (i in first..last) {
+                if (i in failed && retried.add(i)) {
+                    failed.remove(i)
+                    errorFired = false
+                }
+            }
+        }
         trimToBudget(vTop, vBottom, cur)
         kickDecodeLoop()
     }
@@ -444,6 +535,7 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
                 invalidate()
                 if (!readyFired) {
                     readyFired = true
+                    ReaderDiagnostics.logFor(debugLabel, "chunked ready (first chunk $idx of ${bitmaps.size})")
                     onReady?.invoke()
                 }
             } finally {
@@ -480,7 +572,7 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
         val cur = info ?: return null
         return withContext(Dispatchers.IO) {
             withDecodePermit {
-                runCatching {
+                try {
                     val decoder = newRegionDecoder(cur.file)
                     try {
                         val rect = Rect(0, cur.srcTop(idx), cur.srcWidth, cur.srcBottom(idx))
@@ -492,7 +584,18 @@ class WebtoonChunkedImageView @JvmOverloads constructor(
                     } finally {
                         decoder.recycle()
                     }
-                }.getOrNull()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    // Never fail silently: a null chunk is a black hole in the strip, and the old
+                    // code discarded the reason. The label comes from the bind, so this names the page.
+                    ReaderDiagnostics.logFor(
+                        debugLabel,
+                        "chunked decode FAILED idx=$idx rows=${cur.srcTop(idx)}..${cur.srcBottom(idx)}: " +
+                            "${e.javaClass.simpleName}: ${e.message}",
+                    )
+                    null
+                }
             }
         }
     }
