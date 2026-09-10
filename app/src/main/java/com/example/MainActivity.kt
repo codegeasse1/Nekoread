@@ -550,8 +550,13 @@ fun MainAppScreen(viewModel: MainViewModel) {
                     onTagClick = { tag ->
                         val srcId = mangaState?.sourceId?.takeIf { it.isNotBlank() }
                             ?: mangaState?.id?.substringBefore(":")
-                        if (srcId != null) viewModel.openTagSearch(srcId, tag)
-                        navController.navigateToTab(Screen.Browse.route)
+                        if (srcId != null) {
+                            AppDiagnostics.log(
+                                "tag click tag=$tag src=$srcId from=${navController.currentDestination?.route}"
+                            )
+                            viewModel.openTagSearch(srcId, tag)
+                        }
+                        navController.navigateToTagSearch()
                     }
                 )
             }
@@ -641,6 +646,30 @@ fun MainAppScreen(viewModel: MainViewModel) {
             }
         )
     }
+}
+
+/**
+ * Open the Browse tab for a genre/tag tapped on a manga detail screen.
+ *
+ * Deliberately NOT [navigateToTab]: that helper navigates with
+ * `popUpTo(startDestination) { saveState = true }` + `restoreState = true`, and the restored state
+ * is the tab's whole saved back stack - which, when the detail was reached from Browse, still
+ * contained that detail screen on top. So the tag search was applied to the Browse entry *behind*
+ * the restored detail entry, and you only saw the results after pressing back (which popped it).
+ * Popping straight back to the existing Browse entry drops everything above it, so the results are
+ * the visible screen immediately; if Browse is not on the stack (detail opened from Library or
+ * History), push a fresh one.
+ */
+private fun NavHostController.navigateToTagSearch() {
+    if (popBackStack(Screen.Browse.route, inclusive = false)) {
+        AppDiagnostics.log("tag click -> popped back to browse")
+        return
+    }
+    navigate(Screen.Browse.route) {
+        popUpTo(graph.findStartDestination().id)
+        launchSingleTop = true
+    }
+    AppDiagnostics.log("tag click -> pushed browse (not on the stack)")
 }
 
 /** Switch to a bottom-nav tab, always landing on its top-level screen. */

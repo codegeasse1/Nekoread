@@ -272,6 +272,7 @@ fun BrowseScreen(
         if (ps != null) {
             viewModel.consumePendingCatalogSearch()
             val (sourceId, tag) = ps
+            AppDiagnostics.log("tag search apply src=$sourceId tag=$tag")
             if (sourceId.isNotBlank()) {
                 // Drop any cached load state so the fresh tag search always runs (never swallowed
                 // by the same-key no-op guard), then jump straight to the catalog with the tag.
@@ -280,7 +281,10 @@ fun BrowseScreen(
                 activeSourceBaseUrl = extensionSources.firstOrNull { it.id == sourceId }?.baseUrl ?: ""
                 searchQuery = "tag:$tag"
                 selectedTabIndex = TAB_CATALOG
-                viewModel.loadCatalog(sourceId, "tag:$tag")
+                // "filter" so the catalog's Filter chip matches the filtered results being shown
+                // (the tag branch of searchCatalog ignores the mode, but the chip is the user's
+                // only hint about what the grid is showing).
+                viewModel.loadCatalog(sourceId, "tag:$tag", 1, "filter")
             }
         }
     }
