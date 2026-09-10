@@ -744,7 +744,7 @@ fun ReaderScreen(
                 // can actually hold — roughly half the cache, one ~4MB decoded page each — so the
                 // runway fills as far as the device allows without overflowing the cache and
                 // thrashing (the dx5 failure at a fixed 8-ahead on much bigger bitmaps).
-                val cacheBytes = imageLoader.memoryCache?.maxSize ?: 0L
+                val cacheBytes = (imageLoader.memoryCache?.maxSize ?: 0).toLong()
                 val estPageBytes = WEBTOON_MAX_DECODE_PIXELS * 4L
                 val aheadPages = if (cacheBytes > 0L) {
                     (cacheBytes / (estPageBytes * 2L)).toInt()
@@ -836,7 +836,8 @@ fun ReaderScreen(
                 lastCacheLog = now
                 val mc = imageLoader.memoryCache
                 ReaderDiagnostics.log(
-                    "memcache max=${(mc?.maxSize ?: 0L) / 1048576}MB size=${(mc?.size ?: 0L) / 1048576}MB",
+                    "memcache max=${(mc?.maxSize ?: 0).toLong() / 1048576}MB " +
+                        "size=${(mc?.size ?: 0).toLong() / 1048576}MB",
                 )
             }
             // Tick faster than before so the decode-ahead window refills quickly the moment the

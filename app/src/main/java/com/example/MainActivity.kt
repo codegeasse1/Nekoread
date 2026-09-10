@@ -143,7 +143,7 @@ class MainActivity : ComponentActivity() {
                     val bytes = maxOf((heap * 0.40).toLong(), 48L * 1024 * 1024)
                         .coerceAtMost((heap * 0.45).toLong())
                     MemoryCache.Builder(this)
-                        .maxSizeBytes(bytes)
+                        .maxSizeBytes(bytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
                         .build()
                 }
                 // Disk cache so a loaded cover/page stays on-device: scrolling back to a screen or
