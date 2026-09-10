@@ -49,6 +49,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.data.local.MangaEntity
 import com.example.data.source.SourceRegistry
+import com.example.diagnostics.AppDiagnostics
 import com.example.ui.theme.SleekGoldBadge
 import com.example.ui.theme.SleekVioletPrimary
 import com.example.ui.theme.GlassCardBorder
@@ -79,6 +80,7 @@ fun MangaGridCard(
     onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    AppDiagnostics.noteCompose("gridCard")
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -264,6 +266,9 @@ fun MangaGridCard(
                         fontSize = 13.sp
                     ),
                     maxLines = 2,
+                    // Reserve two lines even for a one-line title: it makes every grid cell the same
+                    // height, which lets the lazy grid work out item extents without measuring each.
+                    minLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
 
@@ -279,17 +284,25 @@ fun MangaGridCard(
                     overflow = TextOverflow.Ellipsis
                 )
 
-                if (manga.lastReadPage > 1) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    LinearProgressIndicator(
-                        progress = { 0.6f },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(3.dp)
-                            .clip(RoundedCornerShape(2.dp)),
-                        color = SleekVioletPrimary,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
+                // Always reserve the progress row (7dp) even when there is no progress to show, so
+                // the cell height stays constant in both cases — see the `minLines` note above.
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(7.dp)
+                ) {
+                    if (manga.lastReadPage > 1) {
+                        LinearProgressIndicator(
+                            progress = { 0.6f },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(3.dp)
+                                .align(Alignment.TopStart)
+                                .clip(RoundedCornerShape(2.dp)),
+                            color = SleekVioletPrimary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    }
                 }
             }
         }
@@ -305,6 +318,7 @@ fun MangaListCard(
     onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    AppDiagnostics.noteCompose("listCard")
     Card(
         modifier = modifier
             .fillMaxWidth()

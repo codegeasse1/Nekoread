@@ -77,6 +77,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.data.local.CategoryEntity
 import com.example.data.local.MangaEntity
+import com.example.diagnostics.AppDiagnostics
 import com.example.diagnostics.AppScrollProbe
 import com.example.ui.MainViewModel
 import com.example.ui.components.FloatingTopAppBar
@@ -96,6 +97,7 @@ fun LibraryScreen(
     onNavigateToBrowse: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    AppDiagnostics.noteCompose("library")
     var isGridView by remember { mutableStateOf(true) }
     var showSearchField by remember { mutableStateOf(false) }
     var showAddCategoryDialog by remember { mutableStateOf(false) }
@@ -542,6 +544,7 @@ private fun ContinueReadingHero(
     onOpen: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    AppDiagnostics.noteCompose("hero")
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -639,6 +642,7 @@ private fun RecentlyReadRow(
     onMangaClick: (String) -> Unit,
     onReadClick: (String, String) -> Unit
 ) {
+    AppDiagnostics.noteCompose("recentRow")
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = "Recently Read",

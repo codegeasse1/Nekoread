@@ -89,6 +89,7 @@ import com.example.data.local.ExtensionEntity
 import com.example.data.local.ExtensionRepoEntity
 import com.example.data.local.ExtensionSourceEntity
 import com.example.data.local.MangaEntity
+import com.example.diagnostics.AppDiagnostics
 import com.example.diagnostics.AppScrollProbe
 import com.example.ui.GlobalSearchSection
 import com.example.ui.MainViewModel
@@ -1076,6 +1077,7 @@ fun CatalogTabContent(
     onLoadMore: () -> Unit = {},
     onOpenWebView: (String) -> Unit
 ) {
+    AppDiagnostics.noteCompose("browse")
     Column(modifier = Modifier.fillMaxSize()) {
         if (!hasSource) {
             Box(

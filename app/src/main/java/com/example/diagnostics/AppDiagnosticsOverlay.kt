@@ -52,6 +52,7 @@ fun AppScrollProbe(label: String, state: ScrollableState) {
 @Composable
 fun BoxScope.AppDiagnosticsOverlay() {
     if (!AppDiagnostics.ENABLED || !AppDiagnostics.overlayVisible) return
+    AppDiagnostics.noteCompose("overlay")
     val context = LocalContext.current
     AppDiagnostics.init(context)
     var text by remember { mutableStateOf(AppDiagnostics.text()) }

@@ -197,6 +197,7 @@ class MainActivity : ComponentActivity() {
                 // classic cause of whole-app scroll jank; a radial falloff looks identical and is
                 // free.
                 Box(modifier = Modifier.fillMaxSize()) {
+                    AppDiagnostics.noteCompose("appRoot")
                     Box(
                         modifier = Modifier
                             .fillMaxSize()

@@ -68,6 +68,9 @@ object AppDiagnostics {
 
     private const val NOTIFY_MS = 400L
 
+    /** How many trailing lines the on-screen overlay renders (the file keeps everything). */
+    private const val OVERLAY_LINES = 14
+
     private const val TOUCH_LABEL = "(scroll)"
 
     private val lock = Any()
@@ -226,8 +229,40 @@ object AppDiagnostics {
 
     fun path(): String? = logFile?.absolutePath
 
-    /** Latest lines (for the overlay), most recent last. */
-    fun text(): String = synchronized(lock) { lines.joinToString("\n") }
+    /**
+     * Latest lines (for the overlay), most recent last. Only the trailing [OVERLAY_LINES] are kept:
+     * the overlay used to render all [MAX_LINES] lines (a ~40 KB paragraph re-laid-out every
+     * [NOTIFY_MS]), which was a recurring main-thread cost during exactly the scrolls it was meant
+     * to measure. The file / copy output still uses [fullText] and keeps everything.
+     */
+    fun text(): String = synchronized(lock) {
+        val n = lines.size
+        if (n <= OVERLAY_LINES) lines.joinToString("\n")
+        else lines.drop(n - OVERLAY_LINES).joinToString("\n")
+    }
+
+    // ---- per-frame composition attribution (main thread only) ----
+    // Which composables actually recomposed since the previous frame. Cheap: one HashMap bump per
+    // composition, drained (and only formatted) once per frame. This is what names the recomposition
+    // culprit instead of narrowing it by phase alone.
+    private val composeCounts = HashMap<String, Int>(16)
+
+    /** Call at the top of a composable to attribute its recompositions (diagnostics only). */
+    fun noteCompose(tag: String) {
+        if (!ENABLED) return
+        composeCounts[tag] = (composeCounts[tag] ?: 0) + 1
+    }
+
+    /** Drains the per-frame composition counts into a compact `tag xN` digest. */
+    private fun takeComposeDigest(): String {
+        if (composeCounts.isEmpty()) return ""
+        val sb = StringBuilder()
+        for ((tag, n) in composeCounts.entries.sortedByDescending { it.value }) {
+            sb.append(tag).append('x').append(n).append(' ')
+        }
+        composeCounts.clear()
+        return sb.toString().trim()
+    }
 
     fun copy(context: Context) {
         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -274,6 +309,8 @@ object AppDiagnostics {
     }
 
     private fun onFrame(metrics: FrameMetrics) {
+        // Attribute the compositions that happened since the previous frame to this one, then clear.
+        val composed = takeComposeDigest()
         // The reader has its own (more detailed) frame probe — don't double-report its frames.
         if (screen.startsWith("reader/")) return
         val totalMs = metrics.getMetric(FrameMetrics.TOTAL_DURATION) / 1_000_000
@@ -300,7 +337,8 @@ object AppDiagnostics {
                 "draw=${ms(FrameMetrics.DRAW_DURATION)} " +
                 "sync=${ms(FrameMetrics.SYNC_DURATION)} " +
                 "cmd=${ms(FrameMetrics.COMMAND_ISSUE_DURATION)} " +
-                "swap=${ms(FrameMetrics.SWAP_BUFFERS_DURATION)}",
+                "swap=${ms(FrameMetrics.SWAP_BUFFERS_DURATION)}" +
+                if (composed.isEmpty()) "" else " composed=$composed",
         )
     }
 
