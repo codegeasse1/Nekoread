@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,7 +25,6 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -96,41 +96,52 @@ fun MangaGridCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(0.72f)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                // Static placeholder while the thumbnail loads, then a quick crossfade when it lands
-                // (chimahon-style smooth thumbnail loading). Deliberately a plain `AsyncImage` over a
-                // tinted parent Box, NOT `SubcomposeAsyncImage`: a SubcomposeLayout per cell is one of
-                // the most expensive layouts in Compose, and with one per library/catalog grid cell it
-                // dominated the grid's composition cost during a fling — the app-level diagnostics
-                // measured 500-900ms frames on the library grid, one hit per row entering the
-                // viewport. `AsyncImage` draws nothing while loading (and on failure), so the tinted
-                // Box shows through as the placeholder; on success the cover covers it.
+                // Static placeholder while the thumbnail loads. Deliberately a plain `AsyncImage` over
+                // the card's own tinted container, NOT `SubcomposeAsyncImage`: a SubcomposeLayout per
+                // cell is one of the most expensive layouts in Compose, and with one per
+                // library/catalog grid cell it dominated the grid's composition cost during a fling —
+                // the app-level diagnostics measured 500-900ms frames on the library grid, one hit per
+                // row entering the viewport. `AsyncImage` draws nothing while loading (and on failure),
+                // so the tinted tile shows through as the placeholder; on success the cover covers it.
                 val ctx = LocalContext.current
-                AsyncImage(
-                    model = ImageRequest.Builder(ctx)
-                        .data(coverModelFor(manga))
+                val coverModel = coverModelFor(manga)
+                // The request is remembered so a recomposition (selection toggle, scroll recycling)
+                // reuses the identical object instead of allocating a new one. Deliberately NO
+                // `crossfade(true)` here: the fade-in is a Choreographer animation started for every
+                // thumbnail that lands, and during a fling that is one per row entering the viewport —
+                // the app-level frame logs from the Library/catalog grid showed the `anim` phase
+                // eating 20-200ms per janky frame with `layout`/`draw` near zero, which is exactly
+                // that pattern. Cards now pop in; the hero keeps its fade.
+                val coverRequest = remember(manga.id, coverModel) {
+                    ImageRequest.Builder(ctx)
+                        .data(coverModel)
                         .size(360, 500)
-                        .crossfade(true)
                         .memoryCacheKey("cover:${manga.id}")
                         .diskCacheKey("cover:${manga.id}:${manga.coverUrl}")
-                        .build(),
+                        .build()
+                }
+                AsyncImage(
+                    model = coverRequest,
                     contentDescription = manga.title,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                 )
 
-                // Bottom Gradient overlay
+                // Bottom scrim only, over the lower ~55% of the cell where the rating / Read pill
+                // sit. Previously a full-cell gradient (startY=150) drew an extra full tile every
+                // frame while flinging for no visual gain.
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.55f)
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
                                     Color.Transparent,
                                     Color.Black.copy(alpha = 0.85f)
-                                ),
-                                startY = 150f
+                                )
                             )
                         )
                 )
@@ -218,6 +229,7 @@ fun MangaGridCard(
                 }
 
                 // Rating at bottom left
+                val ratingText = remember(manga.rating) { "%.1f".format(manga.rating) }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -232,7 +244,7 @@ fun MangaGridCard(
                     )
                     Spacer(modifier = Modifier.width(3.dp))
                     Text(
-                        text = "%.1f".format(manga.rating),
+                        text = ratingText,
                         color = Color.White,
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
                     )
@@ -321,9 +333,20 @@ fun MangaListCard(
                 Spacer(modifier = Modifier.width(8.dp))
             }
             val ctx = LocalContext.current
-            // Plain `AsyncImage` over a tinted Box (see MangaGridCard): the spinner sits *behind* the
-            // image, so it is visible while loading and covered once the cover lands. No per-row
-            // SubcomposeLayout — that was the list's main composition cost during a fling.
+            val coverModel = coverModelFor(manga)
+            // Plain `AsyncImage` over a tinted Box (see MangaGridCard): no per-row SubcomposeLayout,
+            // no crossfade (its per-image animation was part of the `anim` cost in the logs), and no
+            // indeterminate `CircularProgressIndicator` — that one spins on the main thread forever
+            // for every composed row, even once the cover has covered it, so it was a continuous
+            // animation source during a list fling. The tinted tile is the placeholder.
+            val coverRequest = remember(manga.id, coverModel) {
+                ImageRequest.Builder(ctx)
+                    .data(coverModel)
+                    .size(180, 240)
+                    .memoryCacheKey("cover:${manga.id}")
+                    .diskCacheKey("cover:${manga.id}:${manga.coverUrl}")
+                    .build()
+            }
             Box(
                 modifier = Modifier
                     .size(width = 60.dp, height = 80.dp)
@@ -331,19 +354,8 @@ fun MangaListCard(
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(14.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                )
                 AsyncImage(
-                    model = ImageRequest.Builder(ctx)
-                        .data(coverModelFor(manga))
-                        .crossfade(true)
-                        .size(180, 240)
-                        .memoryCacheKey("cover:${manga.id}")
-                        .diskCacheKey("cover:${manga.id}:${manga.coverUrl}")
-                        .build(),
+                    model = coverRequest,
                     contentDescription = manga.title,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,

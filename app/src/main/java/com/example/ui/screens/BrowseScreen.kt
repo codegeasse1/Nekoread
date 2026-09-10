@@ -1241,7 +1241,11 @@ fun CatalogTabContent(
                 AppScrollProbe("catalog", gridState)
                 // Infinite scroll: when the user scrolls near the bottom and there are more real
                 // pages (page 2, page 3, ...) to load, fetch the next one and append it.
-                val shouldLoadMore by remember {
+                // Keyed on the flags so the derived state re-reads them: a keyless `remember` captured
+                // the first composition's hasMore/isLoadingMore/isLoading and never saw them change,
+                // so the near-bottom edge could re-fire onLoadMore (extra fetches + composition while
+                // the user is still flinging).
+                val shouldLoadMore by remember(hasMore, isLoadingMore, isLoading) {
                     derivedStateOf {
                         val last = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
                         val total = gridState.layoutInfo.totalItemsCount
@@ -1259,7 +1263,7 @@ fun CatalogTabContent(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(results, key = { it.id }) { manga ->
+                    items(results, key = { it.id }, contentType = { "manga" }) { manga ->
                         MangaGridCard(
                             manga = manga,
                             onClick = { onMangaClick(manga.id) }

@@ -66,15 +66,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImagePainter
-import coil.compose.SubcomposeAsyncImage
-import coil.compose.SubcomposeAsyncImageContent
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.data.local.CategoryEntity
 import com.example.data.local.MangaEntity
 import com.example.diagnostics.AppScrollProbe
@@ -403,7 +403,7 @@ fun LibraryScreen(
                                 }
                             }
                         }
-                        items(mangaList, key = { it.id }) { manga ->
+                        items(mangaList, key = { it.id }, contentType = { "manga" }) { manga ->
                             MangaGridCard(
                                 manga = manga,
                                 onClick = {
@@ -451,7 +451,7 @@ fun LibraryScreen(
                                 }
                             }
                         }
-                        items(mangaList, key = { it.id }) { manga ->
+                        items(mangaList, key = { it.id }, contentType = { "manga" }) { manga ->
                             MangaListCard(
                                 manga = manga,
                                 onClick = {
@@ -530,6 +530,10 @@ fun LibraryScreen(
     }
 }
 
+// Hoisted out of the hero composable: an identical `Brush` allocation (and shader) per recomposition
+// is pure waste, and this one never changes.
+private val heroScrim = Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000)))
+
 /** Tadami-style hero banner: the manga you were most recently reading, with a Resume button. */
 @Composable
 private fun ContinueReadingHero(
@@ -550,26 +554,36 @@ private fun ContinueReadingHero(
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            SubcomposeAsyncImage(
-                model = coverModelFor(manga),
+            val ctx = LocalContext.current
+            val coverModel = coverModelFor(manga)
+            // Bounded request + plain `AsyncImage` instead of `SubcomposeAsyncImage` with no size:
+            // this is the widest cell on the screen, so an unbounded model decoded and uploaded far
+            // more pixels than it can display (and a SubcomposeLayout is the most expensive layout in
+            // Compose). The tinted Box under it is the placeholder/error state.
+            val heroRequest = remember(manga.id, coverModel) {
+                ImageRequest.Builder(ctx)
+                    .data(coverModel)
+                    .size(1080, 560)
+                    .memoryCacheKey("cover:${manga.id}")
+                    .diskCacheKey("cover:${manga.id}:${manga.coverUrl}")
+                    .build()
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            )
+            AsyncImage(
+                model = heroRequest,
                 contentDescription = manga.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
-            ) {
-                when (painter.state) {
-                    is AsyncImagePainter.State.Error -> Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                    )
-                    else -> SubcomposeAsyncImageContent()
-                }
-            }
+            )
             // Bottom scrim so the title/Resume stay readable over any cover.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000))))
+                    .background(heroScrim)
             )
             Column(
                 modifier = Modifier
@@ -636,7 +650,7 @@ private fun RecentlyReadRow(
             contentPadding = PaddingValues(end = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(mangaList, key = { it.id }) { manga ->
+            items(mangaList, key = { it.id }, contentType = { "manga" }) { manga ->
                 MangaGridCard(
                     manga = manga,
                     onClick = { onMangaClick(manga.id) },
