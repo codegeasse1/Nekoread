@@ -740,11 +740,14 @@ fun ReaderScreen(
                             runCatching {
                                 // Exact same request the page holder uses (same file, size, policies,
                                 // conditional crop parameter), so this warm's memory-cache key matches
-                                // the bind's — see ReaderPageImageView.setShortImage.
+                                // the bind's — see ReaderPageImageView.setShortImage. The size is
+                                // capped at the source's native width exactly like the bind, so the
+                                // comix ~800px-wide sources are never upscaled to screen width
+                                // (upscaling costs ~2x the decode time and memory for no added detail).
                                 val res = imageLoader.execute(
                                     ImageRequest.Builder(context)
                                         .data(f)
-                                        .size(Size(displayDecodeWidth, Dimension.Undefined))
+                                        .size(Size(minOf(displayDecodeWidth, mm.width), Dimension.Undefined))
                                         .memoryCachePolicy(CachePolicy.ENABLED)
                                         .diskCachePolicy(CachePolicy.DISABLED)
                                         .allowHardware(!cropBorders)
