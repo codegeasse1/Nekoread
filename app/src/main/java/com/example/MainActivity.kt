@@ -109,6 +109,15 @@ import com.example.ui.theme.GlowViolet
 import com.example.ui.theme.NekoReadTheme
 import eu.kanade.tachiyomi.network.NetworkHelper
 
+// Ambient background + glow brushes, hoisted to file level: they never change, and building a
+// `Brush.verticalGradient` / `radialGradient` (plus its Shader) inline re-created them on every
+// root recomposition for no visual gain. The reader's take-thirteen lesson, applied to the app
+// root, which is the one composable every screen sits under.
+private val AppBackgroundBrush =
+    Brush.verticalGradient(listOf(BgGradientTop, BgGradientMid, BgGradientBottom))
+private val GlowVioletBrush = Brush.radialGradient(listOf(GlowViolet, GlowViolet.copy(alpha = 0f)))
+private val GlowCyanBrush = Brush.radialGradient(listOf(GlowCyan, GlowCyan.copy(alpha = 0f)))
+
 class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
@@ -201,28 +210,20 @@ class MainActivity : ComponentActivity() {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    listOf(BgGradientTop, BgGradientMid, BgGradientBottom)
-                                )
-                            )
+                            .background(AppBackgroundBrush)
                     )
                     Box(
                         modifier = Modifier
                             .size(380.dp)
                             .offset(x = (-110).dp, y = (-80).dp)
-                            .background(
-                                Brush.radialGradient(listOf(GlowViolet, GlowViolet.copy(alpha = 0f)))
-                            )
+                            .background(GlowVioletBrush)
                     )
                     Box(
                         modifier = Modifier
                             .size(440.dp)
                             .align(Alignment.BottomEnd)
                             .offset(x = 80.dp, y = 100.dp)
-                            .background(
-                                Brush.radialGradient(listOf(GlowCyan, GlowCyan.copy(alpha = 0f)))
-                            )
+                            .background(GlowCyanBrush)
                     )
                     MainAppScreen(viewModel = viewModel)
 

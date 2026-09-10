@@ -292,7 +292,16 @@ object AppDiagnostics {
             } else if (s.startsWith("<<<<<")) {
                 val dt = SystemClock.elapsedRealtime() - msgStart
                 if (dt >= MSG_JANK_MS) {
-                    val line = "msg ${dt}ms $msgDesc"
+                    // Attribute the compositions that just ran to the MESSAGE that ran them, rather
+                    // than to whichever frame the metrics listener next reports: the listener is a
+                    // separate main-thread message, so a LazyLayout prefetch message that composed 3
+                    // grid cells and blocked the loop for 75ms used to show its `composed=` digest on
+                    // the FOLLOWING frame line, whose phases no longer contained that work (the log
+                    // read as "big anim, nothing composed"), which made the culprit look like nothing
+                    // in our code at all. The digest drained here is therefore not repeated on the
+                    // next frame line.
+                    val composed = if (screen.startsWith("reader/")) "" else takeComposeDigest()
+                    val line = "msg ${dt}ms $msgDesc" + if (composed.isEmpty()) "" else " composed=$composed"
                     if (screen.startsWith("reader/")) ReaderDiagnostics.log(line) else log(line)
                 }
             }

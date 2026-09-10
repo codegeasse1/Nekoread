@@ -567,7 +567,10 @@ private fun ContinueReadingHero(
                 ImageRequest.Builder(ctx)
                     .data(coverModel)
                     .size(1080, 560)
-                    .memoryCacheKey("cover:${manga.id}")
+                    // Its own memory-cache key: shared with the grid/list "cover:<id>" key it would
+                    // hand a 1080x560 bitmap to a 130dp grid cell (and keep ~600k pixels resident
+                    // per manga) — the grid must cache its own small bitmap.
+                    .memoryCacheKey("cover-hero:${manga.id}")
                     .diskCacheKey("cover:${manga.id}:${manga.coverUrl}")
                     .build()
             }
