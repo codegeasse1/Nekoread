@@ -49,7 +49,7 @@ import kotlin.math.abs
 object AppDiagnostics {
 
     /** Set to false to compile the whole app-level tracker out of a normal build. */
-    const val ENABLED = true
+    const val ENABLED = false
 
     private const val MAX_LINES = 400
     private const val FILE_NAME = "nekoread-app-diagnostic.log"
@@ -127,6 +127,7 @@ object AppDiagnostics {
 
     /** Idempotent init from the Activity (creates the log file + background writer). */
     fun init(context: Context) {
+        if (!ENABLED) return
         if (logFile != null) return
         logFile = File(context.applicationContext.filesDir, FILE_NAME)
         runCatching { logFile?.writeText("") }
