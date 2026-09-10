@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
@@ -46,7 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
-import coil.compose.SubcomposeAsyncImage
+import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.data.local.MangaEntity
 import com.example.data.source.SourceRegistry
@@ -97,14 +96,18 @@ fun MangaGridCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(0.72f)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                // State-aware cover: a static placeholder while the thumbnail loads (no spinner —
-                // during a fast catalog fling many cards load at once, and each spinner costs
-                // frames), a quick crossfade when the image lands (chimahon-style smooth thumbnail
-                // loading), and a dim broken-image tile on failure. With Coil's disk cache a loaded
-                // cover shows instantly when you come back to the screen.
+                // Static placeholder while the thumbnail loads, then a quick crossfade when it lands
+                // (chimahon-style smooth thumbnail loading). Deliberately a plain `AsyncImage` over a
+                // tinted parent Box, NOT `SubcomposeAsyncImage`: a SubcomposeLayout per cell is one of
+                // the most expensive layouts in Compose, and with one per library/catalog grid cell it
+                // dominated the grid's composition cost during a fling — the app-level diagnostics
+                // measured 500-900ms frames on the library grid, one hit per row entering the
+                // viewport. `AsyncImage` draws nothing while loading (and on failure), so the tinted
+                // Box shows through as the placeholder; on success the cover covers it.
                 val ctx = LocalContext.current
-                SubcomposeAsyncImage(
+                AsyncImage(
                     model = ImageRequest.Builder(ctx)
                         .data(coverModelFor(manga))
                         .size(360, 500)
@@ -115,27 +118,6 @@ fun MangaGridCard(
                     contentDescription = manga.title,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
-                    loading = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                        )
-                    },
-                    error = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.BrokenImage,
-                                contentDescription = "Failed to load cover",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
-                            )
-                        }
-                    }
                 )
 
                 // Bottom Gradient overlay
@@ -339,47 +321,34 @@ fun MangaListCard(
                 Spacer(modifier = Modifier.width(8.dp))
             }
             val ctx = LocalContext.current
-            SubcomposeAsyncImage(
-                model = ImageRequest.Builder(ctx)
-                    .data(coverModelFor(manga))
-                    .crossfade(true)
-                    .size(180, 240)
-                    .memoryCacheKey("cover:${manga.id}")
-                    .diskCacheKey("cover:${manga.id}:${manga.coverUrl}")
-                    .build(),
-                contentDescription = manga.title,
+            // Plain `AsyncImage` over a tinted Box (see MangaGridCard): the spinner sits *behind* the
+            // image, so it is visible while loading and covered once the cover lands. No per-row
+            // SubcomposeLayout — that was the list's main composition cost during a fling.
+            Box(
                 modifier = Modifier
                     .size(width = 60.dp, height = 80.dp)
-                    .clip(RoundedCornerShape(8.dp)),
-                contentScale = ContentScale.Crop,
-                loading = {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(14.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                        )
-                    }
-                },
-                error = {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.BrokenImage,
-                            contentDescription = "Failed to load cover",
-                            modifier = Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                        )
-                    }
-                }
-            )
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(14.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                )
+                AsyncImage(
+                    model = ImageRequest.Builder(ctx)
+                        .data(coverModelFor(manga))
+                        .crossfade(true)
+                        .size(180, 240)
+                        .memoryCacheKey("cover:${manga.id}")
+                        .diskCacheKey("cover:${manga.id}:${manga.coverUrl}")
+                        .build(),
+                    contentDescription = manga.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            }
 
             Spacer(modifier = Modifier.width(12.dp))
 

@@ -125,18 +125,25 @@ fun LibraryScreen(
     // row beneath it, then the full library grid below. Only shown on the unfiltered library
     // view (no search, "All" category, not in selection mode).
     val showHomeSections = !selectionMode && searchQuery.isBlank() && selectedCategory == "All"
-    val continueManga = if (showHomeSections) {
-        mangaList.asSequence()
-            .filter { it.lastReadChapterId != null }
-            .maxByOrNull { it.lastReadTimestamp }
-    } else null
-    val recentlyRead = if (continueManga != null) {
-        mangaList.asSequence()
-            .filter { it.lastReadChapterId != null && it.id != continueManga.id }
-            .sortedByDescending { it.lastReadTimestamp }
-            .take(8)
-            .toList()
-    } else emptyList()
+    // Remembered: this scans (and sorts) the whole library, and computing it inline on every
+    // recomposition put that work on the main thread while the grid was scrolling.
+    val continueManga = remember(mangaList, showHomeSections) {
+        if (showHomeSections) {
+            mangaList.asSequence()
+                .filter { it.lastReadChapterId != null }
+                .maxByOrNull { it.lastReadTimestamp }
+        } else null
+    }
+    val recentlyRead = remember(mangaList, continueManga) {
+        val hero = continueManga
+        if (hero != null) {
+            mangaList.asSequence()
+                .filter { it.lastReadChapterId != null && it.id != hero.id }
+                .sortedByDescending { it.lastReadTimestamp }
+                .take(8)
+                .toList()
+        } else emptyList()
+    }
 
     Scaffold(
         containerColor = Color.Transparent,

@@ -73,7 +73,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
-import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.example.data.local.CategoryEntity
 import com.example.data.local.ChapterEntity
@@ -537,35 +536,31 @@ fun MangaDetailScreen(
                     // Chimahon-style chapter row: every row carries the manga's cover as a small
                     // thumbnail (crossfades in like chimahon's image loading; cached on disk so it
                     // reappears instantly), and tapping the row selects that chapter.
-                    SubcomposeAsyncImage(
-                        model = ImageRequest.Builder(ctx)
-                            .data(coverModelFor(manga))
-                            .size(100, 140)
-                            .crossfade(true)
-                            .memoryCacheKey("chapterThumb:${manga.id}")
-                            .diskCacheKey("chapterThumb:${manga.id}:${manga.coverUrl}")
-                            .build(),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
+                    // Plain `AsyncImage` over a tinted Box, not `SubcomposeAsyncImage`: the log
+                    // showed the chapter list spending 100-670ms per scroll frame, and a
+                    // SubcomposeLayout on *every* row (same cover thumbnail repeated down the list)
+                    // was the dominant composition cost. The Box's surfaceVariant tint is the
+                    // placeholder/error state — `AsyncImage` draws nothing until the cover lands.
+                    Box(
                         modifier = Modifier
                             .width(50.dp)
                             .height(70.dp)
-                            .clip(RoundedCornerShape(6.dp)),
-                        loading = {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                            )
-                        },
-                        error = {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                            )
-                        },
-                    )
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(ctx)
+                                .data(coverModelFor(manga))
+                                .size(100, 140)
+                                .crossfade(true)
+                                .memoryCacheKey("chapterThumb:${manga.id}")
+                                .diskCacheKey("chapterThumb:${manga.id}:${manga.coverUrl}")
+                                .build(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
 
                     Spacer(modifier = Modifier.width(12.dp))
 

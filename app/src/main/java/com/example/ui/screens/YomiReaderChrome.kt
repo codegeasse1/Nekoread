@@ -92,7 +92,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import coil.compose.SubcomposeAsyncImage
+import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.data.local.ChapterEntity
 import com.example.ui.ReaderBg
@@ -1789,20 +1789,21 @@ private fun ChapterListSheet(
                         // Chimahon-style row: a small cover thumbnail on every chapter row (fades in
                         // smoothly like chimahon's image loading; served from Coil's disk cache after
                         // the first open, so it appears instantly on later visits).
-                        SubcomposeAsyncImage(
-                            model = ImageRequest.Builder(ctx).data(chapterCoverModel).crossfade(true).build(),
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
+                        Box(
                             modifier = Modifier
                                 .size(width = 44.dp, height = 60.dp)
-                                .clip(RoundedCornerShape(6.dp)),
-                            loading = {
-                                Box(Modifier.fillMaxSize().background(CardColor))
-                            },
-                            error = {
-                                Box(Modifier.fillMaxSize().background(CardColor))
-                            },
-                        )
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(CardColor)
+                        ) {
+                            // Plain `AsyncImage` over a tinted Box — no per-row SubcomposeLayout
+                            // (same fix as the series chapter list; this picker janked the same way).
+                            AsyncImage(
+                                model = ImageRequest.Builder(ctx).data(chapterCoverModel).crossfade(true).build(),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                         Spacer(Modifier.width(12.dp))
                     }
                     Column(Modifier.weight(1f)) {
