@@ -6,6 +6,7 @@ import android.content.pm.ActivityInfo
 import android.os.Handler
 import android.os.Looper
 import android.view.FrameMetrics
+import android.view.Window
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
@@ -430,7 +431,7 @@ fun ReaderScreen(
     DisposableEffect(frameCtx) {
         val window = frameCtx.findActivity()?.window
         if (window == null) return@DisposableEffect onDispose { }
-        val listener = FrameMetrics.OnFrameMetricsAvailableListener { _, metrics, _ ->
+        val listener = Window.OnFrameMetricsAvailableListener { _, metrics, _ ->
             val total = metrics.getMetric(FrameMetrics.TOTAL_DURATION)
             if (total >= 100_000_000L) {
                 fun ms(metric: Int) = metrics.getMetric(metric) / 1_000_000
