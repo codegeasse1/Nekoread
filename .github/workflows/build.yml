@@ -101,6 +101,14 @@ jobs:
           tail -n 40 gradle-build.log
           exit $EXIT
 
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log
+          path: gradle-build.log
+          if-no-files-found: warn
+
       - name: Upload APK as workflow artifact
         if: success()
         uses: actions/upload-artifact@v4
