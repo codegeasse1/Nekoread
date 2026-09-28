@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -51,6 +52,12 @@ class WebtoonPageHolder(
     /** Job for loading the page. */
     private var loadJob: Job? = null
 
+    /** Pending automatic reload after a failure (cancelled on rebind/recycle). */
+    private var autoRetryJob: Job? = null
+
+    /** Automatic attempts used for the current page (manual retry resets to 0). */
+    private var autoAttempts = 0
+
     /**
      * The frame's placeholder height while a page loads: the recycler's viewport height. The
      * recycler is not necessarily measured yet when the FIRST holders are created (the adapter is
@@ -82,6 +89,8 @@ class WebtoonPageHolder(
         frame.debugLabel = label
         ReaderDiagnostics.logFor(label, "bind seg=${item.segIndex} page=${item.number}")
         loadJob?.cancel()
+        autoRetryJob?.cancel()
+        autoAttempts = 0
         removeErrorLayout()
         progressContainer.isVisible = true
         refreshLayoutParams()
@@ -242,6 +251,7 @@ class WebtoonPageHolder(
     /** Called when the view is recycled and added to the view pool. */
     fun recycle() {
         loadJob?.cancel()
+        autoRetryJob?.cancel()
         loadJob = null
         removeErrorLayout()
         frame.recycle()
@@ -273,12 +283,37 @@ class WebtoonPageHolder(
                 addView(msg)
                 val retry = Button(frame.context).apply {
                     text = "Retry"
-                    setOnClickListener { item?.let { bind(it) } }
+                    setOnClickListener { autoAttempts = 0; item?.let { bind(it) } }
                 }
                 addView(retry, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(12) })
             }
             frame.addView(errorLayout)
         }
+        scheduleAutoRetry()
+    }
+
+    /**
+     * Reloads a failed page automatically (up to [MAX_AUTO_RETRIES] attempts with growing
+     * backoff). Stops early as soon as a load succeeds; the manual Retry button still works
+     * afterwards and resets the budget.
+     */
+    private fun scheduleAutoRetry() {
+        if (autoAttempts >= MAX_AUTO_RETRIES) return
+        autoRetryJob?.cancel()
+        autoRetryJob = scope.launch {
+            delay(700L * (autoAttempts + 1))
+            val target = item ?: return@launch
+            if (errorLayout != null) {
+                val n = autoAttempts + 1
+                bind(target)
+                autoAttempts = n
+            }
+        }
+    }
+
+    companion object {
+        /** Automatic reload attempts per page before giving up (manual retry resets). */
+        const val MAX_AUTO_RETRIES = 10
     }
 
     /** Removes the error layout from the holder, if found. */

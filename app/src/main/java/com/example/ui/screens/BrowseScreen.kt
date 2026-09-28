@@ -104,12 +104,18 @@ import com.example.ui.components.MangaGridCard
 import com.example.ui.components.MangaListCard
 import com.example.ui.theme.GlassCardBorder
 import com.example.ui.theme.NekoGoldBadge
-import com.example.ui.theme.NekoVioletPrimary
+import com.example.ui.theme.proPrimary()
 import kotlinx.coroutines.delay
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.example.ui.components.proButtonGradient
+import com.example.ui.components.ProPrimaryButton
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import android.widget.Toast
 
 private const val TAB_SOURCES = 0
 private const val TAB_GLOBAL = 1
@@ -184,7 +190,7 @@ private fun ExtensionIconView(
         AsyncImage(model = iconUrl, contentDescription = null, modifier = modifier)
     } else {
         Box(
-            modifier = modifier.background(if (nsfw) NekoGoldBadge else NekoVioletPrimary),
+            modifier = modifier.background(if (nsfw) NekoGoldBadge else proPrimary()),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -421,7 +427,7 @@ fun BrowseScreen(
                                 Icon(
                                     imageVector = Icons.Default.Language,
                                     contentDescription = "Cloudflare check",
-                                    tint = NekoVioletPrimary
+                                    tint = proPrimary()
                                 )
                             }
                         }
@@ -527,6 +533,12 @@ fun BrowseScreen(
                         viewModel.loadCatalog(activeSourceId, if (m == "filter") searchQuery else "", 1, m)
                     },
                     onRetry = { viewModel.loadCatalog(activeSourceId, searchQuery, 1, catalogMode) },
+                    onGenreSelect = { q ->
+                        if (activeSourceId.isNotBlank()) {
+                            viewModel.setCatalogMode("filter")
+                            viewModel.loadCatalog(activeSourceId, q, 1, "filter")
+                        }
+                    },
                     onMangaClick = onMangaClick,
                     isLoadingMore = catalogLoadingMore,
                     hasMore = catalogHasMore,
@@ -640,7 +652,7 @@ fun AddRepoDialog(
                 Icon(
                     imageVector = Icons.Default.Public,
                     contentDescription = "Repo",
-                    tint = NekoVioletPrimary
+                    tint = proPrimary()
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Add Extension Repository")
@@ -788,7 +800,7 @@ fun SourcesTabContent(
                                     Icon(
                                         imageVector = Icons.Default.Verified,
                                         contentDescription = "Working source",
-                                        tint = NekoVioletPrimary,
+                                        tint = proPrimary(),
                                         modifier = Modifier.size(16.dp)
                                     )
                                 }
@@ -946,7 +958,7 @@ fun GlobalSearchTabContent(
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = null,
-                            tint = NekoVioletPrimary,
+                            tint = proPrimary(),
                             modifier = Modifier.size(40.dp)
                         )
                         Spacer(modifier = Modifier.height(12.dp))
@@ -1090,6 +1102,7 @@ fun CatalogTabContent(
     minimal: Boolean = false,
     mode: String = "latest",
     onModeChange: (String) -> Unit = {},
+    onGenreSelect: (String) -> Unit = {},
     onRetry: () -> Unit,
     onMangaClick: (String) -> Unit,
     isLoadingMore: Boolean = false,
@@ -1110,7 +1123,7 @@ fun CatalogTabContent(
                     Icon(
                         imageVector = Icons.Default.Public,
                         contentDescription = null,
-                        tint = NekoVioletPrimary,
+                        tint = proPrimary(),
                         modifier = Modifier.size(40.dp)
                     )
                     Spacer(modifier = Modifier.height(12.dp))
@@ -1154,8 +1167,9 @@ fun CatalogTabContent(
                     selected = genreSel,
                     onSelect = { g ->
                         genreSel = g
-                        if (g == "All") onSearchQueryChange("")
-                        else onSearchQueryChange("tag:$g")
+                        val q = if (g == "All") "" else "tag:$g"
+                        onSearchQueryChange(q)
+                        onGenreSelect(q)
                     },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1364,7 +1378,7 @@ fun ExtensionsTabContent(
                 item(key = "header_updates") {
                     GlassCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.clip(CircleShape).background(NekoVioletPrimary.copy(alpha = 0.2f)).padding(8.dp)) {
+                            Box(modifier = Modifier.clip(CircleShape).background(proPrimary().copy(alpha = 0.2f)).padding(8.dp)) {
                                 Icon(Icons.Default.Refresh, null, tint = NekoGoldBadge, modifier = Modifier.size(20.dp))
                             }
                             Spacer(modifier = Modifier.width(10.dp))
@@ -1427,7 +1441,7 @@ fun ExtensionsTabContent(
 @Composable
 private fun SectionLabel(text: String) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-        Box(modifier = Modifier.width(3.dp).height(16.dp).clip(RoundedCornerShape(2.dp)).background(com.example.ui.components.ProButtonGradient))
+        Box(modifier = Modifier.width(3.dp).height(16.dp).clip(RoundedCornerShape(2.dp)).background(proButtonGradient()))
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = text,
@@ -1581,6 +1595,8 @@ fun ReposTabContent(
     onRefreshRepo: (String) -> Unit,
     onDeleteRepo: (ExtensionRepoEntity) -> Unit
 ) {
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -1607,14 +1623,12 @@ fun ReposTabContent(
                     }
                 }
 
-                Button(
+                ProPrimaryButton(
+                    label = "Add Repo",
+                    icon = Icons.Default.Add,
                     onClick = onAddRepoClick,
                     modifier = Modifier.testTag("add_repo_button")
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Repo")
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Add Repo")
-                }
+                )
             }
         }
 
@@ -1644,7 +1658,7 @@ fun ReposTabContent(
                     Icon(
                         imageVector = Icons.Default.Public,
                         contentDescription = "Repo Icon",
-                        tint = NekoVioletPrimary,
+                        tint = proPrimary(),
                         modifier = Modifier.size(32.dp)
                     )
 
@@ -1691,6 +1705,19 @@ fun ReposTabContent(
                     if (repoBusy) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
                     } else {
+                        IconButton(
+                            onClick = {
+                                clipboardManager.setText(AnnotatedString(repo.url))
+                                Toast.makeText(context, "Repo link copied", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.testTag("copy_repo_${repo.id}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = "Copy Repo Link",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         IconButton(
                             onClick = { onRefreshRepo(repo.id) },
                             modifier = Modifier.testTag("refresh_repo_${repo.id}")
