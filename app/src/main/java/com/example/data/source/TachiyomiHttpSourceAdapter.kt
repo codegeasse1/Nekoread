@@ -97,12 +97,12 @@ class TachiyomiHttpSourceAdapter(
     private fun idOf(mangaUrl: String): String = "${this.id}:" + b64(mangaUrl)
 
     // Nekoread drives extensions through the SUSPEND API (getLatestUpdates/getPopularManga/
-    // getSearchManga/getPageList/getImageUrl) — exactly what Tadami/Mihon call. The old Rx fetch*
+    // getSearchManga/getPageList/getImageUrl) â exactly what Tadami/Mihon call. The old Rx fetch*
     // methods are still provided by the vendored HttpSource for lib-1.4 sources (their defaults run
     // request+parse), but keiyoushi lib-1.6 (KeiSource) sources force those Rx methods to throw, so
     // calling fetch* directly broke sources like 4KHD. KeiSource instead routes EVERYTHING through
     // the modern getMangaUpdate(manga, chapters, fetchDetails, fetchChapters) API, so details and
-    // chapters are fetched through that — its default in MangaSource still bridges back to
+    // chapters are fetched through that â its default in MangaSource still bridges back to
     // getMangaDetails/getChapterList, so old lib-1.4 sources keep working unchanged.
     private suspend fun <T> loading(tag: String, block: suspend () -> T): T =
         withTimeout(120_000) { block() }
@@ -120,24 +120,50 @@ class TachiyomiHttpSourceAdapter(
             .map { it.toManga() }
     }
 
-    // Tag search for extension sources: find the genre filter in the source's own filter list whose
-    // name matches the tapped tag, set it to INCLUDED, and run the source's real genre-filtered
-    // search (the exact mechanism Mihon's filter UI uses) — so a tag tap shows every manga carrying
-    // that genre, not a fuzzy title match. If no filter matches the tag, fall back to a plain
-    // keyword search so the tap still returns something instead of an empty page.
+    // Tag search for extension sources: most extensions declare their genres as TriState
+    // filters nested inside a genre Group (e.g. Madara/MangaBox "GenreList"), NOT as
+    // top-level filters - so TriStates are collected recursively, the tapped tag is set
+    // to INCLUDED, and the source's real genre-filtered search runs (the exact mechanism
+    // Mihon's filter UI uses). That lists every manga carrying the genre instead of a
+    // fuzzy title match. Sources with a genre Select get the matching option picked.
+    // Only when no filter matches the tag is there a plain keyword-search fallback.
     override suspend fun searchByTag(tag: String, page: Int): List<MangaEntity> = withContext(Dispatchers.IO) {
         val base = runCatching { ext.getFilterList() }.getOrNull().orEmpty()
-        val genre = base.filterIsInstance<Filter.TriState>()
-            .firstOrNull { it.name.equals(tag.trim(), ignoreCase = true) }
+        val wanted = tag.trim()
+        fun triStates(filters: List<Filter<*>>): List<Filter.TriState> = buildList {
+            for (f in filters) {
+                when (f) {
+                    is Filter.TriState -> add(f)
+                    is Filter.Group<*> -> for (child in f.state) {
+                        if (child is Filter.TriState) add(child)
+                        else if (child is Filter.Group<*>) addAll(triStates(listOf(child)))
+                    }
+                }
+            }
+        }
+        val genre = triStates(base).firstOrNull {
+            it.name.equals(wanted, ignoreCase = true) || normTag(it.name) == normTag(wanted)
+        }
+        val select = base.filterIsInstance<Filter.Select<*>>().firstOrNull { s ->
+            s.values.any { v -> normTag(v.toString()) == normTag(wanted) }
+        }
         loading("searchByTag") {
-            if (genre != null) {
-                genre.state = Filter.TriState.STATE_INCLUDE
-                ext.getSearchManga(page, "", FilterList(base))
-            } else {
-                ext.getSearchManga(page, tag, FilterList())
+            when {
+                genre != null -> {
+                    genre.state = Filter.TriState.STATE_INCLUDE
+                    ext.getSearchManga(page, "", FilterList(base))
+                }
+                select != null -> {
+                    (select as Filter<Int>).state =
+                        select.values.indexOfFirst { v -> normTag(v.toString()) == normTag(wanted) }
+                    ext.getSearchManga(page, "", FilterList(base))
+                }
+                else -> ext.getSearchManga(page, tag, FilterList())
             }
         }.mangas.map { it.toManga() }
     }
+
+    private fun normTag(s: String): String = s.lowercase().filter { it.isLetterOrDigit() }
 
     override suspend fun latest(page: Int): List<MangaEntity> = withContext(Dispatchers.IO) {
         loading("latest") { ext.getLatestUpdates(page) }
@@ -173,7 +199,7 @@ class TachiyomiHttpSourceAdapter(
         // renumbered by list position: the order a source returns its chapters changes between
         // fetches and doesn't match chapter content, so position-based numbers made the list,
         // prev/next and continuous scroll point at the WRONG chapters. Ordering for these sources
-        // falls back to the number in the chapter NAME (see sortChapters) — stable across refreshes.
+        // falls back to the number in the chapter NAME (see sortChapters) â stable across refreshes.
         chapters
     }
 
@@ -186,7 +212,7 @@ class TachiyomiHttpSourceAdapter(
 
     /**
      * Coil models that load each page through the extension's own client + `imageRequest(page)`
-     * headers (Referer/Origin/etc.) — the exact path Tadami's reader uses. Without this, pages
+     * headers (Referer/Origin/etc.) â the exact path Tadami's reader uses. Without this, pages
      * were fetched as bare URLs via Coil's generic client, so hotlink-protected CDNs rejected
      * them (blank/black pages).
      */
@@ -243,7 +269,7 @@ class TachiyomiHttpSourceAdapter(
      *
      * getMangaUrl can fail while the Cloudflare challenge it is meant to solve is still up (its
      * token bootstrap hits the challenged homepage), so bound the wait and fall back to the source
-     * homepage — a real page that reliably triggers the challenge, which is all the verification
+     * homepage â a real page that reliably triggers the challenge, which is all the verification
      * WebView needs to issue a host-wide cf_clearance.
      */
     override suspend fun getMangaWebUrl(fullMangaId: String): String {
