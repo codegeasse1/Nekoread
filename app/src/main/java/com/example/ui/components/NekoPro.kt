@@ -55,7 +55,7 @@ import com.example.ui.theme.GlassCardBorder
 import com.example.ui.theme.SleekGoldBadge
 
 val ProViolet = Color(0xFF8B5CF6)
-val proPrimary()Deep = Color(0xFF6D28D9)
+val ProVioletDeep = Color(0xFF6D28D9)
 val ProCyan = Color(0xFF22D3EE)
 val ProGold = Color(0xFFFFB300)
 val ProNsfwRed = Color(0xFFFF5252)

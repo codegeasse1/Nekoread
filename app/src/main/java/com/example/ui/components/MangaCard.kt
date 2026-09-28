@@ -388,6 +388,7 @@ fun MangaGridCard(
             // `drawBehind` (two rounded rects) instead of a track Box wrapping a clipped inner Box:
             // three layout nodes + a clip layer per cell before, zero extra nodes now.
             val progressTrack = MaterialTheme.colorScheme.surfaceVariant
+                            val accentPrimary = proPrimary()
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -402,7 +403,7 @@ fun MangaGridCard(
                                 cornerRadius = radius
                             )
                             drawRoundRect(
-                                color = proPrimary(),
+                                color = accentPrimary,
                                 size = Size(size.width * 0.6f, barHeight),
                                 cornerRadius = radius
                             )
