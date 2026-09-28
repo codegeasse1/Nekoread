@@ -1773,7 +1773,7 @@ private fun ChapterListSheet(
             chapters.indexOfFirst { it.id == activeChapterId }
         }
         val listState = rememberLazyListState(
-            firstVisibleItemIndex = (activeIndex - 2).coerceAtLeast(0)
+            initialFirstVisibleItemIndex = (activeIndex - 2).coerceAtLeast(0)
         )
         LazyColumn(
             modifier = Modifier
