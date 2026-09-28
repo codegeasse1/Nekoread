@@ -45,7 +45,7 @@ import androidx.compose.ui.unit.dp
 import com.example.ui.theme.GlassCard
 import com.example.ui.theme.GlassCardBorder
 import com.example.ui.theme.GlassField
-import com.example.ui.theme.NekoVioletPrimary
+import com.example.ui.theme.proPrimary()
 import com.example.ui.theme.TextMutedDark
 import kotlinx.coroutines.delay
 
@@ -104,7 +104,7 @@ fun GlassSearchBar(
             Icon(
                 imageVector = Icons.Default.Search,
                 contentDescription = "Search",
-                tint = NekoVioletPrimary,
+                tint = proPrimary(),
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -115,7 +115,7 @@ fun GlassSearchBar(
                 textStyle = MaterialTheme.typography.bodyMedium.copy(
                     color = MaterialTheme.colorScheme.onSurface
                 ),
-                cursorBrush = SolidColor(NekoVioletPrimary),
+                cursorBrush = SolidColor(proPrimary()),
                 modifier = Modifier.weight(1f),
                 decorationBox = { innerTextField ->
                     Box(contentAlignment = Alignment.CenterStart) {

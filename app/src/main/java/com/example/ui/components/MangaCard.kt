@@ -58,7 +58,7 @@ import com.example.data.source.SourceRegistry
 import com.example.diagnostics.AppDiagnostics
 import com.example.diagnostics.cellCost
 import com.example.ui.theme.SleekGoldBadge
-import com.example.ui.theme.SleekVioletPrimary
+import com.example.ui.theme.proPrimary()
 import com.example.ui.theme.GlassCardBorder
 
 // -------------------------------------------------------------------------------------------------
@@ -186,7 +186,8 @@ fun MangaGridCard(
     isFavorite: Boolean = false,
     onFavoriteClick: (() -> Unit)? = null,
     onMenuClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    coverScale: ContentScale = ContentScale.Crop
 ) {
     AppDiagnostics.noteCompose("gridCard")
     // Plain surface (border + background + clip) instead of Material3 `Card`: see the note at the
@@ -199,7 +200,7 @@ fun MangaGridCard(
             .fillMaxWidth()
             .cardSurface(
                 fill = MaterialTheme.colorScheme.surfaceVariant,
-                stroke = if (selected) SleekVioletPrimary else GlassCardBorder,
+                stroke = if (selected) proPrimary() else GlassCardBorder,
                 strokeWidth = if (selected) 2.dp else 1.dp
             )
             .clip(CardShape)
@@ -249,7 +250,7 @@ fun MangaGridCard(
                         drawContent()
                         drawRect(brush = CoverScrim)
                     },
-                contentScale = ContentScale.Crop,
+                contentScale = coverScale,
             )
 
             // Top Type Chip (MANHWA / MANGA) — violet gradient pill like the new design
@@ -259,7 +260,7 @@ fun MangaGridCard(
                 modifier = Modifier
                     .padding(8.dp)
                     .align(Alignment.TopStart)
-                    .background(SleekVioletPrimary, ChipShape)
+                    .background(proPrimary(), ChipShape)
                     .padding(horizontal = 8.dp, vertical = 3.dp)
             )
 
@@ -302,7 +303,7 @@ fun MangaGridCard(
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
                     contentDescription = "Selected",
-                    tint = SleekVioletPrimary,
+                    tint = proPrimary(),
                     modifier = Modifier
                         .padding(6.dp)
                         .align(Alignment.TopEnd)
@@ -317,7 +318,7 @@ fun MangaGridCard(
                     modifier = Modifier
                         .padding(6.dp)
                         .align(Alignment.BottomEnd)
-                        .background(SleekVioletPrimary, PillShape)
+                        .background(proPrimary(), PillShape)
                         .clip(PillShape)
                         .clickable { onReadClick() }
                         .padding(horizontal = 8.dp, vertical = 4.dp)
@@ -402,7 +403,7 @@ fun MangaGridCard(
                                 cornerRadius = radius
                             )
                             drawRoundRect(
-                                color = SleekVioletPrimary,
+                                color = proPrimary(),
                                 size = Size(size.width * 0.6f, barHeight),
                                 cornerRadius = radius
                             )
@@ -429,7 +430,7 @@ fun MangaListCard(
             .fillMaxWidth()
             .cardSurface(
                 fill = MaterialTheme.colorScheme.surface,
-                stroke = if (selected) SleekVioletPrimary else GlassCardBorder,
+                stroke = if (selected) proPrimary() else GlassCardBorder,
                 strokeWidth = if (selected) 2.dp else 1.dp
             )
             .clip(CardShape)
@@ -442,7 +443,7 @@ fun MangaListCard(
             Icon(
                 imageVector = Icons.Default.CheckCircle,
                 contentDescription = "Selected",
-                tint = SleekVioletPrimary,
+                tint = proPrimary(),
                 modifier = Modifier.padding(start = 4.dp).size(26.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -507,7 +508,7 @@ fun MangaListCard(
                     text = manga.type,
                     style = LabelSmallWhite,
                     modifier = Modifier
-                        .background(if (manga.type == "MANHWA") SleekVioletPrimary else TypeCyan, RoundedCornerShape(4.dp))
+                        .background(if (manga.type == "MANHWA") proPrimary() else TypeCyan, RoundedCornerShape(4.dp))
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 )
 
