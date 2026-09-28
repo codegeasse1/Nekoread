@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -230,8 +231,8 @@ fun YomiReaderChrome(
     var autoScrollExpanded by remember { mutableStateOf(false) }
 
     // The bottom-bar crop toggle operates on whichever crop setting applies to the current reading
-    // mode: webtoon (continuous) â the classic crop setting, webtoon with gaps â its own setting,
-    // paged modes (left-to-right / right-to-left / vertical) â the paged crop setting.
+    // mode: webtoon (continuous) Ã¢ÂÂ the classic crop setting, webtoon with gaps Ã¢ÂÂ its own setting,
+    // paged modes (left-to-right / right-to-left / vertical) Ã¢ÂÂ the paged crop setting.
     val activeCrop = when (readerMode) {
         ReaderMode.WEBTOON -> cropBorders
         ReaderMode.WEBTOON_GAPS -> cropBordersContinuous
@@ -1766,10 +1767,19 @@ private fun ChapterListSheet(
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
         )
+        // Open scrolled to the chapter being read (a couple of rows above it for
+        // context), so picking a nearby chapter never means scrolling down from the top.
+        val activeIndex = remember(chapters, activeChapterId) {
+            chapters.indexOfFirst { it.id == activeChapterId }
+        }
+        val listState = rememberLazyListState(
+            firstVisibleItemIndex = (activeIndex - 2).coerceAtLeast(0)
+        )
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = 460.dp),
+            state = listState,
         ) {
             items(chapters, key = { it.id }) { ch ->
                 val active = ch.id == activeChapterId
@@ -1795,7 +1805,7 @@ private fun ChapterListSheet(
                                 .clip(RoundedCornerShape(6.dp))
                                 .background(CardColor)
                         ) {
-                            // Plain `AsyncImage` over a tinted Box — no per-row SubcomposeLayout
+                            // Plain `AsyncImage` over a tinted Box â no per-row SubcomposeLayout
                             // (same fix as the series chapter list; this picker janked the same way).
                             AsyncImage(
                                 model = ImageRequest.Builder(ctx).data(chapterCoverModel).crossfade(true).build(),
