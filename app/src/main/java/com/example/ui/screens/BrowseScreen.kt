@@ -104,7 +104,6 @@ import com.example.ui.components.MangaGridCard
 import com.example.ui.components.MangaListCard
 import com.example.ui.theme.GlassCardBorder
 import com.example.ui.theme.NekoGoldBadge
-import com.example.ui.theme.proPrimary()
 import kotlinx.coroutines.delay
 import java.io.File
 import java.text.SimpleDateFormat
@@ -116,6 +115,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import android.widget.Toast
+import com.example.ui.components.proPrimary
 
 private const val TAB_SOURCES = 0
 private const val TAB_GLOBAL = 1

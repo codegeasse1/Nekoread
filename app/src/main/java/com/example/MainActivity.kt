@@ -112,6 +112,8 @@ import eu.kanade.tachiyomi.network.NetworkHelper
 import androidx.compose.foundation.clickable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.draw.clip
 
 // Ambient background + glow brushes, hoisted to file level: they never change, and building a
 // `Brush.verticalGradient` / `radialGradient` (plus its Shader) inline re-created them on every

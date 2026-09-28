@@ -75,7 +75,6 @@ import com.example.ui.ReaderBg
 import com.example.ui.ReaderMode
 import com.example.ui.components.FloatingTopAppBar
 import com.example.ui.components.GlassCard
-import com.example.ui.components.proButtonGradient()
 import com.example.ui.components.ProDropdownPill
 import com.example.ui.components.ProPrimaryButton
 import com.example.ui.components.ProSettingRow
@@ -89,7 +88,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import com.example.ui.theme.GlassCardBorder
 import com.example.ui.theme.NekoGoldBadge
-import com.example.ui.theme.proPrimary()
 import com.example.BuildConfig
 import com.example.updater.AppUpdater
 import com.example.updater.UpdateDownloadService
@@ -98,6 +96,9 @@ import kotlinx.coroutines.launch
 import com.example.ui.theme.AppAccent
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
+import com.example.ui.components.proButtonGradient
+import com.example.ui.components.proPrimary
+import androidx.compose.foundation.layout.Box
 
 private fun readerModeLabel(mode: ReaderMode): String = when (mode) {
     ReaderMode.WEBTOON -> "Long strip"

@@ -58,7 +58,6 @@ import com.example.data.source.SourceRegistry
 import com.example.diagnostics.AppDiagnostics
 import com.example.diagnostics.cellCost
 import com.example.ui.theme.SleekGoldBadge
-import com.example.ui.theme.proPrimary()
 import com.example.ui.theme.GlassCardBorder
 
 // -------------------------------------------------------------------------------------------------

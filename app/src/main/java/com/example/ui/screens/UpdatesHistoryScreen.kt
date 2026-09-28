@@ -60,7 +60,6 @@ import com.example.data.local.MangaEntity
 import com.example.diagnostics.AppScrollProbe
 import com.example.ui.components.FloatingTopAppBar
 import com.example.ui.components.GlassCard
-import com.example.ui.components.proButtonGradient()
 import com.example.ui.components.ProEmptyCard
 import com.example.ui.components.ProEmptyHistoryArt
 import com.example.ui.components.ProSegmented
@@ -73,7 +72,8 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.MoreVert
 import com.example.ui.MainViewModel
-import com.example.ui.theme.proPrimary()
+import com.example.ui.components.proButtonGradient
+import com.example.ui.components.proPrimary
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

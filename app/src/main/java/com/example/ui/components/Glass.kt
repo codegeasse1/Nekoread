@@ -45,9 +45,9 @@ import androidx.compose.ui.unit.dp
 import com.example.ui.theme.GlassCard
 import com.example.ui.theme.GlassCardBorder
 import com.example.ui.theme.GlassField
-import com.example.ui.theme.proPrimary()
 import com.example.ui.theme.TextMutedDark
 import kotlinx.coroutines.delay
+import com.example.ui.components.proPrimary
 
 /**
  * Frosted-glass card: translucent fill + hairline white border so the ambient background
