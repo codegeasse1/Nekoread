@@ -218,8 +218,8 @@ fun SettingsScreen(
                     title = "Reader",
                     subtitle = "Customize how you read your manga and manhwa",
                     expanded = readerExpanded,
-                    onToggle = { readerExpanded = !readerExpanded }
-                ) {
+                    onToggle = { readerExpanded = !readerExpanded },
+                    content = {
                     ProSettingRow(
                         icon = Icons.Default.MenuBook,
                         title = "Default Reading Mode",
@@ -241,6 +241,7 @@ fun SettingsScreen(
                         trailing = { Switch(checked = showPageNumber, onCheckedChange = { viewModel.setShowPageNumber(it) }) }
                     )
                 }
+                )
             }
 
             item {
@@ -249,8 +250,8 @@ fun SettingsScreen(
                     title = "Library",
                     subtitle = "Organize and manage your library",
                     expanded = libraryExpanded,
-                    onToggle = { libraryExpanded = !libraryExpanded }
-                ) {
+                    onToggle = { libraryExpanded = !libraryExpanded },
+                    content = {
                     ProSettingRow(
                         icon = Icons.Default.Category,
                         title = "Edit Categories",
@@ -259,6 +260,7 @@ fun SettingsScreen(
                         onClick = { showCategoryModal = true }
                     )
                 }
+                )
             }
 
             item {
@@ -267,8 +269,8 @@ fun SettingsScreen(
                     title = "Data",
                     subtitle = "Backup and restore your app data",
                     expanded = dataExpanded,
-                    onToggle = { dataExpanded = !dataExpanded }
-                ) {
+                    onToggle = { dataExpanded = !dataExpanded },
+                    content = {
                     ProSettingRow(
                         icon = Icons.Default.CloudUpload,
                         title = "Export Backup (JSON)",
@@ -284,6 +286,7 @@ fun SettingsScreen(
                         onClick = { importLauncher.launch(arrayOf("application/json")) }
                     )
                 }
+                )
             }
 
             item {
@@ -292,8 +295,8 @@ fun SettingsScreen(
                     title = "App Updates",
                     subtitle = "Keep your app up to date",
                     expanded = updatesExpanded,
-                    onToggle = { updatesExpanded = !updatesExpanded }
-                ) {
+                    onToggle = { updatesExpanded = !updatesExpanded },
+                    content = {
                 val updateInfo = remember(updateTick) { AppUpdater.currentUpdate(context) }
                 val updatesEnabled = remember(updateTick) { AppUpdater.isEnabled(context) }
                 var checkingNow by remember { mutableStateOf(false) }
@@ -419,6 +422,9 @@ fun SettingsScreen(
                             })
                         }
                     }
+                }
+                }
+                )
             }
 
             // About

@@ -225,7 +225,7 @@ fun ProEmptyHistoryArt(modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun ProSettingsSection(icon: ImageVector, title: String, subtitle: String, expanded: Boolean, onToggle: () -> Unit, content: @Composable () -> Unit, modifier: Modifier = Modifier) {
+fun ProSettingsSection(icon: ImageVector, title: String, subtitle: String, expanded: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
   GlassCard(modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), borderWidth = if (expanded) 1.dp else 1.dp) {
     Column(Modifier.fillMaxWidth()) {
       Row(Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {

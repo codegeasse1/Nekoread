@@ -1364,7 +1364,7 @@ fun ExtensionsTabContent(
                 item(key = "header_updates") {
                     GlassCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.clip(CircleShape).background(com.example.ui.components.ProButtonGradient.copy(alpha = 0.2f)).padding(8.dp)) {
+                            Box(modifier = Modifier.clip(CircleShape).background(NekoVioletPrimary.copy(alpha = 0.2f)).padding(8.dp)) {
                                 Icon(Icons.Default.Refresh, null, tint = NekoGoldBadge, modifier = Modifier.size(20.dp))
                             }
                             Spacer(modifier = Modifier.width(10.dp))
