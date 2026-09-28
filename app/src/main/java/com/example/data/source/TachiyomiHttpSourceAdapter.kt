@@ -138,6 +138,8 @@ class TachiyomiHttpSourceAdapter(
                         if (child is Filter.TriState) add(child)
                         else if (child is Filter.Group<*>) addAll(triStates(listOf(child)))
                     }
+                    else -> {}
+                    }
                 }
             }
         }
