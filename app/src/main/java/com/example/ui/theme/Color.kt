@@ -71,6 +71,8 @@ enum class AppAccent(
     PINK("Pink", Color(0xFFEC4899), Color(0xFF831843), Color(0xFFDB2777), Color(0xFFF472B6), Color(0xFFF9A8D4)),
     TEAL("Teal", Color(0xFF14B8A6), Color(0xFF134E4A), Color(0xFF0D9488), Color(0xFF2DD4BF), Color(0xFF5EEAD4)),
     GOLD("Gold", Color(0xFFFFB300), Color(0xFF78350F), Color(0xFFF59E0B), Color(0xFFFBBF24), Color(0xFFFDE68A));
-    val buttonGradient: Brush get() = Brush.horizontalGradient(listOf(gradientStart, gradientEnd))
-    val gradient: Brush get() = Brush.horizontalGradient(listOf(primary, gradientEnd, highlight))
+    // Stable shared instances (computed once per accent): handing a fresh Brush to every card
+    // on every composition invalidated draw caches while scrolling.
+    val buttonGradient: Brush by lazy { Brush.horizontalGradient(listOf(gradientStart, gradientEnd)) }
+    val gradient: Brush by lazy { Brush.horizontalGradient(listOf(primary, gradientEnd, highlight)) }
 }

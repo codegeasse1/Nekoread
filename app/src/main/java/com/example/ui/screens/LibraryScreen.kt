@@ -627,7 +627,7 @@ private fun ContinueReadingHero(
         AsyncImage(
             model = heroRequest,
             contentDescription = manga.title,
-            contentScale = ContentScale.Crop,
+            contentScale = ContentScale.Fit,
             modifier = Modifier
                 .fillMaxSize()
                 // The bottom scrim (so the title/Resume stay readable over any cover) rides the

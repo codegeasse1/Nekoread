@@ -459,16 +459,19 @@ fun MainAppScreen(viewModel: MainViewModel) {
                     contentAlignment = Alignment.Center
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(32.dp),
+                        shape = RoundedCornerShape(28.dp),
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
                         border = BorderStroke(1.dp, GlassCardBorder),
-                        shadowElevation = 10.dp
+                        shadowElevation = 10.dp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("bottom_nav")
                     ) {
                         Row(
                             modifier = Modifier
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                                .testTag("bottom_nav"),
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             bottomNavScreens.forEach { screen ->
@@ -476,7 +479,7 @@ fun MainAppScreen(viewModel: MainViewModel) {
                                     (screen == Screen.Browse && currentRoute in tagSearchRoutePatterns)
                                 Box(
                                     modifier = Modifier
-                                        .size(52.dp)
+                                        .size(50.dp)
                                         .clip(androidx.compose.foundation.shape.CircleShape)
                                         .background(if (sel) MaterialTheme.colorScheme.primary else Color.Transparent)
                                         .clickable { navController.navigateToTab(screen.route) }
