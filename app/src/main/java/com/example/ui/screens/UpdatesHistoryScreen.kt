@@ -60,7 +60,7 @@ import com.example.data.local.MangaEntity
 import com.example.diagnostics.AppScrollProbe
 import com.example.ui.components.FloatingTopAppBar
 import com.example.ui.components.GlassCard
-import com.example.ui.components.ProButtonGradient
+import com.example.ui.components.proButtonGradient()
 import com.example.ui.components.ProEmptyCard
 import com.example.ui.components.ProEmptyHistoryArt
 import com.example.ui.components.ProSegmented
@@ -73,7 +73,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.MoreVert
 import com.example.ui.MainViewModel
-import com.example.ui.theme.NekoVioletPrimary
+import com.example.ui.theme.proPrimary()
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,14 +98,14 @@ fun UpdatesHistoryScreen(
             FloatingTopAppBar {
                 Column(Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        Box(modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(ProButtonGradient).padding(7.dp)) {
+                        Box(modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(proButtonGradient()).padding(7.dp)) {
                             Icon(Icons.Default.History, null, tint = Color.White, modifier = Modifier.size(18.dp))
                         }
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text("History ", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium)
-                                Text("& Updates", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium.copy(brush = ProButtonGradient))
+                                Text("& Updates", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium.copy(brush = proButtonGradient()))
                             }
                             Text("Your recent activity and latest updates", style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
@@ -238,7 +238,7 @@ fun HistoryList(
                             Text(
                                 text = manga.lastReadChapterName ?: "Chapter 1",
                                 style = MaterialTheme.typography.bodySmall.copy(
-                                    color = NekoVioletPrimary,
+                                    color = proPrimary(),
                                     fontWeight = FontWeight.Bold
                                 ),
                                 maxLines = 1,
@@ -341,7 +341,7 @@ fun UpdatesList(
                     Icon(
                         imageVector = Icons.Default.NewReleases,
                         contentDescription = "New",
-                        tint = NekoVioletPrimary,
+                        tint = proPrimary(),
                         modifier = Modifier.size(24.dp)
                     )
                 }

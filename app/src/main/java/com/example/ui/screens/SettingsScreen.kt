@@ -75,7 +75,7 @@ import com.example.ui.ReaderBg
 import com.example.ui.ReaderMode
 import com.example.ui.components.FloatingTopAppBar
 import com.example.ui.components.GlassCard
-import com.example.ui.components.ProButtonGradient
+import com.example.ui.components.proButtonGradient()
 import com.example.ui.components.ProDropdownPill
 import com.example.ui.components.ProPrimaryButton
 import com.example.ui.components.ProSettingRow
@@ -89,12 +89,15 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import com.example.ui.theme.GlassCardBorder
 import com.example.ui.theme.NekoGoldBadge
-import com.example.ui.theme.NekoVioletPrimary
+import com.example.ui.theme.proPrimary()
 import com.example.BuildConfig
 import com.example.updater.AppUpdater
 import com.example.updater.UpdateDownloadService
 import com.example.util.BuildInfo
 import kotlinx.coroutines.launch
+import com.example.ui.theme.AppAccent
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
 
 private fun readerModeLabel(mode: ReaderMode): String = when (mode) {
     ReaderMode.WEBTOON -> "Long strip"
@@ -128,6 +131,7 @@ fun SettingsScreen(
     var libraryExpanded by remember { mutableStateOf(true) }
     var dataExpanded by remember { mutableStateOf(true) }
     var updatesExpanded by remember { mutableStateOf(true) }
+    var appearanceExpanded by remember { mutableStateOf(true) }
     // Bumped to recompute the update banner after a toggle / "Check now".
     var updateTick by remember { mutableIntStateOf(0) }
 
@@ -135,6 +139,7 @@ fun SettingsScreen(
     val readerMode: ReaderMode by viewModel.readerMode.collectAsStateWithLifecycle()
     val readerBg: ReaderBg by viewModel.readerBg.collectAsStateWithLifecycle()
     val showPageNumber: Boolean by viewModel.showPageNumber.collectAsStateWithLifecycle()
+    val appAccent: AppAccent by viewModel.appAccent.collectAsStateWithLifecycle()
 
     // Real export: user picks where to save the backup JSON (SAF).
     val exportLauncher = rememberLauncherForActivityResult(
@@ -188,7 +193,7 @@ fun SettingsScreen(
         topBar = {
             FloatingTopAppBar {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    androidx.compose.foundation.layout.Box(modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(ProButtonGradient).padding(7.dp)) {
+                    androidx.compose.foundation.layout.Box(modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(proButtonGradient()).padding(7.dp)) {
                         Icon(Icons.Default.Settings, null, tint = Color.White, modifier = Modifier.size(18.dp))
                     }
                     Spacer(modifier = Modifier.width(10.dp))
@@ -260,6 +265,69 @@ fun SettingsScreen(
                         onClick = { showCategoryModal = true }
                     )
                 }
+                )
+            }
+
+            item {
+                ProSettingsSection(
+                    icon = Icons.Default.Palette,
+                    title = "Appearance",
+                    subtitle = "App theme color",
+                    expanded = appearanceExpanded,
+                    onToggle = { appearanceExpanded = !appearanceExpanded },
+                    content = {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            AppAccent.entries.chunked(4).forEach { rowAccents ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly
+                                ) {
+                                    rowAccents.forEach { a ->
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(44.dp)
+                                                    .clip(CircleShape)
+                                                    .background(a.buttonGradient)
+                                                    .clickable { viewModel.setAppAccent(a) }
+                                                    .then(
+                                                        if (a == appAccent) Modifier.border(
+                                                            2.dp,
+                                                            Color.White,
+                                                            CircleShape
+                                                        ) else Modifier
+                                                    ),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                if (a == appAccent) {
+                                                    Icon(
+                                                        Icons.Default.Check,
+                                                        contentDescription = "Selected",
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                            }
+                                            Text(
+                                                text = a.label,
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    color = if (a == appAccent) MaterialTheme.colorScheme.onSurface
+                                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    fontWeight = if (a == appAccent) FontWeight.Bold else FontWeight.Normal
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 )
             }
 
@@ -384,7 +452,7 @@ fun SettingsScreen(
                                 .padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.SystemUpdate, contentDescription = "Updates", tint = NekoVioletPrimary)
+                            Icon(Icons.Default.SystemUpdate, contentDescription = "Updates", tint = proPrimary())
                             Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text("Check for updates", fontWeight = FontWeight.Bold)
@@ -439,7 +507,7 @@ fun SettingsScreen(
                         Icon(
                             imageVector = Icons.Default.AutoAwesome,
                             contentDescription = "Logo",
-                            tint = NekoVioletPrimary,
+                            tint = proPrimary(),
                             modifier = Modifier.height(40.dp)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
@@ -610,7 +678,7 @@ private fun SettingRow(
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = title, tint = NekoVioletPrimary)
+        Icon(icon, contentDescription = title, tint = proPrimary())
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(title, fontWeight = FontWeight.Bold)

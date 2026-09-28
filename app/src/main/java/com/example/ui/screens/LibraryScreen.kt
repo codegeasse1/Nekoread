@@ -706,7 +706,8 @@ private fun RecentlyReadRow(
                     manga = manga,
                     onClick = { onMangaClick(manga.id) },
                     onReadClick = manga.lastReadChapterId?.let { { onReadClick(manga.id, it) } },
-                    modifier = Modifier.width(120.dp)
+                    modifier = Modifier.width(120.dp),
+                    coverScale = ContentScale.Fit
                 )
             }
         }
