@@ -116,6 +116,10 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import android.widget.Toast
 import com.example.ui.components.proPrimary
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 private const val TAB_SOURCES = 0
 private const val TAB_GLOBAL = 1
@@ -353,6 +357,25 @@ fun BrowseScreen(
 
     val repoNameById: Map<String, String> = extensionRepos.associate { it.id to it.name }
 
+    // Swipeable tabs: dragging left/right moves between Sources/Global/Catalog/Extensions/Repos
+    // without tapping the pill row (vertical lists inside still scroll vertically as usual).
+    val browseScope = rememberCoroutineScope()
+    val browsePager = rememberPagerState(initialPage = selectedTabIndex) { 5 }
+    LaunchedEffect(selectedTabIndex) {
+        if (browsePager.currentPage != selectedTabIndex) browsePager.animateScrollToPage(selectedTabIndex)
+    }
+    LaunchedEffect(browsePager.currentPage) {
+        val p = browsePager.currentPage
+        if (p != selectedTabIndex) {
+            selectedTabIndex = p
+            if (p == TAB_CATALOG && activeSourceId.isNotBlank() &&
+                catalogResults.isEmpty() && !catalogLoading
+            ) {
+                viewModel.loadCatalog(activeSourceId, searchQuery)
+            }
+        }
+    }
+
     // Browsing a source's catalog hides the outer "Browse & Extensions" chrome (title + tab row)
     // and shows a minimal Tadami-style bar: back arrow + the source's name.
     val inExtensionMode = selectedTabIndex == TAB_CATALOG && activeSourceId.isNotBlank()
@@ -484,7 +507,12 @@ fun BrowseScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            when (selectedTabIndex) {
+            HorizontalPager(
+                state = browsePager,
+                modifier = Modifier.fillMaxSize(),
+                key = { it }
+            ) { page ->
+            when (page) {
                 TAB_SOURCES -> SourcesTabContent(
                     sources = extensionSources.filter { it.isInstalled },
                     onBrowseSource = { source ->
@@ -562,6 +590,7 @@ fun BrowseScreen(
                     onRefreshRepo = { viewModel.refreshExtensionRepo(it) },
                     onDeleteRepo = { repoToDelete = it }
                 )
+            }
             }
 
         }
@@ -1649,96 +1678,105 @@ fun ReposTabContent(
                 .fillMaxWidth()
                 .testTag("repo_card_${repo.id}")
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Public,
-                        contentDescription = "Repo Icon",
-                        tint = proPrimary(),
-                        modifier = Modifier.size(32.dp)
-                    )
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = repo.name,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Public,
+                            contentDescription = "Repo Icon",
+                            tint = proPrimary(),
+                            modifier = Modifier.size(28.dp)
                         )
 
-                        Spacer(modifier = Modifier.height(2.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
 
-                        Text(
-                            text = repo.url,
-                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = repo.name,
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
 
-                        Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = repo.url,
+                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                shape = RoundedCornerShape(4.dp)
+                        if (repoBusy) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
+                        } else {
+                            IconButton(
+                                onClick = {
+                                    clipboardManager.setText(AnnotatedString(repo.url))
+                                    Toast.makeText(context, "Repo link copied", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.testTag("copy_repo_${repo.id}")
                             ) {
-                                Text(
-                                    text = "${repo.extensionCount} Extensions",
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                    style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Copy Repo Link",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            IconButton(
+                                onClick = { onRefreshRepo(repo.id) },
+                                modifier = Modifier.testTag("refresh_repo_${repo.id}")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "Refresh Repo",
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
                             }
 
-                            Spacer(modifier = Modifier.width(8.dp))
-
-                            Text(
-                                text = "Updated: ${formatTimestamp(repo.lastUpdated)}",
-                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            )
+                            IconButton(
+                                onClick = { onDeleteRepo(repo) },
+                                modifier = Modifier.testTag("delete_repo_${repo.id}")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Delete Repo",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
                         }
                     }
 
-                    if (repoBusy) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
-                    } else {
-                        IconButton(
-                            onClick = {
-                                clipboardManager.setText(AnnotatedString(repo.url))
-                                Toast.makeText(context, "Repo link copied", Toast.LENGTH_SHORT).show()
-                            },
-                            modifier = Modifier.testTag("copy_repo_${repo.id}")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(4.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "Copy Repo Link",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        IconButton(
-                            onClick = { onRefreshRepo(repo.id) },
-                            modifier = Modifier.testTag("refresh_repo_${repo.id}")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Refresh Repo",
-                                tint = MaterialTheme.colorScheme.primary
+                            Text(
+                                text = "${repo.extensionCount} Extensions",
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onPrimaryContainer)
                             )
                         }
 
-                        IconButton(
-                            onClick = { onDeleteRepo(repo) },
-                            modifier = Modifier.testTag("delete_repo_${repo.id}")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Delete Repo",
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Text(
+                            text = "Updated: ${formatTimestamp(repo.lastUpdated)}",
+                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
             }

@@ -74,6 +74,10 @@ import androidx.compose.material.icons.filled.MoreVert
 import com.example.ui.MainViewModel
 import com.example.ui.components.proButtonGradient
 import com.example.ui.components.proPrimary
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,6 +93,15 @@ fun UpdatesHistoryScreen(
     var selectedTabIndex by remember { mutableStateOf(0) }
     var showClearConfirm by remember { mutableStateOf(false) }
     val tabs = listOf("History", "Updates")
+    // Swipeable tabs: dragging left/right moves between History and Updates.
+    val historyScope = rememberCoroutineScope()
+    val historyPager = rememberPagerState(initialPage = 0) { tabs.size }
+    LaunchedEffect(selectedTabIndex) {
+        if (historyPager.currentPage != selectedTabIndex) historyPager.animateScrollToPage(selectedTabIndex)
+    }
+    LaunchedEffect(historyPager.currentPage) {
+        if (selectedTabIndex != historyPager.currentPage) selectedTabIndex = historyPager.currentPage
+    }
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -120,7 +133,10 @@ fun UpdatesHistoryScreen(
                     ProSegmented(
                         options = listOf("History" to Icons.Default.History, "Updates" to Icons.Default.Notifications),
                         selected = selectedTabIndex,
-                        onSelect = { selectedTabIndex = it }
+                        onSelect = {
+                            selectedTabIndex = it
+                            historyScope.launch { historyPager.animateScrollToPage(it) }
+                        }
                     )
                 }
             }
@@ -132,17 +148,23 @@ fun UpdatesHistoryScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            when (selectedTabIndex) {
+            HorizontalPager(
+                state = historyPager,
+                modifier = Modifier.fillMaxSize(),
+                key = { it }
+            ) { page ->
+            when (page) {
                 0 -> HistoryList(
                     historyManga = historyManga,
                     onMangaClick = onMangaClick,
                     onReadChapterClick = onReadChapterClick,
                     onRemoveHistory = onRemoveHistory
                 )
-                1 -> UpdatesList(
+                else -> UpdatesList(
                     historyManga = historyManga,
                     onMangaClick = onMangaClick
                 )
+            }
             }
         }
     }
