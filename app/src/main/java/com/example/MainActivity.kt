@@ -465,20 +465,30 @@ fun MainAppScreen(viewModel: MainViewModel) {
                                 .testTag("bottom_nav")
                         ) {
                             bottomNavScreens.forEach { screen ->
+                                val sel = currentRoute == screen.route ||
+                                    (screen == Screen.Browse && currentRoute in tagSearchRoutePatterns)
                                 NavigationBarItem(
                                     icon = screen.icon,
                                     label = {
                                         Text(
                                             text = screen.title,
-                                            style = MaterialTheme.typography.labelSmall
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontWeight = if (sel) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal
+                                            )
                                         )
                                     },
-                                    selected = currentRoute == screen.route ||
-                                        (screen == Screen.Browse && currentRoute in tagSearchRoutePatterns),
+                                    selected = sel,
                                     onClick = {
                                         navController.navigateToTab(screen.route)
                                     },
-                                    modifier = Modifier.testTag("nav_item_${screen.route}")
+                                    modifier = Modifier.testTag("nav_item_${screen.route}"),
+                                    colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+                                        selectedIconColor = androidx.compose.ui.graphics.Color.White,
+                                        selectedTextColor = androidx.compose.ui.graphics.Color.White,
+                                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        indicatorColor = com.example.ui.theme.SleekVioletPrimary
+                                    )
                                 )
                             }
                         }

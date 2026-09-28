@@ -59,7 +59,19 @@ import coil.compose.AsyncImage
 import com.example.data.local.MangaEntity
 import com.example.diagnostics.AppScrollProbe
 import com.example.ui.components.FloatingTopAppBar
+import com.example.ui.components.GlassCard
+import com.example.ui.components.ProButtonGradient
+import com.example.ui.components.ProEmptyCard
+import com.example.ui.components.ProEmptyHistoryArt
+import com.example.ui.components.ProSegmented
+import com.example.ui.components.ProTitle
 import com.example.ui.theme.GlassCardBorder
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CompassCalibration
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.MoreVert
 import com.example.ui.MainViewModel
 import com.example.ui.theme.NekoVioletPrimary
 
@@ -84,48 +96,32 @@ fun UpdatesHistoryScreen(
         topBar = {
             // Floating rounded glass pill (Hikari/taskbar style), matching the bottom nav pill.
             FloatingTopAppBar {
-                Column {
-                    TopAppBar(
-                        modifier = Modifier.height(40.dp),
-                        windowInsets = WindowInsets(0),
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                        title = {
-                            Text(
-                                text = "History & Updates",
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                        },
-                        actions = {
-                            if (selectedTabIndex == 0 && historyManga.isNotEmpty()) {
-                                IconButton(
-                                    onClick = { showClearConfirm = true },
-                                    modifier = Modifier.testTag("clear_history_button")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Clear all history"
-                                    )
-                                }
-                            }
+                Column(Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Box(modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(ProButtonGradient).padding(7.dp)) {
+                            Icon(Icons.Default.History, null, tint = Color.White, modifier = Modifier.size(18.dp))
                         }
-                    )
-
-                    TabRow(
-                        selectedTabIndex = selectedTabIndex,
-                        containerColor = Color.Transparent,
-                        contentColor = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.height(36.dp)
-                    ) {
-                        tabs.forEachIndexed { index, title ->
-                            Tab(
-                                selected = selectedTabIndex == index,
-                                onClick = { selectedTabIndex = index },
-                                text = { Text(title, fontWeight = FontWeight.Bold) },
-                                modifier = Modifier.testTag("history_tab_$index")
-                            )
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("History ", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium)
+                                Text("& Updates", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium.copy(brush = ProButtonGradient))
+                            }
+                            Text("Your recent activity and latest updates", style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
+                            Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(19.dp))
+                        }
+                        IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
+                            Icon(Icons.Default.MoreVert, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(19.dp))
                         }
                     }
+                    Spacer(Modifier.height(8.dp))
+                    ProSegmented(
+                        options = listOf("History" to Icons.Default.History, "Updates" to Icons.Default.Notifications),
+                        selected = selectedTabIndex,
+                        onSelect = { selectedTabIndex = it }
+                    )
                 }
             }
         },
@@ -180,32 +176,20 @@ fun HistoryList(
     historyManga: List<MangaEntity>,
     onMangaClick: (String) -> Unit,
     onReadChapterClick: (String, String) -> Unit,
-    onRemoveHistory: (String) -> Unit
+    onRemoveHistory: (String) -> Unit,
+    onExplore: (() -> Unit)? = null
 ) {
     if (historyManga.isEmpty()) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(32.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    imageVector = Icons.Default.History,
-                    contentDescription = null,
-                    modifier = Modifier.size(64.dp),
-                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "No reading history yet",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
-                Text(
-                    text = "Start reading chapters from your library or extension sources!",
-                    style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                )
-            }
+        Column(modifier = Modifier.fillMaxSize().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            ProEmptyCard(
+                title = "No reading",
+                titleAccent = "history yet",
+                body = "Start reading chapters from your library or extension sources!",
+                primaryLabel = "Explore Sources",
+                primaryIcon = Icons.Default.CompassCalibration,
+                onPrimary = { onExplore?.invoke() },
+                art = { ProEmptyHistoryArt() }
+            )
         }
     } else {
         val historyListState = rememberLazyListState()

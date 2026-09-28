@@ -61,6 +61,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -73,6 +74,19 @@ import com.example.ui.MainViewModel
 import com.example.ui.ReaderBg
 import com.example.ui.ReaderMode
 import com.example.ui.components.FloatingTopAppBar
+import com.example.ui.components.GlassCard
+import com.example.ui.components.ProButtonGradient
+import com.example.ui.components.ProDropdownPill
+import com.example.ui.components.ProPrimaryButton
+import com.example.ui.components.ProSettingRow
+import com.example.ui.components.ProSettingsSection
+import com.example.ui.components.ProTitle
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Storage
 import com.example.ui.theme.GlassCardBorder
 import com.example.ui.theme.NekoGoldBadge
 import com.example.ui.theme.NekoVioletPrimary
@@ -110,6 +124,10 @@ fun SettingsScreen(
     var showReaderModeDialog by remember { mutableStateOf(false) }
     var showReaderBgDialog by remember { mutableStateOf(false) }
     var busyMessage by remember { mutableStateOf<String?>(null) }
+    var readerExpanded by remember { mutableStateOf(true) }
+    var libraryExpanded by remember { mutableStateOf(true) }
+    var dataExpanded by remember { mutableStateOf(true) }
+    var updatesExpanded by remember { mutableStateOf(true) }
     // Bumped to recompute the update banner after a toggle / "Check now".
     var updateTick by remember { mutableIntStateOf(0) }
 
@@ -168,31 +186,21 @@ fun SettingsScreen(
         containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0),
         topBar = {
-            // Floating rounded glass pill (Hikari/taskbar style), matching the bottom nav pill.
             FloatingTopAppBar {
-                TopAppBar(
-                    modifier = Modifier.height(44.dp),
-                    windowInsets = WindowInsets(0),
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                    title = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Settings",
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = "Build ${BuildInfo.VERSION}",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                ),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.foundation.layout.Box(modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(ProButtonGradient).padding(7.dp)) {
+                        Icon(Icons.Default.Settings, null, tint = Color.White, modifier = Modifier.size(18.dp))
                     }
-                )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            ProTitle(text = "Settings", modifier = Modifier.weight(1f, fill = false))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Build ${BuildInfo.VERSION}", style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant), maxLines = 1)
+                        }
+                        Text("Customize your reading experience and manage your data", style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
             }
         },
         modifier = modifier.fillMaxSize()
@@ -204,123 +212,88 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Reader
             item {
-                Text(
-                    text = "Reader",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            item {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    modifier = Modifier.fillMaxWidth()
+                ProSettingsSection(
+                    icon = Icons.Default.MenuBook,
+                    title = "Reader",
+                    subtitle = "Customize how you read your manga and manhwa",
+                    expanded = readerExpanded,
+                    onToggle = { readerExpanded = !readerExpanded }
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        SettingRow(
-                            icon = Icons.Default.MenuBook,
-                            title = "Default Reading Mode",
-                            subtitle = readerModeLabel(readerMode),
-                            onClick = { showReaderModeDialog = true }
-                        )
-
-                        SettingRow(
-                            icon = Icons.Default.Palette,
-                            title = "Reader Background",
-                            subtitle = readerBgLabel(readerBg),
-                            onClick = { showReaderBgDialog = true }
-                        )
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.Tag, contentDescription = "Page Number", tint = NekoVioletPrimary)
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Show Page Number", fontWeight = FontWeight.Bold)
-                                Text("Overlay the page number in the reader", style = MaterialTheme.typography.bodySmall)
-                            }
-                            Switch(
-                                checked = showPageNumber,
-                                onCheckedChange = { viewModel.setShowPageNumber(it) }
-                            )
-                        }
-                    }
+                    ProSettingRow(
+                        icon = Icons.Default.MenuBook,
+                        title = "Default Reading Mode",
+                        subtitle = readerModeLabel(readerMode),
+                        trailing = { ProDropdownPill(readerModeLabel(readerMode), { showReaderModeDialog = true }) },
+                        onClick = { showReaderModeDialog = true }
+                    )
+                    ProSettingRow(
+                        icon = Icons.Default.Palette,
+                        title = "Reader Background",
+                        subtitle = readerBgLabel(readerBg),
+                        trailing = { ProDropdownPill(readerBgLabel(readerBg), { showReaderBgDialog = true }) },
+                        onClick = { showReaderBgDialog = true }
+                    )
+                    ProSettingRow(
+                        icon = Icons.Default.Tag,
+                        title = "Show Page Number",
+                        subtitle = "Overlay the page number in the reader",
+                        trailing = { Switch(checked = showPageNumber, onCheckedChange = { viewModel.setShowPageNumber(it) }) }
+                    )
                 }
             }
 
-            // Library
             item {
-                Text(
-                    text = "Library",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            item {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    modifier = Modifier.fillMaxWidth()
+                ProSettingsSection(
+                    icon = Icons.Default.Folder,
+                    title = "Library",
+                    subtitle = "Organize and manage your library",
+                    expanded = libraryExpanded,
+                    onToggle = { libraryExpanded = !libraryExpanded }
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        SettingRow(
-                            icon = Icons.Default.Category,
-                            title = "Edit Categories",
-                            subtitle = "${categories.size} custom categories",
-                            onClick = { showCategoryModal = true }
-                        )
-                    }
+                    ProSettingRow(
+                        icon = Icons.Default.Category,
+                        title = "Edit Categories",
+                        subtitle = "${categories.size} custom categories",
+                        trailing = { Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                        onClick = { showCategoryModal = true }
+                    )
                 }
             }
 
-            // Data
             item {
-                Text(
-                    text = "Data",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            item {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    modifier = Modifier.fillMaxWidth()
+                ProSettingsSection(
+                    icon = Icons.Default.Storage,
+                    title = "Data",
+                    subtitle = "Backup and restore your app data",
+                    expanded = dataExpanded,
+                    onToggle = { dataExpanded = !dataExpanded }
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        SettingRow(
-                            icon = Icons.Default.CloudUpload,
-                            title = "Export Backup (JSON)",
-                            subtitle = "Save library, history, categories, repos & extensions",
-                            onClick = { exportLauncher.launch("nekoread-backup.json") }
-                        )
-
-                        SettingRow(
-                            icon = Icons.Default.CloudDownload,
-                            title = "Restore Backup",
-                            subtitle = "Import a previously exported backup file",
-                            onClick = { importLauncher.launch(arrayOf("application/json")) }
-                        )
-                    }
+                    ProSettingRow(
+                        icon = Icons.Default.CloudUpload,
+                        title = "Export Backup (JSON)",
+                        subtitle = "Save library, history, categories, repos & extensions",
+                        trailing = { Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                        onClick = { exportLauncher.launch("nekoread-backup.json") }
+                    )
+                    ProSettingRow(
+                        icon = Icons.Default.CloudDownload,
+                        title = "Restore Backup",
+                        subtitle = "Import a previously exported backup file",
+                        trailing = { Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                        onClick = { importLauncher.launch(arrayOf("application/json")) }
+                    )
                 }
             }
 
-            // App Updates
             item {
-                Text(
-                    text = "App Updates",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            item {
+                ProSettingsSection(
+                    icon = Icons.Default.SystemUpdate,
+                    title = "App Updates",
+                    subtitle = "Keep your app up to date",
+                    expanded = updatesExpanded,
+                    onToggle = { updatesExpanded = !updatesExpanded }
+                ) {
                 val updateInfo = remember(updateTick) { AppUpdater.currentUpdate(context) }
                 val updatesEnabled = remember(updateTick) { AppUpdater.isEnabled(context) }
                 var checkingNow by remember { mutableStateOf(false) }
@@ -426,42 +399,31 @@ fun SettingsScreen(
                             )
                         }
 
-                        TextButton(
-                            onClick = {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Check for Updates", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold))
+                                Text("Get the latest version and new features", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            ProPrimaryButton(label = if (checkingNow) "..." else "Check Now", icon = Icons.Default.Download, onClick = {
                                 scope.launch {
                                     checkingNow = true
                                     try {
                                         AppUpdater.runCheck(context, force = true)
                                         updateTick++
                                         val fresh = AppUpdater.currentUpdate(context)
-                                        Toast.makeText(
-                                            context,
-                                            if (fresh != null) "Update available: v${fresh.version}" else "You're up to date",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
+                                        Toast.makeText(context, if (fresh != null) "Update available: v${fresh.version}" else "You're up to date", Toast.LENGTH_SHORT).show()
                                     } finally {
                                         checkingNow = false
                                     }
                                 }
-                            },
-                            enabled = !checkingNow
-                        ) {
-                            if (checkingNow) {
-                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                                Spacer(modifier = Modifier.width(8.dp))
-                            }
-                            Text("Check now")
+                            })
                         }
                     }
-                }
             }
 
             // About
             item {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                GlassCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()

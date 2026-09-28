@@ -37,6 +37,10 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -426,72 +430,42 @@ fun BrowseScreen(
             } else {
                 // Floating rounded glass pill (Hikari/taskbar style), matching the bottom nav pill.
                 FloatingTopAppBar {
-                    Column {
-                        TopAppBar(
-                            modifier = Modifier.height(40.dp),
-                            windowInsets = WindowInsets(0),
-                            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                            title = {
-                                Text(
-                                    text = "Browse & Extensions",
-                                    fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                            }
+                    Column(Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
+                        Text(
+                            text = "Browse & Extensions",
+                            fontWeight = FontWeight.ExtraBold,
+                            style = MaterialTheme.typography.titleMedium
                         )
-
-                        ScrollableTabRow(
-                            selectedTabIndex = selectedTabIndex,
-                            containerColor = Color.Transparent,
-                            edgePadding = 8.dp,
-                            modifier = Modifier.height(36.dp)
-                        ) {
-                            // Tadami-style badge: the Extensions tab shows how many installed
-                            // extensions have a newer version available in their repo.
+                        Text(
+                            text = "Discover, install and manage extensions to unlock more manga and manhwa",
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        run {
                             val pendingUpdates = extensions.count { hasUpdate(it) }
-                            tabs.forEachIndexed { index, title ->
-                                Tab(
-                                    selected = selectedTabIndex == index,
-                                    onClick = {
-                                        selectedTabIndex = index
-                                        if (index == TAB_CATALOG && activeSourceId.isNotBlank() &&
-                                            catalogResults.isEmpty() && !catalogLoading
-                                        ) {
-                                            viewModel.loadCatalog(activeSourceId, searchQuery)
-                                        }
-                                    },
-                                    text = {
-                                        if (index == TAB_EXTENSIONS && pendingUpdates > 0) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                            ) {
-                                                Text(title, fontWeight = FontWeight.Bold)
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(20.dp)
-                                                        .clip(CircleShape)
-                                                        .background(NekoGoldBadge),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text(
-                                                        text = if (pendingUpdates > 99) "99+" else "$pendingUpdates",
-                                                        style = MaterialTheme.typography.labelSmall.copy(
-                                                            color = Color.White,
-                                                            fontWeight = FontWeight.Bold
-                                                        )
-                                                    )
-                                                }
-                                            }
-                                        } else {
-                                            Text(title, fontWeight = FontWeight.Bold)
-                                        }
-                                    },
-                                    modifier = Modifier.testTag("browse_tab_$index")
-                                )
-                            }
+                            com.example.ui.components.ProPillTabs(
+                                tabs = listOf(
+                                    "Sources" to Icons.Default.Public,
+                                    "Global" to Icons.Default.Language,
+                                    "Catalog" to Icons.Default.GridView,
+                                    "Extensions" to Icons.Default.Extension,
+                                    "Repos" to Icons.Default.Storage
+                                ),
+                                selected = selectedTabIndex,
+                                badgeCount = pendingUpdates,
+                                badgeTab = TAB_EXTENSIONS,
+                                onSelect = { index ->
+                                    selectedTabIndex = index
+                                    if (index == TAB_CATALOG && activeSourceId.isNotBlank() &&
+                                        catalogResults.isEmpty() && !catalogLoading
+                                    ) {
+                                        viewModel.loadCatalog(activeSourceId, searchQuery)
+                                    }
+                                }
+                            )
                         }
-                        HorizontalDivider(color = GlassCardBorder)
                     }
                 }
             }
@@ -1170,46 +1144,22 @@ fun CatalogTabContent(
             // as the "Filter" — typing a query always searches, whatever tab is active.
             // ALWAYS shown — including inside an opened extension (the user taps Popular/Latest
             // right inside the source's catalog).
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                    listOf("popular" to "Popular", "latest" to "Latest", "filter" to "Filter").forEach { (m, label) ->
-                        FilterChip(
-                            selected = mode == m,
-                            onClick = { onModeChange(m) },
-                            label = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    when (m) {
-                                        "popular" -> Icon(
-                                            imageVector = Icons.Default.Star,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        "latest" -> Icon(
-                                            imageVector = Icons.Default.Refresh,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        else -> Icon(
-                                            imageVector = Icons.Default.FilterList,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(label)
-                                }
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = Color.White
-                            ),
-                            modifier = Modifier.testTag("catalog_mode_$m")
-                        )
-                    }
-                }
+            com.example.ui.components.ProModeRow(mode = mode, onModeChange = onModeChange, modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(8.dp))
+            run {
+                var genreSel by remember { mutableStateOf("All") }
+                val genres = listOf("All", "Action", "Romance", "Comedy", "Isekai", "Drama")
+                com.example.ui.components.ProGenreRow(
+                    genres = genres,
+                    selected = genreSel,
+                    onSelect = { g ->
+                        genreSel = g
+                        if (g == "All") onSearchQueryChange("")
+                        else onSearchQueryChange("tag:$g")
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
 
         }
 
@@ -1412,32 +1362,20 @@ fun ExtensionsTabContent(
         ) {
             if (updatesPending.isNotEmpty()) {
                 item(key = "header_updates") {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Updates pending (${updatesPending.size})",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            color = NekoGoldBadge
-                        )
-                        if (updatingAll) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Updating...",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                    GlassCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.clip(CircleShape).background(com.example.ui.components.ProButtonGradient.copy(alpha = 0.2f)).padding(8.dp)) {
+                                Icon(Icons.Default.Refresh, null, tint = NekoGoldBadge, modifier = Modifier.size(20.dp))
                             }
-                        } else {
-                            Button(
-                                onClick = { onUpdateAll(updatesPending) },
-                                modifier = Modifier.testTag("update_all_button")
-                            ) {
-                                Text("Update all")
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("Updates pending (${updatesPending.size})", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = NekoGoldBadge)
+                                Text("Keep your extensions up to date for the best experience", style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            if (updatingAll) {
+                                CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                            } else {
+                                com.example.ui.components.ProPrimaryButton(label = "Update all", icon = Icons.Default.Download, onClick = { onUpdateAll(updatesPending) }, modifier = Modifier.testTag("update_all_button"))
                             }
                         }
                     }
@@ -1488,12 +1426,15 @@ fun ExtensionsTabContent(
 
 @Composable
 private fun SectionLabel(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 8.dp)
-    )
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+        Box(modifier = Modifier.width(3.dp).height(16.dp).clip(RoundedCornerShape(2.dp)).background(com.example.ui.components.ProButtonGradient))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
 }
 
 @Composable
@@ -1531,27 +1472,21 @@ private fun ExtensionCardRow(
                                         text = ext.name,
                                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                         maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
                                     )
                                     if (ext.nsfw) {
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Surface(
-                                            color = NekoGoldBadge,
-                                            shape = RoundedCornerShape(4.dp)
-                                        ) {
-                                            Text(
-                                                text = "NSFW",
-                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                                                style = MaterialTheme.typography.labelSmall.copy(color = Color.White)
-                                            )
-                                        }
+                                        com.example.ui.components.ProNsfwBadge()
                                     }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    com.example.ui.components.ProLangBadge("EN")
                                 }
 
                                 Spacer(modifier = Modifier.height(2.dp))
 
                                 Text(
-                                    text = "v${ext.versionName} (${ext.versionCode}) • $repoName${cwLabel?.let { " • $it" } ?: ""}",
+                                    text = "v${ext.versionName} (${ext.versionCode}) • $repoName",
                                     style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis

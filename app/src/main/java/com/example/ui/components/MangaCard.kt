@@ -18,6 +18,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -180,6 +183,9 @@ fun MangaGridCard(
     onReadClick: (() -> Unit)? = null,
     selected: Boolean = false,
     onLongClick: (() -> Unit)? = null,
+    isFavorite: Boolean = false,
+    onFavoriteClick: (() -> Unit)? = null,
+    onMenuClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     AppDiagnostics.noteCompose("gridCard")
@@ -246,24 +252,45 @@ fun MangaGridCard(
                 contentScale = ContentScale.Crop,
             )
 
-            // Top Type Chip (MANHWA / MANGA)
+            // Top Type Chip (MANHWA / MANGA) — violet gradient pill like the new design
             Text(
                 text = manga.type,
                 style = LabelSmallWhite,
                 modifier = Modifier
                     .padding(8.dp)
                     .align(Alignment.TopStart)
-                    .background(if (manga.type == "MANHWA") SleekVioletPrimary else TypeCyan, ChipShape)
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                    .background(SleekVioletPrimary, ChipShape)
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
             )
 
-            // Unread Count Badge (top right)
+            // Favorite heart top-right + unread badge below it
+            if (onFavoriteClick != null) {
+                Box(
+                    modifier = Modifier
+                        .padding(6.dp)
+                        .align(Alignment.TopEnd)
+                        .size(30.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(Color.Black.copy(alpha = 0.45f))
+                        .clickable { onFavoriteClick() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (isFavorite || manga.inLibrary) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = "Favorite",
+                        tint = if (isFavorite || manga.inLibrary) Color(0xFFFF5252) else Color.White,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
+            }
+
+            // Unread Count Badge (top right, below heart when fav is shown)
             if (manga.unreadCount > 0) {
                 Text(
                     text = "${manga.unreadCount}",
                     style = LabelSmallWhite,
                     modifier = Modifier
-                        .padding(8.dp)
+                        .padding(top = if (onFavoriteClick != null) 40.dp else 8.dp, end = 8.dp)
                         .align(Alignment.TopEnd)
                         .background(MaterialTheme.colorScheme.primary, BadgeShape)
                         .padding(horizontal = 7.dp, vertical = 2.dp)
@@ -321,22 +348,31 @@ fun MangaGridCard(
             )
         }
 
-        // Title & Source Info
+        // Title & Source Info with overflow menu
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(8.dp)
         ) {
-            Text(
-                text = manga.title,
-                style = GridTitleStyle,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                // Reserve two lines even for a one-line title: it makes every grid cell the same
-                // height, which lets the lazy grid work out item extents without measuring each.
-                minLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                Text(
+                    text = manga.title,
+                    style = GridTitleStyle,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    minLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                if (onMenuClick != null) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "More",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp).clickable { onMenuClick() }
+                    )
+                }
+            }
 
             Text(
                 text = manga.sourceName,

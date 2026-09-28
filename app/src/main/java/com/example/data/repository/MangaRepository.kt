@@ -100,6 +100,7 @@ class MangaRepository(private val db: AppDatabase, private val app: Application)
         val src = SourceRegistry.source(sourceId)
         val results = when {
             mode == "popular" && query.isBlank() -> src.popular(page)
+            mode == "top_rated" && query.isBlank() -> src.popular(page)
             query.startsWith("tag:") -> src.searchByTag(query.removePrefix("tag:").trim(), page)
             query.isBlank() -> src.latest(page)
             else -> src.search(query, page)

@@ -86,6 +86,16 @@ import com.example.ui.components.FloatingTopAppBar
 import com.example.ui.components.GlassSearchBar
 import com.example.ui.components.MangaGridCard
 import com.example.ui.components.MangaListCard
+import com.example.ui.components.ProButtonGradient
+import com.example.ui.components.ProCountBadge
+import com.example.ui.components.ProEmptyBookArt
+import com.example.ui.components.ProEmptyCard
+import com.example.ui.components.ProTitle
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Search
 import com.example.ui.components.coverModelFor
 import com.example.ui.theme.GlassCardBorder
 
@@ -204,20 +214,8 @@ fun LibraryScreen(
                                         .testTag("library_search_input")
                                 )
                             } else {
-                                Icon(
-                                    imageVector = Icons.Default.AutoAwesome,
-                                    contentDescription = "Logo",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Library (${mangaList.size})",
-                                    fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                ProTitle(text = "Library", modifier = Modifier.weight(1f).testTag("library_title"))
+                                ProCountBadge(count = mangaList.size)
                             }
                             IconButton(
                                 onClick = { showSearchField = !showSearchField },
@@ -263,7 +261,13 @@ fun LibraryScreen(
                                 FilterChip(
                                     selected = selectedCategory == "All",
                                     onClick = { viewModel.setSelectedCategory("All") },
-                                    label = { Text("All") },
+                                    label = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.GridView, null, modifier = Modifier.size(14.dp))
+                                            Spacer(Modifier.width(4.dp))
+                                            Text("All")
+                                        }
+                                    },
                                     colors = FilterChipDefaults.filterChipColors(
                                         selectedContainerColor = MaterialTheme.colorScheme.primary,
                                         selectedLabelColor = Color.White
@@ -275,10 +279,22 @@ fun LibraryScreen(
                             }
 
                             items(categories) { category: CategoryEntity ->
+                                val catIcon = when (category.name.lowercase()) {
+                                    "reading" -> Icons.Default.MenuBook
+                                    "favorites", "favourite", "favourites" -> Icons.Default.Favorite
+                                    "manhwa", "manhua", "manga" -> Icons.Default.Layers
+                                    else -> Icons.Default.MenuBook
+                                }
                                 FilterChip(
                                     selected = selectedCategory == category.name,
                                     onClick = { viewModel.setSelectedCategory(category.name) },
-                                    label = { Text(category.name) },
+                                    label = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(catIcon, null, modifier = Modifier.size(14.dp))
+                                            Spacer(Modifier.width(4.dp))
+                                            Text(category.name)
+                                        }
+                                    },
                                     colors = FilterChipDefaults.filterChipColors(
                                         selectedContainerColor = MaterialTheme.colorScheme.primary,
                                         selectedLabelColor = Color.White
@@ -341,38 +357,24 @@ fun LibraryScreen(
                 .padding(innerPadding)
         ) {
             if (mangaList.isEmpty()) {
-                // Empty State Illustration
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
+                    modifier = Modifier.fillMaxSize().padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = "Empty Library",
-                        modifier = Modifier.size(72.dp),
-                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = if (searchQuery.isNotEmpty()) "No results found for '$searchQuery'" else "Your library is empty",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Search the MangaDex catalog (via the Explore button) to add real manga and manhwa to your library.",
-                        style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Button(
-                        onClick = onNavigateToBrowse,
-                        modifier = Modifier.testTag("empty_explore_button")
-                    ) {
-                        Text("Browse Extension Catalog")
+                    if (searchQuery.isNotEmpty()) {
+                        Text("No results found for '$searchQuery'", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), textAlign = TextAlign.Center)
+                    } else {
+                        ProEmptyCard(
+                            title = "Your library",
+                            titleAccent = "is empty",
+                            body = "Search the MangaDex catalog (via the Explore button) to add real manga and manhwa to your library.",
+                            primaryLabel = "Browse Extension Catalog",
+                            primaryIcon = Icons.Default.Search,
+                            onPrimary = onNavigateToBrowse,
+                            art = { ProEmptyBookArt() },
+                            modifier = Modifier.testTag("empty_library_card")
+                        )
                     }
                 }
             } else {
