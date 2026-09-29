@@ -119,6 +119,7 @@ import com.example.ui.components.proPrimary
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.launch
 
 private const val TAB_SOURCES = 0
@@ -361,27 +362,41 @@ fun BrowseScreen(
     // without tapping the pill row (vertical lists inside still scroll vertically as usual).
     val browseScope = rememberCoroutineScope()
     val browsePager = rememberPagerState(initialPage = selectedTabIndex) { 5 }
+    // Tab jumps (pill taps, source open, tag search): animate there, then snap, so the
+    // pager can never rest between pages.
     LaunchedEffect(selectedTabIndex) {
         if (browsePager.currentPage != selectedTabIndex) {
             browsePager.animateScrollToPage(selectedTabIndex)
-            // Snap: an interrupted animation can leave the pager resting between pages
-            // (half black, half content) - scrolling to the exact page guarantees it
-            // always settles on a full page.
             browsePager.scrollToPage(selectedTabIndex)
         }
     }
-    LaunchedEffect(browsePager.currentPage) {
-        val p = browsePager.currentPage
-        if (p != selectedTabIndex) {
-            selectedTabIndex = p
-            if (p == TAB_CATALOG && activeSourceId.isNotBlank() &&
-                catalogResults.isEmpty() && !catalogLoading
-            ) {
-                viewModel.loadCatalog(activeSourceId, searchQuery)
+    // Manual swipes sync back ONLY once the pager has fully settled. Syncing the transient
+    // currentPage mid-flight cancels the in-flight animation and strands the pager half on
+    // each page (half black, half catalog) with nothing left to recover it - this settle
+    // collector is the only writer back to selectedTabIndex, so that state is unreachable.
+    // Effect keys carry the catalog values so the reload branch below always sees fresh
+    // ones (collectAsState snapshots read inside collect would be stale).
+    LaunchedEffect(browsePager, activeSourceId, searchQuery, catalogResults, catalogLoading) {
+        snapshotFlow { browsePager.isScrollInProgress to selectedTabIndex }.collect { (scrolling, sel) ->
+            if (!scrolling) {
+                if (browsePager.currentPageOffsetFraction != 0f) {
+                    // Interrupted-animation leftover: finish the trip to the selected tab.
+                    browsePager.animateScrollToPage(sel)
+                    browsePager.scrollToPage(sel)
+                } else {
+                    val p = browsePager.currentPage
+                    if (p != sel) {
+                        selectedTabIndex = p
+                        if (p == TAB_CATALOG && activeSourceId.isNotBlank() &&
+                            catalogResults.isEmpty() && !catalogLoading
+                        ) {
+                            viewModel.loadCatalog(activeSourceId, searchQuery)
+                        }
+                    }
+                }
             }
         }
     }
-
     // Browsing a source's catalog hides the outer "Browse & Extensions" chrome (title + tab row)
     // and shows a minimal Tadami-style bar: back arrow + the source's name.
     val inExtensionMode = selectedTabIndex == TAB_CATALOG && activeSourceId.isNotBlank()
