@@ -98,6 +98,11 @@ fun UpdatesHistoryScreen(
     modifier: Modifier = Modifier
 ) {
     var selectedTabIndex by remember { mutableStateOf(0) }
+    var historyTarget by remember { mutableStateOf<Int?>(null) }
+    fun goToHistoryTab(i: Int) {
+        historyTarget = i
+        selectedTabIndex = i
+    }
     var showClearConfirm by remember { mutableStateOf(false) }
     var historyMenuOpen by remember { mutableStateOf(false) }
     var historySearchOpen by remember { mutableStateOf(false) }
@@ -110,9 +115,8 @@ fun UpdatesHistoryScreen(
     // Swipeable tabs: dragging left/right moves between History and Updates.
     val historyPager = rememberPagerState(initialPage = 0) { tabs.size }
     // Pager/tab sync, all in ONE effect so a segment tap and a swipe can never fight.
-    // Segment taps animate to the tab; manual swipes are adopted only once the pager is
-    // fully settled (never mid-flight). The snap in `finally` guarantees the pager
-    // always ends exactly on a page, even when a second tap cancels the first animation.
+    // Manual swipes are adopted only once the pager is fully settled (never mid-flight).
+    // The snap in `finally` guarantees the pager always ends exactly on a page.
     LaunchedEffect(selectedTabIndex) {
         try {
             if (historyPager.currentPage != selectedTabIndex) {
@@ -121,11 +125,20 @@ fun UpdatesHistoryScreen(
         } finally {
             withContext(NonCancellable) { historyPager.scrollToPage(selectedTabIndex) }
         }
-        snapshotFlow { historyPager.currentPage }.collect { p ->
-            if (!historyPager.isScrollInProgress && p != selectedTabIndex) {
-                selectedTabIndex = p
+        historyTarget = null
+        snapshotFlow { Triple(historyPager.isScrollInProgress, historyPager.currentPage, historyTarget) }
+            .collect { (scrolling, p, tgt) ->
+                if (scrolling) return@collect
+                if (tgt != null) {
+                    if (p != selectedTabIndex || historyPager.currentPageOffsetFraction != 0f) {
+                        historyPager.animateScrollToPage(selectedTabIndex)
+                        historyPager.scrollToPage(selectedTabIndex)
+                    }
+                    historyTarget = null
+                } else if (p != selectedTabIndex) {
+                    selectedTabIndex = p
+                }
             }
-        }
     }
     Scaffold(
         containerColor = Color.Transparent,
@@ -192,7 +205,7 @@ fun UpdatesHistoryScreen(
                     ProSegmented(
                         options = listOf("History" to Icons.Default.History, "Updates" to Icons.Default.Notifications),
                         selected = selectedTabIndex,
-                        onSelect = { selectedTabIndex = it }
+                        onSelect = { goToHistoryTab(it) }
                     )
                 }
             }
