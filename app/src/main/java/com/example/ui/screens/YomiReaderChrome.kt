@@ -232,8 +232,8 @@ fun YomiReaderChrome(
     var autoScrollExpanded by remember { mutableStateOf(false) }
 
     // The bottom-bar crop toggle operates on whichever crop setting applies to the current reading
-    // mode: webtoon (continuous) Ã¢ÂÂ the classic crop setting, webtoon with gaps Ã¢ÂÂ its own setting,
-    // paged modes (left-to-right / right-to-left / vertical) Ã¢ÂÂ the paged crop setting.
+    // mode: webtoon (continuous) â the classic crop setting, webtoon with gaps â its own setting,
+    // paged modes (left-to-right / right-to-left / vertical) â the paged crop setting.
     val activeCrop = when (readerMode) {
         ReaderMode.WEBTOON -> cropBorders
         ReaderMode.WEBTOON_GAPS -> cropBordersContinuous
@@ -1762,8 +1762,12 @@ private fun ChapterListSheet(
     chapterCoverModel: Any? = null,
 ) {
     val ctx = LocalContext.current
+    // Open fully expanded: with the default half-expanded sheet the first drag only
+    // expands the sheet and chapter scrolling starts on the second gesture.
+    val chapterSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = chapterSheetState,
         containerColor = SheetColor,
         contentColor = OnDark,
     ) {
@@ -1810,7 +1814,7 @@ private fun ChapterListSheet(
                                 .clip(RoundedCornerShape(6.dp))
                                 .background(CardColor)
                         ) {
-                            // Plain `AsyncImage` over a tinted Box â no per-row SubcomposeLayout
+                            // Plain `AsyncImage` over a tinted Box — no per-row SubcomposeLayout
                             // (same fix as the series chapter list; this picker janked the same way).
                             AsyncImage(
                                 model = ImageRequest.Builder(ctx).data(chapterCoverModel).crossfade(true).build(),
