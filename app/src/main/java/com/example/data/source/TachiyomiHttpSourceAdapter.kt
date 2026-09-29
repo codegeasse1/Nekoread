@@ -11,13 +11,19 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.intrinsics.COROUTINE_SUSPENDED
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.io.IOException
+import java.lang.reflect.InvocationTargetException
+import java.lang.reflect.Method
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * Bridges a DexClassLoader-loaded Tachiyomi [HttpSource] (from an installed extension APK) onto
@@ -122,25 +128,16 @@ class TachiyomiHttpSourceAdapter(
 
     // Tag search for extension sources. Genre/demographic/type filters come in different
     // shapes per source, so every mappable shape is tried (the exact mechanism Mihon's filter
-    // UI uses): TriStates nested in a Group (Madara/MangaBox "GenreList", Comix genre/format
-    // lists), a genre Select (top-level or nested in a Group), or a CheckBox group (Comix
-    // "Demographic"/"Type"/"Status" — this is where Josei/Seinen/Manhwa live). A matched
-    // CheckBox group is isolated to the tapped tag (siblings unchecked) so select-all defaults
-    // can't turn the search into a no-op. That lists every manga carrying the tag instead of a
-    // fuzzy title match. Only when no filter matches the tag is there a plain keyword fallback.
+    // UI uses): TriStates nested in a Group, a genre Select (top-level or nested), a CheckBox
+    // group (isolated to the tapped tag so select-all defaults can't turn it into a no-op),
+    // or a free-text "Tags" filter. Only when nothing maps is there a keyword fallback.
+    //
+    // The filter LIST itself is resolved universally: plain getFilterList(), plus the
+    // KeiSource getFilterList(data) overload (found reflectively — null data first, then the
+    // source's own fetchFilterData() result, which is how site-driven genre lists like
+    // Madara's reach the app). No per-source code anywhere: any current or future extension
+    // exposing its genres through these standard mechanisms gets real tag search.
     override suspend fun searchByTag(tag: String, page: Int): List<MangaEntity> = withContext(Dispatchers.IO) {
-        // KeiSource (keiyoushi lib-1.6) extensions declare their filters on
-        // getFilterList(data) instead of the no-arg getFilterList(), which stays EMPTY — so a
-        // plain no-arg call sees zero filters and EVERY tag search on such extensions degrades
-        // to a keyword search. Reflect for the one-arg overload (passing null data, which the
-        // sources accept) and prefer it whenever it yields filters.
-        val noArg = runCatching { ext.getFilterList() }.getOrNull().orEmpty()
-        val oneArg = runCatching {
-            ext.javaClass.methods
-                .firstOrNull { it.name == "getFilterList" && it.parameterCount == 1 }
-                ?.invoke(ext, *arrayOfNulls<Any>(1)) as? FilterList
-        }.getOrNull().orEmpty()
-        val base = if (oneArg.isNotEmpty()) oneArg else noArg
         val wanted = tag.trim()
         fun triStates(filters: List<Filter<*>>): List<Filter.TriState> = buildList {
             for (f in filters) {
@@ -181,24 +178,25 @@ class TachiyomiHttpSourceAdapter(
         }
         fun namesMatch(name: String): Boolean =
             name.equals(wanted, ignoreCase = true) || normTag(name) == normTag(wanted)
-        val genre = triStates(base).firstOrNull { namesMatch(it.name) }
-        val select = selects(base).firstOrNull { s ->
-            s.values.any { v -> normTag(v.toString()) == normTag(wanted) }
-        }
-        val checkGroup = checkBoxGroups(base).firstOrNull { g ->
-            g.state.any { child -> child is Filter.CheckBox && namesMatch(child.name) }
-        }
-        // Last resort before the keyword fallback: a free-text "Tags" filter (Comix-style
-        // sources resolve tag names to IDs through their API, so typing the tag here is a
-        // real tag search, not a title search). Only used when no TriState/Select/CheckBox
-        // matched, so it can never override a precise filter mapping.
-        val tagsText = if (genre == null && select == null && checkGroup == null) {
-            base.filterIsInstance<Filter.Text>()
-                .firstOrNull { it.name.contains("tag", ignoreCase = true) }
-        } else null
-        android.util.Log.d("NekoTag", "searchByTag tag=$wanted noArg=${noArg.size} oneArg=${oneArg.size} tri=${genre?.name} select=${select?.name} checkGroup=${checkGroup?.name} tagsText=${tagsText?.name}")
         loading("searchByTag") {
-            when {
+            val base = resolveTagFilters()
+            val genre = triStates(base).firstOrNull { namesMatch(it.name) }
+            val select = selects(base).firstOrNull { s ->
+                s.values.any { v -> normTag(v.toString()) == normTag(wanted) }
+            }
+            val checkGroup = checkBoxGroups(base).firstOrNull { g ->
+                g.state.any { child -> child is Filter.CheckBox && namesMatch(child.name) }
+            }
+            // Last resort before the keyword fallback: a free-text "Tags" filter (Comix-style
+            // sources resolve tag names to IDs through their API, so typing the tag here is a
+            // real tag search, not a title search). Only used when no TriState/Select/CheckBox
+            // matched, so it can never override a precise filter mapping.
+            val tagsText = if (genre == null && select == null && checkGroup == null) {
+                base.filterIsInstance<Filter.Text>()
+                    .firstOrNull { it.name.contains("tag", ignoreCase = true) }
+            } else null
+            android.util.Log.d("NekoTag", "searchByTag tag=$wanted base=${base.size} tri=${genre?.name} select=${select?.name} checkGroup=${checkGroup?.name} tagsText=${tagsText?.name}")
+            return@loading when {
                 genre != null -> {
                     genre.state = Filter.TriState.STATE_INCLUDE
                     ext.getSearchManga(page, "", FilterList(base))
@@ -224,6 +222,55 @@ class TachiyomiHttpSourceAdapter(
     }
 
     private fun normTag(s: String): String = s.lowercase().filter { it.isLetterOrDigit() }
+
+    // Site-driven genre data (per-source fetchFilterData result) is stateless input, so it is
+    // cached per extension: genres don't change between tag taps, but the FilterList built
+    // from it must be fresh every time (matching mutates filter states).
+    private val filterDataCache = ConcurrentHashMap<String, Any>()
+
+    private suspend fun Method.callSuspend(receiver: Any, vararg args: Any?): Any? =
+        suspendCancellableCoroutine { cont ->
+            val result = try {
+                invoke(receiver, *args, cont)
+            } catch (e: InvocationTargetException) {
+                cont.resumeWithException(e.targetException ?: e)
+                return@suspendCancellableCoroutine
+            } catch (e: Throwable) {
+                cont.resumeWithException(e)
+                return@suspendCancellableCoroutine
+            }
+            if (result !== COROUTINE_SUSPENDED) cont.resume(result)
+        }
+
+    // The full filter universe for tag matching, resolved the same way a reader app's filter
+    // screen does: plain getFilterList(), then the getFilterList(data) overload with null
+    // data, then with the source's own fetchFilterData() result (this is what carries
+    // site-driven genre lists such as Madara's into the app). Richest non-empty list wins;
+    // anything missing at any step simply falls through to the next.
+    private suspend fun resolveTagFilters(): List<Filter<*>> {
+        val noArg = runCatching { ext.getFilterList() }.getOrNull().orEmpty()
+        val dataMethod = runCatching {
+            ext.javaClass.methods.firstOrNull { it.name == "getFilterList" && it.parameterCount == 1 }
+        }.getOrNull() ?: return noArg
+        fun withData(data: Any?): List<Filter<*>> = runCatching {
+            dataMethod.invoke(ext, *arrayOf<Any?>(data)) as? FilterList
+        }.getOrNull().orEmpty()
+        val nullData = withData(null)
+        val fetched = filterDataCache[ext.id] ?: runCatching {
+            val fetch = ext.javaClass.methods
+                .firstOrNull { it.name == "fetchFilterData" && it.parameterCount == 1 }
+                ?: return@runCatching null
+            runCatching { fetch.isAccessible = true }
+            fetch.callSuspend(ext)
+        }.getOrNull()?.also { if (it != null) filterDataCache[ext.id] = it }
+        val fullData = if (fetched != null) withData(fetched) else emptyList()
+        android.util.Log.d("NekoTag", "filterLists noArg=${noArg.size} nullData=${nullData.size} fullData=${fullData.size} fetched=${fetched != null}")
+        return when {
+            fullData.isNotEmpty() -> fullData
+            nullData.isNotEmpty() -> nullData
+            else -> noArg
+        }
+    }
 
     override suspend fun latest(page: Int): List<MangaEntity> = withContext(Dispatchers.IO) {
         loading("latest") { ext.getLatestUpdates(page) }
