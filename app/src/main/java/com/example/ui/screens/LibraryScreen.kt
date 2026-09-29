@@ -25,6 +25,8 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -52,6 +54,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -134,6 +137,22 @@ fun LibraryScreen(
     val searchQuery by viewModel.librarySearchQuery.collectAsStateWithLifecycle()
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
     val categories: List<CategoryEntity> by viewModel.categories.collectAsStateWithLifecycle()
+
+    // Swipeable categories: dragging left/right moves between All and each user category,
+    // mirroring the swipeable tabs on Browse and History.
+    val libraryPages = remember(categories) { listOf("All") + categories.map { it.name } }
+    val libraryPager = rememberPagerState { libraryPages.size }
+    LaunchedEffect(selectedCategory, libraryPages) {
+        val idx = libraryPages.indexOf(selectedCategory).coerceAtLeast(0)
+        if (libraryPager.currentPage != idx) {
+            libraryPager.animateScrollToPage(idx)
+            libraryPager.scrollToPage(idx)
+        }
+    }
+    LaunchedEffect(libraryPager.currentPage, libraryPages) {
+        val name = libraryPages.getOrNull(libraryPager.currentPage) ?: return@LaunchedEffect
+        if (name != selectedCategory) viewModel.setSelectedCategory(name)
+    }
 
     // Tadami-style home: a "Continue Reading" hero banner on top, a horizontal "Recently Read"
     // row beneath it, then the full library grid below. Only shown on the unfiltered library
@@ -251,7 +270,7 @@ fun LibraryScreen(
                     }
 
                     if (!selectionMode) {
-                        // Full-width category chips row — several fit at once, the rest scroll.
+                        // Full-width category chips row â several fit at once, the rest scroll.
                         LazyRow(
                             modifier = Modifier.fillMaxWidth(),
                             contentPadding = PaddingValues(horizontal = 12.dp),
@@ -351,130 +370,134 @@ fun LibraryScreen(
         },
         modifier = modifier.fillMaxSize()
     ) { innerPadding ->
-        Box(
+        // Swipeable category pages: every page renders the same list content (the list
+        // itself follows the selected category), so a swipe both animates and switches.
+        HorizontalPager(
+            state = libraryPager,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            if (mangaList.isEmpty()) {
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    if (searchQuery.isNotEmpty()) {
-                        Text("No results found for '$searchQuery'", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), textAlign = TextAlign.Center)
-                    } else {
-                        ProEmptyCard(
-                            title = "Your library",
-                            titleAccent = "is empty",
-                            body = "Search the MangaDex catalog (via the Explore button) to add real manga and manhwa to your library.",
-                            primaryLabel = "Browse Extension Catalog",
-                            primaryIcon = Icons.Default.Search,
-                            onPrimary = onNavigateToBrowse,
-                            art = { ProEmptyBookArt() },
-                            modifier = Modifier.testTag("empty_library_card")
-                        )
-                    }
-                }
-            } else {
-                if (isGridView) {
-                    val libraryGridState = rememberLazyGridState()
-                    AppScrollProbe("library", libraryGridState)
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 130.dp),
-                        state = libraryGridState,
-                        contentPadding = PaddingValues(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxSize()
+                .padding(innerPadding),
+            key = { libraryPages.getOrNull(it) ?: it }
+        ) { _ ->
+                if (mangaList.isEmpty()) {
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        if (continueManga != null) {
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                ContinueReadingHero(
-                                    manga = continueManga,
-                                    onResume = {
-                                        continueManga.lastReadChapterId?.let { onReadClick(continueManga.id, it) }
-                                    },
-                                    onOpen = { onMangaClick(continueManga.id) }
-                                )
-                            }
-                            if (recentlyRead.isNotEmpty()) {
-                                item(span = { GridItemSpan(maxLineSpan) }) {
-                                    RecentlyReadRow(
-                                        mangaList = recentlyRead,
-                                        onMangaClick = onMangaClick,
-                                        onReadClick = onReadClick
-                                    )
-                                }
-                            }
-                        }
-                        items(mangaList, key = { it.id }, contentType = { "manga" }) { manga ->
-                            MangaGridCard(
-                                manga = manga,
-                                onClick = {
-                                    if (selectionMode) toggleSelect(manga.id) else onMangaClick(manga.id)
-                                },
-                                onReadClick = if (!selectionMode && manga.lastReadChapterId != null) {
-                                    { onReadClick(manga.id, manga.lastReadChapterId!!) }
-                                } else null,
-                                selected = manga.id in selectedIds,
-                                onLongClick = {
-                                    if (!selectionMode) {
-                                        selectionMode = true
-                                        selectedIds.add(manga.id)
-                                    }
-                                }
+                        if (searchQuery.isNotEmpty()) {
+                            Text("No results found for '$searchQuery'", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), textAlign = TextAlign.Center)
+                        } else {
+                            ProEmptyCard(
+                                title = "Your library",
+                                titleAccent = "is empty",
+                                body = "Search the MangaDex catalog (via the Explore button) to add real manga and manhwa to your library.",
+                                primaryLabel = "Browse Extension Catalog",
+                                primaryIcon = Icons.Default.Search,
+                                onPrimary = onNavigateToBrowse,
+                                art = { ProEmptyBookArt() },
+                                modifier = Modifier.testTag("empty_library_card")
                             )
                         }
                     }
                 } else {
-                    val libraryListState = rememberLazyListState()
-                    AppScrollProbe("library", libraryListState)
-                    LazyColumn(
-                        state = libraryListState,
-                        contentPadding = PaddingValues(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        if (continueManga != null) {
-                            item {
-                                ContinueReadingHero(
-                                    manga = continueManga,
-                                    onResume = {
-                                        continueManga.lastReadChapterId?.let { onReadClick(continueManga.id, it) }
-                                    },
-                                    onOpen = { onMangaClick(continueManga.id) }
-                                )
-                            }
-                            if (recentlyRead.isNotEmpty()) {
-                                item {
-                                    RecentlyReadRow(
-                                        mangaList = recentlyRead,
-                                        onMangaClick = onMangaClick,
-                                        onReadClick = onReadClick
+                    if (isGridView) {
+                        val libraryGridState = rememberLazyGridState()
+                        AppScrollProbe("library", libraryGridState)
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 130.dp),
+                            state = libraryGridState,
+                            contentPadding = PaddingValues(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            if (continueManga != null) {
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    ContinueReadingHero(
+                                        manga = continueManga,
+                                        onResume = {
+                                            continueManga.lastReadChapterId?.let { onReadClick(continueManga.id, it) }
+                                        },
+                                        onOpen = { onMangaClick(continueManga.id) }
                                     )
                                 }
-                            }
-                        }
-                        items(mangaList, key = { it.id }, contentType = { "manga" }) { manga ->
-                            MangaListCard(
-                                manga = manga,
-                                onClick = {
-                                    if (selectionMode) toggleSelect(manga.id) else onMangaClick(manga.id)
-                                },
-                                selected = manga.id in selectedIds,
-                                onLongClick = {
-                                    if (!selectionMode) {
-                                        selectionMode = true
-                                        selectedIds.add(manga.id)
+                                if (recentlyRead.isNotEmpty()) {
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        RecentlyReadRow(
+                                            mangaList = recentlyRead,
+                                            onMangaClick = onMangaClick,
+                                            onReadClick = onReadClick
+                                        )
                                     }
                                 }
-                            )
+                            }
+                            items(mangaList, key = { it.id }, contentType = { "manga" }) { manga ->
+                                MangaGridCard(
+                                    manga = manga,
+                                    onClick = {
+                                        if (selectionMode) toggleSelect(manga.id) else onMangaClick(manga.id)
+                                    },
+                                    onReadClick = if (!selectionMode && manga.lastReadChapterId != null) {
+                                        { onReadClick(manga.id, manga.lastReadChapterId!!) }
+                                    } else null,
+                                    selected = manga.id in selectedIds,
+                                    onLongClick = {
+                                        if (!selectionMode) {
+                                            selectionMode = true
+                                            selectedIds.add(manga.id)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    } else {
+                        val libraryListState = rememberLazyListState()
+                        AppScrollProbe("library", libraryListState)
+                        LazyColumn(
+                            state = libraryListState,
+                            contentPadding = PaddingValues(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            if (continueManga != null) {
+                                item {
+                                    ContinueReadingHero(
+                                        manga = continueManga,
+                                        onResume = {
+                                            continueManga.lastReadChapterId?.let { onReadClick(continueManga.id, it) }
+                                        },
+                                        onOpen = { onMangaClick(continueManga.id) }
+                                    )
+                                }
+                                if (recentlyRead.isNotEmpty()) {
+                                    item {
+                                        RecentlyReadRow(
+                                            mangaList = recentlyRead,
+                                            onMangaClick = onMangaClick,
+                                            onReadClick = onReadClick
+                                        )
+                                    }
+                                }
+                            }
+                            items(mangaList, key = { it.id }, contentType = { "manga" }) { manga ->
+                                MangaListCard(
+                                    manga = manga,
+                                    onClick = {
+                                        if (selectionMode) toggleSelect(manga.id) else onMangaClick(manga.id)
+                                    },
+                                    selected = manga.id in selectedIds,
+                                    onLongClick = {
+                                        if (!selectionMode) {
+                                            selectionMode = true
+                                            selectedIds.add(manga.id)
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
                 }
-            }
         }
     }
 
@@ -588,7 +611,7 @@ private fun ContinueReadingHero(
 ) {
     AppDiagnostics.noteCompose("hero")
     // Plain surface instead of Material3 `Card`: a Card is a pointerInput + `Modifier.surface`
-    // + elevation shadow + a CompositionLocalProvider for its content colour — several nodes per
+    // + elevation shadow + a CompositionLocalProvider for its content colour â several nodes per
     // hero for what is a static rounded rectangle. The app-level frame logs showed the library
     // hero costing ~140ms to compose (`msg 143ms composed=herox1` -> `frame anim=145ms`), and the
     // hero is the one big cell that is always on screen, so cutting all of it is worth it.
@@ -614,7 +637,7 @@ private fun ContinueReadingHero(
                 .size(1080, 560)
                 // Its own memory-cache key: shared with the grid/list "cover:<id>" key it would
                 // hand a 1080x560 bitmap to a 130dp grid cell (and keep ~600k pixels resident
-                // per manga) — the grid must cache its own small bitmap.
+                // per manga) â the grid must cache its own small bitmap.
                 .memoryCacheKey("cover-hero:${manga.id}")
                 .diskCacheKey("cover:${manga.id}:${manga.coverUrl}")
                 .build()
@@ -676,7 +699,7 @@ private fun ContinueReadingHero(
                     .padding(horizontal = 24.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(text = "▶ Resume", style = HeroResumeStyle)
+                Text(text = "â¶ Resume", style = HeroResumeStyle)
             }
         }
     }
