@@ -145,10 +145,16 @@ fun LibraryScreen(
     // mirroring the swipeable tabs on Browse and History.
     val libraryPages = remember(categories) { listOf("All") + categories.map { it.name } }
     val libraryPager = rememberPagerState { libraryPages.size }
+    var libraryTarget by remember { mutableStateOf<Int?>(null) }
+    fun goToLibraryPage(i: Int) {
+        libraryTarget = i
+        viewModel.setSelectedCategory(libraryPages.getOrNull(i) ?: "All")
+    }
     // Pager/category sync, all in ONE effect so a chip tap and a swipe can never fight.
-    // Chip taps animate to the category page; manual swipes switch the category only once
-    // the pager is fully settled (never mid-flight). The snap in `finally` guarantees
-    // the pager always ends exactly on a page, even when a second tap cancels the first.
+    // Manual swipes switch the category only once the pager is fully settled (a swipe that
+    // settles unseen is adopted here - the old code watched currentPage instead, which can
+    // emit mid-gesture and get skipped, losing the swipe). The snap in `finally` guarantees
+    // the pager always ends exactly on a page.
     LaunchedEffect(selectedCategory, libraryPages) {
         val idx = libraryPages.indexOf(selectedCategory).coerceAtLeast(0)
         try {
@@ -158,12 +164,22 @@ fun LibraryScreen(
         } finally {
             withContext(NonCancellable) { libraryPager.scrollToPage(idx) }
         }
-        snapshotFlow { libraryPager.currentPage }.collect { p ->
-            if (!libraryPager.isScrollInProgress) {
-                val name = libraryPages.getOrNull(p) ?: return@collect
-                if (name != selectedCategory) viewModel.setSelectedCategory(name)
+        libraryTarget = null
+        snapshotFlow { Triple(libraryPager.isScrollInProgress, libraryPager.currentPage, libraryTarget) }
+            .collect { (scrolling, p, tgt) ->
+                if (scrolling) return@collect
+                if (tgt != null) {
+                    val want = libraryPages.indexOf(selectedCategory).coerceAtLeast(0)
+                    if (p != want || libraryPager.currentPageOffsetFraction != 0f) {
+                        libraryPager.animateScrollToPage(want)
+                        libraryPager.scrollToPage(want)
+                    }
+                    libraryTarget = null
+                } else {
+                    val name = libraryPages.getOrNull(p) ?: return@collect
+                    if (name != selectedCategory) viewModel.setSelectedCategory(name)
+                }
             }
-        }
     }
     // Keep the selected chip visible: swiping to a far category scrolls the chip row so
     // the active chip is shown in front instead of sitting off-screen.
@@ -299,7 +315,7 @@ fun LibraryScreen(
                             item {
                                 FilterChip(
                                     selected = selectedCategory == "All",
-                                    onClick = { viewModel.setSelectedCategory("All") },
+                                    onClick = { goToLibraryPage(0) },
                                     label = {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Icon(Icons.Default.GridView, null, modifier = Modifier.size(14.dp))
@@ -326,7 +342,7 @@ fun LibraryScreen(
                                 }
                                 FilterChip(
                                     selected = selectedCategory == category.name,
-                                    onClick = { viewModel.setSelectedCategory(category.name) },
+                                    onClick = { goToLibraryPage(libraryPages.indexOf(category.name)) },
                                     label = {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Icon(catIcon, null, modifier = Modifier.size(14.dp))
@@ -397,7 +413,7 @@ fun LibraryScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
-            key = { libraryPages.getOrNull(it) ?: it }
+            key = { it }
         ) { _ ->
                 if (mangaList.isEmpty()) {
                     Column(
