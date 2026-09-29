@@ -80,9 +80,10 @@ import com.example.ui.components.proButtonGradient
 import com.example.ui.components.proPrimary
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.LaunchedEffect
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -107,35 +108,25 @@ fun UpdatesHistoryScreen(
     }
     val tabs = listOf("History", "Updates")
     // Swipeable tabs: dragging left/right moves between History and Updates.
-    val historyScope = rememberCoroutineScope()
     val historyPager = rememberPagerState(initialPage = 0) { tabs.size }
-    // Tab jumps (segment taps): animate there, then snap, so the pager can never rest
-    // between pages.
+    // Pager/tab sync, all in ONE effect so a segment tap and a swipe can never fight.
+    // Segment taps animate to the tab; manual swipes are adopted only once the pager is
+    // fully settled (never mid-flight). The snap in `finally` guarantees the pager
+    // always ends exactly on a page, even when a second tap cancels the first animation.
     LaunchedEffect(selectedTabIndex) {
-        if (historyPager.currentPage != selectedTabIndex) {
-            historyPager.animateScrollToPage(selectedTabIndex)
-            historyPager.scrollToPage(selectedTabIndex)
+        try {
+            if (historyPager.currentPage != selectedTabIndex) {
+                historyPager.animateScrollToPage(selectedTabIndex)
+            }
+        } finally {
+            withContext(NonCancellable) { historyPager.scrollToPage(selectedTabIndex) }
         }
-    }
-    // Manual swipes sync back ONLY once the pager has fully settled. Syncing the transient
-    // currentPage mid-flight cancels the in-flight animation and strands the pager half on
-    // each page with nothing left to recover it - this settle collector is the only writer
-    // back to selectedTabIndex, so that state is unreachable.
-    LaunchedEffect(historyPager) {
-        snapshotFlow { historyPager.isScrollInProgress to selectedTabIndex }.collect { (scrolling, sel) ->
-            if (!scrolling) {
-                if (historyPager.currentPageOffsetFraction != 0f) {
-                    // Interrupted-animation leftover: finish the trip to the selected tab.
-                    historyPager.animateScrollToPage(sel)
-                    historyPager.scrollToPage(sel)
-                } else {
-                    val p = historyPager.currentPage
-                    if (p != sel) selectedTabIndex = p
-                }
+        snapshotFlow { historyPager.currentPage }.collect { p ->
+            if (!historyPager.isScrollInProgress && p != selectedTabIndex) {
+                selectedTabIndex = p
             }
         }
     }
-
     Scaffold(
         containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0),
@@ -201,10 +192,7 @@ fun UpdatesHistoryScreen(
                     ProSegmented(
                         options = listOf("History" to Icons.Default.History, "Updates" to Icons.Default.Notifications),
                         selected = selectedTabIndex,
-                        onSelect = {
-                            selectedTabIndex = it
-                            historyScope.launch { historyPager.animateScrollToPage(it) }
-                        }
+                        onSelect = { selectedTabIndex = it }
                     )
                 }
             }
