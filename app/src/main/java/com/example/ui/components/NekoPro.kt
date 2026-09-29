@@ -3,6 +3,7 @@ package com.example.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.relocation.rememberBringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -39,6 +42,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.compositionLocalOf
 import com.example.ui.theme.AppAccent
 import androidx.compose.ui.Alignment
@@ -139,12 +144,14 @@ fun ProGenreRow(genres: List<String>, selected: String, onSelect: (String) -> Un
   }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ProPillTabs(tabs: List<Pair<String, ImageVector?>>, selected: Int, badgeCount: Int = 0, badgeTab: Int = -1, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+  val bringIntoViewRequester = rememberBringIntoViewRequester()
   Row(modifier = modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
     tabs.forEachIndexed { i, (label, icon) ->
       val sel = i == selected
-      Surface(shape = RoundedCornerShape(18.dp), color = if (sel) Color.Transparent else Color.Transparent, border = if (sel) null else BorderStroke(1.dp, GlassCardBorder), modifier = Modifier.height(34.dp)) {
+      Surface(shape = RoundedCornerShape(18.dp), color = if (sel) Color.Transparent else Color.Transparent, border = if (sel) null else BorderStroke(1.dp, GlassCardBorder), modifier = Modifier.height(34.dp).then(if (sel) Modifier.bringIntoViewRequester(bringIntoViewRequester) else Modifier)) {
         Box(Modifier.background(if (sel) proButtonGradient() else Brush.horizontalGradient(listOf(ProCardFill, ProCardFill)), RoundedCornerShape(18.dp)).clickable { onSelect(i) }.padding(horizontal = 13.dp), contentAlignment = Alignment.Center) {
           Row(verticalAlignment = Alignment.CenterVertically) {
             if (icon != null) {
@@ -163,6 +170,7 @@ fun ProPillTabs(tabs: List<Pair<String, ImageVector?>>, selected: Int, badgeCoun
       }
     }
   }
+  LaunchedEffect(selected) { bringIntoViewRequester.bringIntoView() }
 }
 
 @Composable
