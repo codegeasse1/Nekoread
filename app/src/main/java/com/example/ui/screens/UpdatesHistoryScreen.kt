@@ -30,8 +30,11 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -69,6 +72,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CompassCalibration
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.MoreVert
 import com.example.ui.MainViewModel
@@ -93,6 +97,13 @@ fun UpdatesHistoryScreen(
 ) {
     var selectedTabIndex by remember { mutableStateOf(0) }
     var showClearConfirm by remember { mutableStateOf(false) }
+    var historyMenuOpen by remember { mutableStateOf(false) }
+    var historySearchOpen by remember { mutableStateOf(false) }
+    var historyQuery by remember { mutableStateOf("") }
+    val filteredHistory = remember(historyManga, historyQuery) {
+        if (historyQuery.isBlank()) historyManga
+        else historyManga.filter { it.title.contains(historyQuery.trim(), ignoreCase = true) }
+    }
     val tabs = listOf("History", "Updates")
     // Swipeable tabs: dragging left/right moves between History and Updates.
     val historyScope = rememberCoroutineScope()
@@ -123,12 +134,47 @@ fun UpdatesHistoryScreen(
                             }
                             Text("Your recent activity and latest updates", style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(19.dp))
+                        IconButton(
+                            onClick = {
+                                historySearchOpen = !historySearchOpen
+                                if (!historySearchOpen) historyQuery = ""
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                if (historySearchOpen) Icons.Default.Close else Icons.Default.Search,
+                                null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(19.dp)
+                            )
                         }
-                        IconButton(onClick = {}, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Default.MoreVert, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(19.dp))
+                        Box {
+                            IconButton(onClick = { historyMenuOpen = true }, modifier = Modifier.size(36.dp)) {
+                                Icon(Icons.Default.MoreVert, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(19.dp))
+                            }
+                            DropdownMenu(
+                                expanded = historyMenuOpen,
+                                onDismissRequest = { historyMenuOpen = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Clear history") },
+                                    onClick = {
+                                        historyMenuOpen = false
+                                        showClearConfirm = true
+                                    }
+                                )
+                            }
                         }
+                    }
+                    if (historySearchOpen) {
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = historyQuery,
+                            onValueChange = { historyQuery = it },
+                            placeholder = { Text("Search history...") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                     Spacer(Modifier.height(8.dp))
                     ProSegmented(
@@ -156,13 +202,13 @@ fun UpdatesHistoryScreen(
             ) { page ->
             when (page) {
                 0 -> HistoryList(
-                    historyManga = historyManga,
+                    historyManga = filteredHistory,
                     onMangaClick = onMangaClick,
                     onReadChapterClick = onReadChapterClick,
                     onRemoveHistory = onRemoveHistory
                 )
                 else -> UpdatesList(
-                    historyManga = historyManga,
+                    historyManga = filteredHistory,
                     onMangaClick = onMangaClick
                 )
             }
