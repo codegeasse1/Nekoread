@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.foundation.relocation.rememberBringIntoViewRequester
+import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -147,7 +147,7 @@ fun ProGenreRow(genres: List<String>, selected: String, onSelect: (String) -> Un
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ProPillTabs(tabs: List<Pair<String, ImageVector?>>, selected: Int, badgeCount: Int = 0, badgeTab: Int = -1, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
-  val bringIntoViewRequester = rememberBringIntoViewRequester()
+  val bringIntoViewRequester = remember { BringIntoViewRequester() }
   Row(modifier = modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
     tabs.forEachIndexed { i, (label, icon) ->
       val sel = i == selected
