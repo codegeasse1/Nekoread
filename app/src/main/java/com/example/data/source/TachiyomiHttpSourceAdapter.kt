@@ -188,7 +188,15 @@ class TachiyomiHttpSourceAdapter(
         val checkGroup = checkBoxGroups(base).firstOrNull { g ->
             g.state.any { child -> child is Filter.CheckBox && namesMatch(child.name) }
         }
-        android.util.Log.d("NekoTag", "searchByTag tag=$wanted noArg=${noArg.size} oneArg=${oneArg.size} tri=${genre?.name} select=${select?.name} checkGroup=${checkGroup?.name}")
+        // Last resort before the keyword fallback: a free-text "Tags" filter (Comix-style
+        // sources resolve tag names to IDs through their API, so typing the tag here is a
+        // real tag search, not a title search). Only used when no TriState/Select/CheckBox
+        // matched, so it can never override a precise filter mapping.
+        val tagsText = if (genre == null && select == null && checkGroup == null) {
+            base.filterIsInstance<Filter.Text>()
+                .firstOrNull { it.name.contains("tag", ignoreCase = true) }
+        } else null
+        android.util.Log.d("NekoTag", "searchByTag tag=$wanted noArg=${noArg.size} oneArg=${oneArg.size} tri=${genre?.name} select=${select?.name} checkGroup=${checkGroup?.name} tagsText=${tagsText?.name}")
         loading("searchByTag") {
             when {
                 genre != null -> {
@@ -204,6 +212,10 @@ class TachiyomiHttpSourceAdapter(
                     for (child in checkGroup.state) {
                         if (child is Filter.CheckBox) child.state = namesMatch(child.name)
                     }
+                    ext.getSearchManga(page, "", FilterList(base))
+                }
+                tagsText != null -> {
+                    tagsText.state = wanted
                     ext.getSearchManga(page, "", FilterList(base))
                 }
                 else -> ext.getSearchManga(page, tag, FilterList())
