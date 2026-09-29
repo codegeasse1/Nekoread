@@ -2,6 +2,24 @@
 
 All notable changes to Nekoread.
 
+## [2.2.6] - 2026-09-29
+
+### Pro theme + appearance
+- New accent system (violet, blue, red, green, orange, pink, teal, gold) with an Appearance picker in Settings; dynamic pro colors/brushes throughout.
+- Compact full-width slim bottom bar with circular accent highlight; hero covers and recent-row covers fit properly; scroll-jank fixes for stable brushes.
+
+### Swipeable tabs everywhere
+- Browse (Sources/Global/Catalog/Extensions/Repos), History/Updates, and Library categories all swipe between pages with a settle-only pager sync: taps and swipes can't race, pages always snap full-on (no more half-black catalog or stranded mid-pages), and swipes are never lost.
+- Chip/pill rows follow the selected tab with a minimal slide instead of yanking it to the front; per-category empty text in Library.
+
+### Search that actually searches
+- Genre chip taps use the source's real genre filter (recursive TriState/Group/Select lookup) with a Search / Global search chip menu, not title matching; back from a tag search returns to the manga.
+
+### Reader
+- Chapter sheet opens fully expanded, already scrolled to the current chapter.
+- Position slider syncs instantly and optimistically; failed pages auto-retry with backoff.
+- History gains a search field and clear-history menu; repo cards are compact with copy-link and two-row layout; catalog preloads neighbor pages.
+
 ## [2.2.5] - 2026-09-09
 
 ### Tag search chooser is now a small chip menu (take twenty-two)
