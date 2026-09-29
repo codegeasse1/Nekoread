@@ -68,6 +68,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -842,8 +843,12 @@ private fun ReaderSettingsSheet(
     val tabs = listOf("Reading mode", "General", "Color")
     val sheetMaxHeight = (LocalConfiguration.current.screenHeightDp * 0.62f).dp
 
+    // Open fully expanded: with the default half-expanded sheet the first drag only
+    // expands the sheet and chapter scrolling starts on the second gesture.
+    val chapterSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = chapterSheetState,
         containerColor = SheetColor,
         contentColor = OnDark,
     ) {
