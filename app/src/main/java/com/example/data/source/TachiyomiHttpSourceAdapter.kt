@@ -120,13 +120,14 @@ class TachiyomiHttpSourceAdapter(
             .map { it.toManga() }
     }
 
-    // Tag search for extension sources: most extensions declare their genres as TriState
-    // filters nested inside a genre Group (e.g. Madara/MangaBox "GenreList"), NOT as
-    // top-level filters - so TriStates are collected recursively, the tapped tag is set
-    // to INCLUDED, and the source's real genre-filtered search runs (the exact mechanism
-    // Mihon's filter UI uses). That lists every manga carrying the genre instead of a
-    // fuzzy title match. Sources with a genre Select get the matching option picked.
-    // Only when no filter matches the tag is there a plain keyword-search fallback.
+    // Tag search for extension sources. Genre/demographic/type filters come in different
+    // shapes per source, so every mappable shape is tried (the exact mechanism Mihon's filter
+    // UI uses): TriStates nested in a Group (Madara/MangaBox "GenreList", Comix genre/format
+    // lists), a genre Select (top-level or nested in a Group), or a CheckBox group (Comix
+    // "Demographic"/"Type"/"Status" — this is where Josei/Seinen/Manhwa live). A matched
+    // CheckBox group is isolated to the tapped tag (siblings unchecked) so select-all defaults
+    // can't turn the search into a no-op. That lists every manga carrying the tag instead of a
+    // fuzzy title match. Only when no filter matches the tag is there a plain keyword fallback.
     override suspend fun searchByTag(tag: String, page: Int): List<MangaEntity> = withContext(Dispatchers.IO) {
         val base = runCatching { ext.getFilterList() }.getOrNull().orEmpty()
         val wanted = tag.trim()
@@ -142,12 +143,41 @@ class TachiyomiHttpSourceAdapter(
                 }
             }
         }
-        val genre = triStates(base).firstOrNull {
-            it.name.equals(wanted, ignoreCase = true) || normTag(it.name) == normTag(wanted)
+        fun selects(filters: List<Filter<*>>): List<Filter.Select<*>> = buildList {
+            for (f in filters) {
+                when (f) {
+                    is Filter.Select<*> -> add(f)
+                    is Filter.Group<*> -> for (child in f.state) {
+                        if (child is Filter.Select<*>) add(child)
+                        else if (child is Filter.Group<*>) addAll(selects(listOf(child)))
+                    }
+                    else -> {}
+                }
+            }
         }
-        val select = base.filterIsInstance<Filter.Select<*>>().firstOrNull { s ->
+        fun checkBoxGroups(filters: List<Filter<*>>): List<Filter.Group<*>> = buildList {
+            for (f in filters) {
+                when (f) {
+                    is Filter.Group<*> -> {
+                        if (f.state.any { it is Filter.CheckBox }) add(f)
+                        for (child in f.state) {
+                            if (child is Filter.Group<*>) addAll(checkBoxGroups(listOf(child)))
+                        }
+                    }
+                    else -> {}
+                }
+            }
+        }
+        fun namesMatch(name: String): Boolean =
+            name.equals(wanted, ignoreCase = true) || normTag(name) == normTag(wanted)
+        val genre = triStates(base).firstOrNull { namesMatch(it.name) }
+        val select = selects(base).firstOrNull { s ->
             s.values.any { v -> normTag(v.toString()) == normTag(wanted) }
         }
+        val checkGroup = checkBoxGroups(base).firstOrNull { g ->
+            g.state.any { child -> child is Filter.CheckBox && namesMatch(child.name) }
+        }
+        android.util.Log.d("NekoTag", "searchByTag tag=$wanted tri=${genre?.name} select=${select?.name} checkGroup=${checkGroup?.name} filters=${base.size}")
         loading("searchByTag") {
             when {
                 genre != null -> {
@@ -157,6 +187,12 @@ class TachiyomiHttpSourceAdapter(
                 select != null -> {
                     (select as Filter<Int>).state =
                         select.values.indexOfFirst { v -> normTag(v.toString()) == normTag(wanted) }
+                    ext.getSearchManga(page, "", FilterList(base))
+                }
+                checkGroup != null -> {
+                    for (child in checkGroup.state) {
+                        if (child is Filter.CheckBox) child.state = namesMatch(child.name)
+                    }
                     ext.getSearchManga(page, "", FilterList(base))
                 }
                 else -> ext.getSearchManga(page, tag, FilterList())
