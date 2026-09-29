@@ -143,8 +143,8 @@ private fun contentWarningLabel(cw: String): String? = when (cw) {
 }
 
 /** True when a NEWER build of an installed extension exists in its repo. Compares numeric
- *  versionCodes (the same check Mihon/Tadami use for their update badges) — the display
- *  versionName is just for showing "v1 → v2". */
+ *  versionCodes (the same check Mihon/Tadami use for their update badges) â the display
+ *  versionName is just for showing "v1 â v2". */
 private fun hasUpdate(ext: ExtensionEntity): Boolean {
     if (!ext.isInstalled) return false
     val installed = ext.installedVersionCode?.toLongOrNull() ?: return false
@@ -223,7 +223,7 @@ fun BrowseScreen(
     onBack: () -> Unit = {}
 ) {
     // rememberSaveable (not remember): the user's tab/source/search must survive navigating to a
-    // manga detail screen and back — with plain `remember` the whole Browse composable resets to
+    // manga detail screen and back â with plain `remember` the whole Browse composable resets to
     // the Sources tab on return, which felt like being "thrown out" of the catalog.
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(TAB_SOURCES) }
     val tabs = listOf("Sources", "Global", "Catalog", "Extensions", "Repos")
@@ -323,7 +323,7 @@ fun BrowseScreen(
     }
 
     // Debounced real search against the active source. Tag/genre searches jump straight in via the
-    // tagSearch effect above (no debounce), so they're skipped here — a tag search is never delayed
+    // tagSearch effect above (no debounce), so they're skipped here â a tag search is never delayed
     // or overwritten by a stale default-catalog reload.
     LaunchedEffect(searchQuery, activeSourceId, catalogMode) {
         if (selectedTabIndex == TAB_CATALOG && activeSourceId.isNotBlank() && !searchQuery.startsWith("tag:")) {
@@ -362,7 +362,13 @@ fun BrowseScreen(
     val browseScope = rememberCoroutineScope()
     val browsePager = rememberPagerState(initialPage = selectedTabIndex) { 5 }
     LaunchedEffect(selectedTabIndex) {
-        if (browsePager.currentPage != selectedTabIndex) browsePager.animateScrollToPage(selectedTabIndex)
+        if (browsePager.currentPage != selectedTabIndex) {
+            browsePager.animateScrollToPage(selectedTabIndex)
+            // Snap: an interrupted animation can leave the pager resting between pages
+            // (half black, half content) - scrolling to the exact page guarantees it
+            // always settles on a full page.
+            browsePager.scrollToPage(selectedTabIndex)
+        }
     }
     LaunchedEffect(browsePager.currentPage) {
         val p = browsePager.currentPage
@@ -403,7 +409,7 @@ fun BrowseScreen(
     val minimalBar = inExtensionMode || isGlobalTagSearchRoute
 
     // While inside a source's catalog (or a pushed tag search), the system back button must exit
-    // through [exitSearch] — not pop the whole Browse tab and land on Library.
+    // through [exitSearch] â not pop the whole Browse tab and land on Library.
     BackHandler(enabled = isPushedSearch) { exitSearch() }
     BackHandler(enabled = !isPushedSearch && inExtensionMode) { exitSearch() }
 
@@ -510,6 +516,7 @@ fun BrowseScreen(
             HorizontalPager(
                 state = browsePager,
                 modifier = Modifier.fillMaxSize(),
+                beyondViewportPageCount = 1,
                 key = { it }
             ) { page ->
             when (page) {
@@ -654,7 +661,7 @@ fun BrowseScreen(
                 webviewTarget = null
                 // Re-load the active source so a freshly solved cf_clearance takes effect.
                 viewModel.loadCatalog(activeSourceId, searchQuery)
-                // If the user was verifying from the global search tab, re-run that search too —
+                // If the user was verifying from the global search tab, re-run that search too â
                 // a source that just got verified will now return its results.
                 if (selectedTabIndex == TAB_GLOBAL && globalQuery.isNotBlank()) {
                     viewModel.globalSearch(globalQuery)
@@ -838,7 +845,7 @@ fun SourcesTabContent(
                             Spacer(modifier = Modifier.height(2.dp))
 
                             Text(
-                                text = "v${source.version} • ${source.lang.uppercase()}${if (source.isNsfw) " • NSFW" else ""}",
+                                text = "v${source.version} â¢ ${source.lang.uppercase()}${if (source.isNsfw) " â¢ NSFW" else ""}",
                                 style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                             )
 
@@ -1183,8 +1190,8 @@ fun CatalogTabContent(
             }
 
             // Tadami-style catalog tabs: Popular / Latest / Filter. The search bar above acts
-            // as the "Filter" — typing a query always searches, whatever tab is active.
-            // ALWAYS shown — including inside an opened extension (the user taps Popular/Latest
+            // as the "Filter" â typing a query always searches, whatever tab is active.
+            // ALWAYS shown â including inside an opened extension (the user taps Popular/Latest
             // right inside the source's catalog).
             com.example.ui.components.ProModeRow(mode = mode, onModeChange = onModeChange, modifier = Modifier.fillMaxWidth())
             Spacer(modifier = Modifier.height(8.dp))
@@ -1349,7 +1356,7 @@ fun ExtensionsTabContent(
     var query by remember { mutableStateOf("") }
     // Show EVERY extension from every repo (exactly like Tadami). The only de-duplication is at
     // the REPO level when adding/refreshing (the same repo added twice in different URL forms, or
-    // a byte-identical mirror of an existing repo, is merged into one row) — so two repos shipping
+    // a byte-identical mirror of an existing repo, is merged into one row) â so two repos shipping
     // the SAME package from DIFFERENT builds (e.g. keiyoushi's comix + the user's own comix) each
     // keep their own row, and nothing the user added is ever hidden behind another repo's copy.
     val filtered = remember(extensions, query) {
@@ -1376,7 +1383,7 @@ fun ExtensionsTabContent(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Extensions (${filtered.size} of ${extensions.size}) — install to add its sources",
+                text = "Extensions (${filtered.size} of ${extensions.size}) â install to add its sources",
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.primary
             )
@@ -1390,7 +1397,7 @@ fun ExtensionsTabContent(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "No extensions loaded. Add a repository first (Repos tab), or refresh the built-in repos — the list will populate from the real repo index.",
+                    text = "No extensions loaded. Add a repository first (Repos tab), or refresh the built-in repos â the list will populate from the real repo index.",
                     style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                     textAlign = TextAlign.Center
                 )
@@ -1529,7 +1536,7 @@ private fun ExtensionCardRow(
                                 Spacer(modifier = Modifier.height(2.dp))
 
                                 Text(
-                                    text = "v${ext.versionName} (${ext.versionCode}) • $repoName",
+                                    text = "v${ext.versionName} (${ext.versionCode}) â¢ $repoName",
                                     style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -1542,7 +1549,7 @@ private fun ExtensionCardRow(
                                         shape = RoundedCornerShape(4.dp)
                                     ) {
                                         Text(
-                                            text = if (hasUpdate(ext)) "Update available" else "Installed${if (ext.installError != null) " • Error" else ""}",
+                                            text = if (hasUpdate(ext)) "Update available" else "Installed${if (ext.installError != null) " â¢ Error" else ""}",
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                             style = MaterialTheme.typography.labelSmall.copy(
                                                 color = if (ext.installError != null) MaterialTheme.colorScheme.error
@@ -1554,7 +1561,7 @@ private fun ExtensionCardRow(
                                     if (hasUpdate(ext)) {
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Text(
-                                            text = "v${ext.installedVersionName} → v${ext.versionName}",
+                                            text = "v${ext.installedVersionName} â v${ext.versionName}",
                                             style = MaterialTheme.typography.labelMedium.copy(
                                                 color = MaterialTheme.colorScheme.primary,
                                                 fontWeight = FontWeight.Bold
