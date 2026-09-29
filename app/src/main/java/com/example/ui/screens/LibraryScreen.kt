@@ -60,6 +60,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -142,6 +143,8 @@ fun LibraryScreen(
     // mirroring the swipeable tabs on Browse and History.
     val libraryPages = remember(categories) { listOf("All") + categories.map { it.name } }
     val libraryPager = rememberPagerState { libraryPages.size }
+    // Category jumps (chip taps): animate there, then snap, so the pager can never
+    // rest between pages.
     LaunchedEffect(selectedCategory, libraryPages) {
         val idx = libraryPages.indexOf(selectedCategory).coerceAtLeast(0)
         if (libraryPager.currentPage != idx) {
@@ -149,9 +152,31 @@ fun LibraryScreen(
             libraryPager.scrollToPage(idx)
         }
     }
-    LaunchedEffect(libraryPager.currentPage, libraryPages) {
-        val name = libraryPages.getOrNull(libraryPager.currentPage) ?: return@LaunchedEffect
-        if (name != selectedCategory) viewModel.setSelectedCategory(name)
+    // Manual swipes switch the category ONLY once the pager has fully settled. Adopting
+    // the transient currentPage mid-flight cancels the in-flight animation and strands
+    // the pager half on each page with nothing left to recover it - this settle collector
+    // is the only writer back to the category, so that state is unreachable.
+    LaunchedEffect(libraryPager, libraryPages) {
+        snapshotFlow { Triple(libraryPager.isScrollInProgress, libraryPager.currentPage, selectedCategory) }.collect { (scrolling, p, sel) ->
+            if (!scrolling) {
+                if (libraryPager.currentPageOffsetFraction != 0f) {
+                    // Interrupted-animation leftover: finish the trip to the selected category.
+                    val idx = libraryPages.indexOf(sel).coerceAtLeast(0)
+                    libraryPager.animateScrollToPage(idx)
+                    libraryPager.scrollToPage(idx)
+                } else {
+                    val name = libraryPages.getOrNull(p) ?: return@collect
+                    if (name != sel) viewModel.setSelectedCategory(name)
+                }
+            }
+        }
+    }
+    // Keep the selected chip visible: swiping to a far category scrolls the chip row so
+    // the active chip is shown in front instead of sitting off-screen.
+    val chipRowState = rememberLazyListState()
+    LaunchedEffect(selectedCategory, libraryPages) {
+        val idx = if (selectedCategory == "All") 0 else libraryPages.indexOf(selectedCategory).coerceAtLeast(0)
+        if (idx in libraryPages.indices) chipRowState.scrollToItem(idx)
     }
 
     // Tadami-style home: a "Continue Reading" hero banner on top, a horizontal "Recently Read"
@@ -272,6 +297,7 @@ fun LibraryScreen(
                     if (!selectionMode) {
                         // Full-width category chips row â several fit at once, the rest scroll.
                         LazyRow(
+                            state = chipRowState,
                             modifier = Modifier.fillMaxWidth(),
                             contentPadding = PaddingValues(horizontal = 12.dp),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -387,6 +413,17 @@ fun LibraryScreen(
                     ) {
                         if (searchQuery.isNotEmpty()) {
                             Text("No results found for '$searchQuery'", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), textAlign = TextAlign.Center)
+                        } else if (selectedCategory != "All") {
+                            ProEmptyCard(
+                                title = "No titles",
+                                titleAccent = "in $selectedCategory",
+                                body = "Titles you file under this category will show up here.",
+                                primaryLabel = "Browse Extension Catalog",
+                                primaryIcon = Icons.Default.Search,
+                                onPrimary = onNavigateToBrowse,
+                                art = { ProEmptyBookArt() },
+                                modifier = Modifier.testTag("empty_library_card")
+                            )
                         } else {
                             ProEmptyCard(
                                 title = "Your library",
