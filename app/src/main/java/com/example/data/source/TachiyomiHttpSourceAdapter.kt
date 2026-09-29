@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.intrinsics.COROUTINE_SUSPENDED
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -24,6 +23,7 @@ import java.lang.reflect.Method
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
 
 /**
  * Bridges a DexClassLoader-loaded Tachiyomi [HttpSource] (from an installed extension APK) onto
@@ -228,6 +228,8 @@ class TachiyomiHttpSourceAdapter(
     // from it must be fresh every time (matching mutates filter states).
     private val filterDataCache = ConcurrentHashMap<String, Any>()
 
+    // stdlib's marker is the same object kotlinx-coroutines suspends with on JVM, so a
+    // direct (non-suspending) result is resumed inline while a real suspension waits.
     private suspend fun Method.callSuspend(receiver: Any, vararg args: Any?): Any? =
         suspendCancellableCoroutine { cont ->
             val result = try {
@@ -256,13 +258,13 @@ class TachiyomiHttpSourceAdapter(
             dataMethod.invoke(ext, *arrayOf<Any?>(data)) as? FilterList
         }.getOrNull().orEmpty()
         val nullData = withData(null)
-        val fetched = filterDataCache[ext.id] ?: runCatching {
+        val fetched = filterDataCache[id] ?: runCatching {
             val fetch = ext.javaClass.methods
                 .firstOrNull { it.name == "fetchFilterData" && it.parameterCount == 1 }
                 ?: return@runCatching null
             runCatching { fetch.isAccessible = true }
             fetch.callSuspend(ext)
-        }.getOrNull()?.also { if (it != null) filterDataCache[ext.id] = it }
+        }.getOrNull()?.also { filterDataCache[id] = it }
         val fullData = if (fetched != null) withData(fetched) else emptyList()
         android.util.Log.d("NekoTag", "filterLists noArg=${noArg.size} nullData=${nullData.size} fullData=${fullData.size} fetched=${fetched != null}")
         return when {
