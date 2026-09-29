@@ -129,7 +129,18 @@ class TachiyomiHttpSourceAdapter(
     // can't turn the search into a no-op. That lists every manga carrying the tag instead of a
     // fuzzy title match. Only when no filter matches the tag is there a plain keyword fallback.
     override suspend fun searchByTag(tag: String, page: Int): List<MangaEntity> = withContext(Dispatchers.IO) {
-        val base = runCatching { ext.getFilterList() }.getOrNull().orEmpty()
+        // KeiSource (keiyoushi lib-1.6) extensions declare their filters on
+        // getFilterList(data) instead of the no-arg getFilterList(), which stays EMPTY — so a
+        // plain no-arg call sees zero filters and EVERY tag search on such extensions degrades
+        // to a keyword search. Reflect for the one-arg overload (passing null data, which the
+        // sources accept) and prefer it whenever it yields filters.
+        val noArg = runCatching { ext.getFilterList() }.getOrNull().orEmpty()
+        val oneArg = runCatching {
+            ext.javaClass.methods
+                .firstOrNull { it.name == "getFilterList" && it.parameterCount == 1 }
+                ?.invoke(ext, *arrayOfNulls<Any>(1)) as? FilterList
+        }.getOrNull().orEmpty()
+        val base = if (oneArg.isNotEmpty()) oneArg else noArg
         val wanted = tag.trim()
         fun triStates(filters: List<Filter<*>>): List<Filter.TriState> = buildList {
             for (f in filters) {
@@ -177,7 +188,7 @@ class TachiyomiHttpSourceAdapter(
         val checkGroup = checkBoxGroups(base).firstOrNull { g ->
             g.state.any { child -> child is Filter.CheckBox && namesMatch(child.name) }
         }
-        android.util.Log.d("NekoTag", "searchByTag tag=$wanted tri=${genre?.name} select=${select?.name} checkGroup=${checkGroup?.name} filters=${base.size}")
+        android.util.Log.d("NekoTag", "searchByTag tag=$wanted noArg=${noArg.size} oneArg=${oneArg.size} tri=${genre?.name} select=${select?.name} checkGroup=${checkGroup?.name}")
         loading("searchByTag") {
             when {
                 genre != null -> {
