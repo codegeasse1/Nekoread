@@ -1324,6 +1324,17 @@ fun ReaderScreen(
             currentPage = { currentPage },
             totalPages = { pageTotal },
             onSeekPage = { targetPage ->
+                // Optimistic HUD sync: the slider thumb and page number reflect the tap
+                // instantly instead of waiting for the viewer to settle and report back
+                // (which lagged until the next small scroll). The viewer's own onPageChanged
+                // corrects the state if it lands on a different page.
+                if (isWebtoon) {
+                    val seg = streamPosition.first
+                    val segSize = streamSegments.getOrNull(seg)?.size ?: 1
+                    viewerPos = Triple(seg, (targetPage + 1).coerceIn(1, segSize), streamPosition.third)
+                } else {
+                    pagerPos = (targetPage + 1).coerceIn(1, pages?.size ?: 1)
+                }
                 coroutineScope.launch {
                     if (isWebtoon) {
                         val seg = streamPosition.first

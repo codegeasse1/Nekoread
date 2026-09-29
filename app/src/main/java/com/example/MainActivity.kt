@@ -109,6 +109,11 @@ import com.example.ui.theme.GlowCyan
 import com.example.ui.theme.GlowViolet
 import com.example.ui.theme.NekoReadTheme
 import eu.kanade.tachiyomi.network.NetworkHelper
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.draw.clip
 
 // Ambient background + glow brushes, hoisted to file level: they never change, and building a
 // `Brush.verticalGradient` / `radialGradient` (plus its Shader) inline re-created them on every
@@ -199,7 +204,8 @@ class MainActivity : ComponentActivity() {
         AppDiagnostics.install(this)
 
         setContent {
-            NekoReadTheme {
+            val appAccent by viewModel.appAccent.collectAsStateWithLifecycle()
+            NekoReadTheme(accent = appAccent) {
                 // Ambient gradient + glow spots behind the whole app: the translucent
                 // glass surfaces on top pick up these colors for the frosted look. The glows are
                 // drawn as radial gradients (NOT Modifier.blur) — blur on large root layers forces
@@ -442,44 +448,52 @@ fun MainAppScreen(viewModel: MainViewModel) {
         contentWindowInsets = if (isReader) WindowInsets(0) else ScaffoldDefaults.contentWindowInsets,
         bottomBar = {
             if (showBottomBar) {
-                // Floating rounded glass nav pill (Tadami-style), not a full-width rectangle.
+                // Compact floating icon bar (wrap-content, centered): the selected tab gets a circular
+                // accent highlight that follows the app theme.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .navigationBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 6.dp)
-                        .testTag("bottom_nav_container")
+                        .testTag("bottom_nav_container"),
+                    contentAlignment = Alignment.Center
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(30.dp),
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.60f),
+                        shape = RoundedCornerShape(28.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
                         border = BorderStroke(1.dp, GlassCardBorder),
-                        shadowElevation = 10.dp
+                        shadowElevation = 10.dp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("bottom_nav")
                     ) {
-                        NavigationBar(
-                            containerColor = Color.Transparent,
-                            tonalElevation = 0.dp,
-                            windowInsets = WindowInsets(0, 0, 0, 0),
+                        Row(
                             modifier = Modifier
-                                .height(64.dp)
-                                .testTag("bottom_nav")
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             bottomNavScreens.forEach { screen ->
-                                NavigationBarItem(
-                                    icon = screen.icon,
-                                    label = {
-                                        Text(
-                                            text = screen.title,
-                                            style = MaterialTheme.typography.labelSmall
-                                        )
-                                    },
-                                    selected = currentRoute == screen.route ||
-                                        (screen == Screen.Browse && currentRoute in tagSearchRoutePatterns),
-                                    onClick = {
-                                        navController.navigateToTab(screen.route)
-                                    },
-                                    modifier = Modifier.testTag("nav_item_${screen.route}")
-                                )
+                                val sel = currentRoute == screen.route ||
+                                    (screen == Screen.Browse && currentRoute in tagSearchRoutePatterns)
+                                Box(
+                                    modifier = Modifier
+                                        .size(50.dp)
+                                        .clip(androidx.compose.foundation.shape.CircleShape)
+                                        .background(if (sel) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                        .clickable { navController.navigateToTab(screen.route) }
+                                        .testTag("nav_item_${screen.route}"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CompositionLocalProvider(
+                                        LocalContentColor provides (
+                                            if (sel) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                    ) {
+                                        screen.icon()
+                                    }
+                                }
                             }
                         }
                     }

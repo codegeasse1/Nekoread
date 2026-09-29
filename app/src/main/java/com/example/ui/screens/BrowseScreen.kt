@@ -37,6 +37,10 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -100,12 +104,25 @@ import com.example.ui.components.MangaGridCard
 import com.example.ui.components.MangaListCard
 import com.example.ui.theme.GlassCardBorder
 import com.example.ui.theme.NekoGoldBadge
-import com.example.ui.theme.NekoVioletPrimary
 import kotlinx.coroutines.delay
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.example.ui.components.proButtonGradient
+import com.example.ui.components.ProPrimaryButton
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import android.widget.Toast
+import com.example.ui.components.proPrimary
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val TAB_SOURCES = 0
 private const val TAB_GLOBAL = 1
@@ -180,7 +197,7 @@ private fun ExtensionIconView(
         AsyncImage(model = iconUrl, contentDescription = null, modifier = modifier)
     } else {
         Box(
-            modifier = modifier.background(if (nsfw) NekoGoldBadge else NekoVioletPrimary),
+            modifier = modifier.background(if (nsfw) NekoGoldBadge else proPrimary()),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -212,6 +229,15 @@ fun BrowseScreen(
     // manga detail screen and back — with plain `remember` the whole Browse composable resets to
     // the Sources tab on return, which felt like being "thrown out" of the catalog.
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(TAB_SOURCES) }
+    // Programmatic tab target: set synchronously alongside selectedTabIndex by every tab
+    // writer (pill taps, source open, tag search, exit). The settle collector below adopts
+    // a swipe ONLY when no jump is pending - without this, a tap's own settle emission
+    // races the jump animation and eats the tap, and a swipe that settles unseen is lost.
+    var browseTarget by remember { mutableStateOf<Int?>(null) }
+    fun goToBrowseTab(i: Int) {
+        browseTarget = i
+        selectedTabIndex = i
+    }
     val tabs = listOf("Sources", "Global", "Catalog", "Extensions", "Repos")
 
     val extensionSources: List<ExtensionSourceEntity> by viewModel.extensionSources.collectAsStateWithLifecycle()
@@ -288,7 +314,7 @@ fun BrowseScreen(
         activeSourceId = sourceId
         activeSourceBaseUrl = extensionSources.firstOrNull { it.id == sourceId }?.baseUrl ?: ""
         searchQuery = "tag:$tag"
-        selectedTabIndex = TAB_CATALOG
+        goToBrowseTab(TAB_CATALOG)
         // "filter" so the catalog's Filter chip matches the filtered results being shown (the tag
         // branch of searchCatalog ignores the mode, but the chip is the user's only hint about what
         // the grid is showing).
@@ -302,7 +328,7 @@ fun BrowseScreen(
         val tag = globalTagSearch ?: return@LaunchedEffect
         if (tag.isBlank()) return@LaunchedEffect
         AppDiagnostics.log("global tag search apply tag=$tag (route)")
-        selectedTabIndex = TAB_GLOBAL
+        goToBrowseTab(TAB_GLOBAL)
         globalQuery = "tag:$tag"
         lastAppliedGlobalQuery = "tag:$tag"
         viewModel.globalSearch("tag:$tag")
@@ -343,6 +369,43 @@ fun BrowseScreen(
 
     val repoNameById: Map<String, String> = extensionRepos.associate { it.id to it.name }
 
+    // Swipeable tabs: dragging left/right moves between Sources/Global/Catalog/Extensions/Repos
+    // without tapping the pill row (vertical lists inside still scroll vertically as usual).
+    val browseScope = rememberCoroutineScope()
+    val browsePager = rememberPagerState(initialPage = selectedTabIndex) { 5 }
+    // Pager/tab sync, all in ONE effect so a tab tap and a swipe can never fight.
+    // Manual swipes are adopted only once the pager is fully settled (never mid-flight).
+    // The snap in `finally` guarantees the pager always ends exactly on a page, even when
+    // a second tap cancels the first animation midway.
+    LaunchedEffect(selectedTabIndex) {
+        try {
+            if (browsePager.currentPage != selectedTabIndex) {
+                browsePager.animateScrollToPage(selectedTabIndex)
+            }
+        } finally {
+            withContext(NonCancellable) { browsePager.scrollToPage(selectedTabIndex) }
+        }
+        browseTarget = null
+        snapshotFlow { Triple(browsePager.isScrollInProgress, browsePager.currentPage, browseTarget) }
+            .collect { (scrolling, p, tgt) ->
+                if (scrolling) return@collect
+                if (tgt != null) {
+                    // A jump was grabbed mid-flight: finish the trip, then release it.
+                    if (p != selectedTabIndex || browsePager.currentPageOffsetFraction != 0f) {
+                        browsePager.animateScrollToPage(selectedTabIndex)
+                        browsePager.scrollToPage(selectedTabIndex)
+                    }
+                    browseTarget = null
+                } else if (p != selectedTabIndex) {
+                    selectedTabIndex = p
+                    if (p == TAB_CATALOG && activeSourceId.isNotBlank() &&
+                        catalogResults.isEmpty() && !catalogLoading
+                    ) {
+                        viewModel.loadCatalog(activeSourceId, searchQuery)
+                    }
+                }
+            }
+    }
     // Browsing a source's catalog hides the outer "Browse & Extensions" chrome (title + tab row)
     // and shows a minimal Tadami-style bar: back arrow + the source's name.
     val inExtensionMode = selectedTabIndex == TAB_CATALOG && activeSourceId.isNotBlank()
@@ -363,7 +426,7 @@ fun BrowseScreen(
             activeSourceId = ""
             activeSourceBaseUrl = ""
             searchQuery = ""
-            selectedTabIndex = TAB_SOURCES
+            goToBrowseTab(TAB_SOURCES)
         }
     }
 
@@ -417,7 +480,7 @@ fun BrowseScreen(
                                 Icon(
                                     imageVector = Icons.Default.Language,
                                     contentDescription = "Cloudflare check",
-                                    tint = NekoVioletPrimary
+                                    tint = proPrimary()
                                 )
                             }
                         }
@@ -426,72 +489,42 @@ fun BrowseScreen(
             } else {
                 // Floating rounded glass pill (Hikari/taskbar style), matching the bottom nav pill.
                 FloatingTopAppBar {
-                    Column {
-                        TopAppBar(
-                            modifier = Modifier.height(40.dp),
-                            windowInsets = WindowInsets(0),
-                            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                            title = {
-                                Text(
-                                    text = "Browse & Extensions",
-                                    fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                            }
+                    Column(Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
+                        Text(
+                            text = "Browse & Extensions",
+                            fontWeight = FontWeight.ExtraBold,
+                            style = MaterialTheme.typography.titleMedium
                         )
-
-                        ScrollableTabRow(
-                            selectedTabIndex = selectedTabIndex,
-                            containerColor = Color.Transparent,
-                            edgePadding = 8.dp,
-                            modifier = Modifier.height(36.dp)
-                        ) {
-                            // Tadami-style badge: the Extensions tab shows how many installed
-                            // extensions have a newer version available in their repo.
+                        Text(
+                            text = "Discover, install and manage extensions to unlock more manga and manhwa",
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        run {
                             val pendingUpdates = extensions.count { hasUpdate(it) }
-                            tabs.forEachIndexed { index, title ->
-                                Tab(
-                                    selected = selectedTabIndex == index,
-                                    onClick = {
-                                        selectedTabIndex = index
-                                        if (index == TAB_CATALOG && activeSourceId.isNotBlank() &&
-                                            catalogResults.isEmpty() && !catalogLoading
-                                        ) {
-                                            viewModel.loadCatalog(activeSourceId, searchQuery)
-                                        }
-                                    },
-                                    text = {
-                                        if (index == TAB_EXTENSIONS && pendingUpdates > 0) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                            ) {
-                                                Text(title, fontWeight = FontWeight.Bold)
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(20.dp)
-                                                        .clip(CircleShape)
-                                                        .background(NekoGoldBadge),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text(
-                                                        text = if (pendingUpdates > 99) "99+" else "$pendingUpdates",
-                                                        style = MaterialTheme.typography.labelSmall.copy(
-                                                            color = Color.White,
-                                                            fontWeight = FontWeight.Bold
-                                                        )
-                                                    )
-                                                }
-                                            }
-                                        } else {
-                                            Text(title, fontWeight = FontWeight.Bold)
-                                        }
-                                    },
-                                    modifier = Modifier.testTag("browse_tab_$index")
-                                )
-                            }
+                            com.example.ui.components.ProPillTabs(
+                                tabs = listOf(
+                                    "Sources" to Icons.Default.Public,
+                                    "Global" to Icons.Default.Language,
+                                    "Catalog" to Icons.Default.GridView,
+                                    "Extensions" to Icons.Default.Extension,
+                                    "Repos" to Icons.Default.Storage
+                                ),
+                                selected = selectedTabIndex,
+                                badgeCount = pendingUpdates,
+                                badgeTab = TAB_EXTENSIONS,
+                                onSelect = { index ->
+                                    goToBrowseTab(index)
+                                    if (index == TAB_CATALOG && activeSourceId.isNotBlank() &&
+                                        catalogResults.isEmpty() && !catalogLoading
+                                    ) {
+                                        viewModel.loadCatalog(activeSourceId, searchQuery)
+                                    }
+                                }
+                            )
                         }
-                        HorizontalDivider(color = GlassCardBorder)
                     }
                 }
             }
@@ -504,7 +537,13 @@ fun BrowseScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            when (selectedTabIndex) {
+            HorizontalPager(
+                state = browsePager,
+                modifier = Modifier.fillMaxSize(),
+                beyondViewportPageCount = 1,
+                key = { it }
+            ) { page ->
+            when (page) {
                 TAB_SOURCES -> SourcesTabContent(
                     sources = extensionSources.filter { it.isInstalled },
                     onBrowseSource = { source ->
@@ -512,14 +551,14 @@ fun BrowseScreen(
                         activeSourceBaseUrl = source.baseUrl
                         searchQuery = ""
                         viewModel.loadCatalog(source.id, "")
-                        selectedTabIndex = TAB_CATALOG
+                        goToBrowseTab(TAB_CATALOG)
                     },
                     onBrowsePopular = { source ->
                         activeSourceId = source.id
                         activeSourceBaseUrl = source.baseUrl
                         searchQuery = ""
                         viewModel.loadCatalog(source.id, "", 1, "popular")
-                        selectedTabIndex = TAB_CATALOG
+                        goToBrowseTab(TAB_CATALOG)
                     },
                     onOpenWebView = { source ->
                         webviewTarget = source.baseUrl to sourceUserAgent(source.id)
@@ -553,6 +592,12 @@ fun BrowseScreen(
                         viewModel.loadCatalog(activeSourceId, if (m == "filter") searchQuery else "", 1, m)
                     },
                     onRetry = { viewModel.loadCatalog(activeSourceId, searchQuery, 1, catalogMode) },
+                    onGenreSelect = { q ->
+                        if (activeSourceId.isNotBlank()) {
+                            viewModel.setCatalogMode("filter")
+                            viewModel.loadCatalog(activeSourceId, q, 1, "filter")
+                        }
+                    },
                     onMangaClick = onMangaClick,
                     isLoadingMore = catalogLoadingMore,
                     hasMore = catalogHasMore,
@@ -576,6 +621,7 @@ fun BrowseScreen(
                     onRefreshRepo = { viewModel.refreshExtensionRepo(it) },
                     onDeleteRepo = { repoToDelete = it }
                 )
+            }
             }
 
         }
@@ -666,7 +712,7 @@ fun AddRepoDialog(
                 Icon(
                     imageVector = Icons.Default.Public,
                     contentDescription = "Repo",
-                    tint = NekoVioletPrimary
+                    tint = proPrimary()
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Add Extension Repository")
@@ -814,7 +860,7 @@ fun SourcesTabContent(
                                     Icon(
                                         imageVector = Icons.Default.Verified,
                                         contentDescription = "Working source",
-                                        tint = NekoVioletPrimary,
+                                        tint = proPrimary(),
                                         modifier = Modifier.size(16.dp)
                                     )
                                 }
@@ -972,7 +1018,7 @@ fun GlobalSearchTabContent(
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = null,
-                            tint = NekoVioletPrimary,
+                            tint = proPrimary(),
                             modifier = Modifier.size(40.dp)
                         )
                         Spacer(modifier = Modifier.height(12.dp))
@@ -1116,6 +1162,7 @@ fun CatalogTabContent(
     minimal: Boolean = false,
     mode: String = "latest",
     onModeChange: (String) -> Unit = {},
+    onGenreSelect: (String) -> Unit = {},
     onRetry: () -> Unit,
     onMangaClick: (String) -> Unit,
     isLoadingMore: Boolean = false,
@@ -1136,7 +1183,7 @@ fun CatalogTabContent(
                     Icon(
                         imageVector = Icons.Default.Public,
                         contentDescription = null,
-                        tint = NekoVioletPrimary,
+                        tint = proPrimary(),
                         modifier = Modifier.size(40.dp)
                     )
                     Spacer(modifier = Modifier.height(12.dp))
@@ -1170,46 +1217,23 @@ fun CatalogTabContent(
             // as the "Filter" — typing a query always searches, whatever tab is active.
             // ALWAYS shown — including inside an opened extension (the user taps Popular/Latest
             // right inside the source's catalog).
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                    listOf("popular" to "Popular", "latest" to "Latest", "filter" to "Filter").forEach { (m, label) ->
-                        FilterChip(
-                            selected = mode == m,
-                            onClick = { onModeChange(m) },
-                            label = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    when (m) {
-                                        "popular" -> Icon(
-                                            imageVector = Icons.Default.Star,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        "latest" -> Icon(
-                                            imageVector = Icons.Default.Refresh,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        else -> Icon(
-                                            imageVector = Icons.Default.FilterList,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(label)
-                                }
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = Color.White
-                            ),
-                            modifier = Modifier.testTag("catalog_mode_$m")
-                        )
-                    }
-                }
+            com.example.ui.components.ProModeRow(mode = mode, onModeChange = onModeChange, modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(8.dp))
+            run {
+                var genreSel by remember { mutableStateOf("All") }
+                val genres = listOf("All", "Action", "Romance", "Comedy", "Isekai", "Drama")
+                com.example.ui.components.ProGenreRow(
+                    genres = genres,
+                    selected = genreSel,
+                    onSelect = { g ->
+                        genreSel = g
+                        val q = if (g == "All") "" else "tag:$g"
+                        onSearchQueryChange(q)
+                        onGenreSelect(q)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
 
         }
 
@@ -1412,32 +1436,20 @@ fun ExtensionsTabContent(
         ) {
             if (updatesPending.isNotEmpty()) {
                 item(key = "header_updates") {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Updates pending (${updatesPending.size})",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            color = NekoGoldBadge
-                        )
-                        if (updatingAll) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Updating...",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                    GlassCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.clip(CircleShape).background(proPrimary().copy(alpha = 0.2f)).padding(8.dp)) {
+                                Icon(Icons.Default.Refresh, null, tint = NekoGoldBadge, modifier = Modifier.size(20.dp))
                             }
-                        } else {
-                            Button(
-                                onClick = { onUpdateAll(updatesPending) },
-                                modifier = Modifier.testTag("update_all_button")
-                            ) {
-                                Text("Update all")
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("Updates pending (${updatesPending.size})", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = NekoGoldBadge)
+                                Text("Keep your extensions up to date for the best experience", style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            if (updatingAll) {
+                                CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                            } else {
+                                com.example.ui.components.ProPrimaryButton(label = "Update all", icon = Icons.Default.Download, onClick = { onUpdateAll(updatesPending) }, modifier = Modifier.testTag("update_all_button"))
                             }
                         }
                     }
@@ -1488,12 +1500,15 @@ fun ExtensionsTabContent(
 
 @Composable
 private fun SectionLabel(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 8.dp)
-    )
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+        Box(modifier = Modifier.width(3.dp).height(16.dp).clip(RoundedCornerShape(2.dp)).background(proButtonGradient()))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
 }
 
 @Composable
@@ -1531,27 +1546,21 @@ private fun ExtensionCardRow(
                                         text = ext.name,
                                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                         maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
                                     )
                                     if (ext.nsfw) {
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Surface(
-                                            color = NekoGoldBadge,
-                                            shape = RoundedCornerShape(4.dp)
-                                        ) {
-                                            Text(
-                                                text = "NSFW",
-                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                                                style = MaterialTheme.typography.labelSmall.copy(color = Color.White)
-                                            )
-                                        }
+                                        com.example.ui.components.ProNsfwBadge()
                                     }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    com.example.ui.components.ProLangBadge("EN")
                                 }
 
                                 Spacer(modifier = Modifier.height(2.dp))
 
                                 Text(
-                                    text = "v${ext.versionName} (${ext.versionCode}) • $repoName${cwLabel?.let { " • $it" } ?: ""}",
+                                    text = "v${ext.versionName} (${ext.versionCode}) • $repoName",
                                     style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -1646,6 +1655,8 @@ fun ReposTabContent(
     onRefreshRepo: (String) -> Unit,
     onDeleteRepo: (ExtensionRepoEntity) -> Unit
 ) {
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -1672,14 +1683,12 @@ fun ReposTabContent(
                     }
                 }
 
-                Button(
+                ProPrimaryButton(
+                    label = "Add Repo",
+                    icon = Icons.Default.Add,
                     onClick = onAddRepoClick,
                     modifier = Modifier.testTag("add_repo_button")
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Repo")
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Add Repo")
-                }
+                )
             }
         }
 
@@ -1700,83 +1709,105 @@ fun ReposTabContent(
                 .fillMaxWidth()
                 .testTag("repo_card_${repo.id}")
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Public,
-                        contentDescription = "Repo Icon",
-                        tint = NekoVioletPrimary,
-                        modifier = Modifier.size(32.dp)
-                    )
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = repo.name,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Public,
+                            contentDescription = "Repo Icon",
+                            tint = proPrimary(),
+                            modifier = Modifier.size(28.dp)
                         )
 
-                        Spacer(modifier = Modifier.height(2.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
 
-                        Text(
-                            text = repo.url,
-                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = repo.name,
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
 
-                        Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = repo.url,
+                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                shape = RoundedCornerShape(4.dp)
+                        if (repoBusy) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
+                        } else {
+                            IconButton(
+                                onClick = {
+                                    clipboardManager.setText(AnnotatedString(repo.url))
+                                    Toast.makeText(context, "Repo link copied", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.testTag("copy_repo_${repo.id}")
                             ) {
-                                Text(
-                                    text = "${repo.extensionCount} Extensions",
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                    style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Copy Repo Link",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            IconButton(
+                                onClick = { onRefreshRepo(repo.id) },
+                                modifier = Modifier.testTag("refresh_repo_${repo.id}")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "Refresh Repo",
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
                             }
 
-                            Spacer(modifier = Modifier.width(8.dp))
-
-                            Text(
-                                text = "Updated: ${formatTimestamp(repo.lastUpdated)}",
-                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            )
+                            IconButton(
+                                onClick = { onDeleteRepo(repo) },
+                                modifier = Modifier.testTag("delete_repo_${repo.id}")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Delete Repo",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
                         }
                     }
 
-                    if (repoBusy) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
-                    } else {
-                        IconButton(
-                            onClick = { onRefreshRepo(repo.id) },
-                            modifier = Modifier.testTag("refresh_repo_${repo.id}")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(4.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Refresh Repo",
-                                tint = MaterialTheme.colorScheme.primary
+                            Text(
+                                text = "${repo.extensionCount} Extensions",
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onPrimaryContainer)
                             )
                         }
 
-                        IconButton(
-                            onClick = { onDeleteRepo(repo) },
-                            modifier = Modifier.testTag("delete_repo_${repo.id}")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Delete Repo",
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Text(
+                            text = "Updated: ${formatTimestamp(repo.lastUpdated)}",
+                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
             }

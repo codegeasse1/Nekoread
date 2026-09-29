@@ -30,8 +30,11 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -59,9 +62,29 @@ import coil.compose.AsyncImage
 import com.example.data.local.MangaEntity
 import com.example.diagnostics.AppScrollProbe
 import com.example.ui.components.FloatingTopAppBar
+import com.example.ui.components.GlassCard
+import com.example.ui.components.ProEmptyCard
+import com.example.ui.components.ProEmptyHistoryArt
+import com.example.ui.components.ProSegmented
+import com.example.ui.components.ProTitle
 import com.example.ui.theme.GlassCardBorder
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CompassCalibration
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.MoreVert
 import com.example.ui.MainViewModel
-import com.example.ui.theme.NekoVioletPrimary
+import com.example.ui.components.proButtonGradient
+import com.example.ui.components.proPrimary
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import androidx.compose.runtime.LaunchedEffect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,57 +98,115 @@ fun UpdatesHistoryScreen(
     modifier: Modifier = Modifier
 ) {
     var selectedTabIndex by remember { mutableStateOf(0) }
+    var historyTarget by remember { mutableStateOf<Int?>(null) }
+    fun goToHistoryTab(i: Int) {
+        historyTarget = i
+        selectedTabIndex = i
+    }
     var showClearConfirm by remember { mutableStateOf(false) }
+    var historyMenuOpen by remember { mutableStateOf(false) }
+    var historySearchOpen by remember { mutableStateOf(false) }
+    var historyQuery by remember { mutableStateOf("") }
+    val filteredHistory = remember(historyManga, historyQuery) {
+        if (historyQuery.isBlank()) historyManga
+        else historyManga.filter { it.title.contains(historyQuery.trim(), ignoreCase = true) }
+    }
     val tabs = listOf("History", "Updates")
-
+    // Swipeable tabs: dragging left/right moves between History and Updates.
+    val historyPager = rememberPagerState(initialPage = 0) { tabs.size }
+    // Pager/tab sync, all in ONE effect so a segment tap and a swipe can never fight.
+    // Manual swipes are adopted only once the pager is fully settled (never mid-flight).
+    // The snap in `finally` guarantees the pager always ends exactly on a page.
+    LaunchedEffect(selectedTabIndex) {
+        try {
+            if (historyPager.currentPage != selectedTabIndex) {
+                historyPager.animateScrollToPage(selectedTabIndex)
+            }
+        } finally {
+            withContext(NonCancellable) { historyPager.scrollToPage(selectedTabIndex) }
+        }
+        historyTarget = null
+        snapshotFlow { Triple(historyPager.isScrollInProgress, historyPager.currentPage, historyTarget) }
+            .collect { (scrolling, p, tgt) ->
+                if (scrolling) return@collect
+                if (tgt != null) {
+                    if (p != selectedTabIndex || historyPager.currentPageOffsetFraction != 0f) {
+                        historyPager.animateScrollToPage(selectedTabIndex)
+                        historyPager.scrollToPage(selectedTabIndex)
+                    }
+                    historyTarget = null
+                } else if (p != selectedTabIndex) {
+                    selectedTabIndex = p
+                }
+            }
+    }
     Scaffold(
         containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0),
         topBar = {
             // Floating rounded glass pill (Hikari/taskbar style), matching the bottom nav pill.
             FloatingTopAppBar {
-                Column {
-                    TopAppBar(
-                        modifier = Modifier.height(40.dp),
-                        windowInsets = WindowInsets(0),
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                        title = {
-                            Text(
-                                text = "History & Updates",
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.titleMedium
+                Column(Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Box(modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(proButtonGradient()).padding(7.dp)) {
+                            Icon(Icons.Default.History, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("History ", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium)
+                                Text("& Updates", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium.copy(brush = proButtonGradient()))
+                            }
+                            Text("Your recent activity and latest updates", style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        IconButton(
+                            onClick = {
+                                historySearchOpen = !historySearchOpen
+                                if (!historySearchOpen) historyQuery = ""
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                if (historySearchOpen) Icons.Default.Close else Icons.Default.Search,
+                                null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(19.dp)
                             )
-                        },
-                        actions = {
-                            if (selectedTabIndex == 0 && historyManga.isNotEmpty()) {
-                                IconButton(
-                                    onClick = { showClearConfirm = true },
-                                    modifier = Modifier.testTag("clear_history_button")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Clear all history"
-                                    )
-                                }
+                        }
+                        Box {
+                            IconButton(onClick = { historyMenuOpen = true }, modifier = Modifier.size(36.dp)) {
+                                Icon(Icons.Default.MoreVert, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(19.dp))
+                            }
+                            DropdownMenu(
+                                expanded = historyMenuOpen,
+                                onDismissRequest = { historyMenuOpen = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Clear history") },
+                                    onClick = {
+                                        historyMenuOpen = false
+                                        showClearConfirm = true
+                                    }
+                                )
                             }
                         }
-                    )
-
-                    TabRow(
-                        selectedTabIndex = selectedTabIndex,
-                        containerColor = Color.Transparent,
-                        contentColor = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.height(36.dp)
-                    ) {
-                        tabs.forEachIndexed { index, title ->
-                            Tab(
-                                selected = selectedTabIndex == index,
-                                onClick = { selectedTabIndex = index },
-                                text = { Text(title, fontWeight = FontWeight.Bold) },
-                                modifier = Modifier.testTag("history_tab_$index")
-                            )
-                        }
                     }
+                    if (historySearchOpen) {
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = historyQuery,
+                            onValueChange = { historyQuery = it },
+                            placeholder = { Text("Search history...") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    ProSegmented(
+                        options = listOf("History" to Icons.Default.History, "Updates" to Icons.Default.Notifications),
+                        selected = selectedTabIndex,
+                        onSelect = { goToHistoryTab(it) }
+                    )
                 }
             }
         },
@@ -136,17 +217,23 @@ fun UpdatesHistoryScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            when (selectedTabIndex) {
+            HorizontalPager(
+                state = historyPager,
+                modifier = Modifier.fillMaxSize(),
+                key = { it }
+            ) { page ->
+            when (page) {
                 0 -> HistoryList(
-                    historyManga = historyManga,
+                    historyManga = filteredHistory,
                     onMangaClick = onMangaClick,
                     onReadChapterClick = onReadChapterClick,
                     onRemoveHistory = onRemoveHistory
                 )
-                1 -> UpdatesList(
-                    historyManga = historyManga,
+                else -> UpdatesList(
+                    historyManga = filteredHistory,
                     onMangaClick = onMangaClick
                 )
+            }
             }
         }
     }
@@ -180,32 +267,20 @@ fun HistoryList(
     historyManga: List<MangaEntity>,
     onMangaClick: (String) -> Unit,
     onReadChapterClick: (String, String) -> Unit,
-    onRemoveHistory: (String) -> Unit
+    onRemoveHistory: (String) -> Unit,
+    onExplore: (() -> Unit)? = null
 ) {
     if (historyManga.isEmpty()) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(32.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    imageVector = Icons.Default.History,
-                    contentDescription = null,
-                    modifier = Modifier.size(64.dp),
-                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "No reading history yet",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
-                Text(
-                    text = "Start reading chapters from your library or extension sources!",
-                    style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                )
-            }
+        Column(modifier = Modifier.fillMaxSize().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            ProEmptyCard(
+                title = "No reading",
+                titleAccent = "history yet",
+                body = "Start reading chapters from your library or extension sources!",
+                primaryLabel = "Explore Sources",
+                primaryIcon = Icons.Default.CompassCalibration,
+                onPrimary = { onExplore?.invoke() },
+                art = { ProEmptyHistoryArt() }
+            )
         }
     } else {
         val historyListState = rememberLazyListState()
@@ -254,7 +329,7 @@ fun HistoryList(
                             Text(
                                 text = manga.lastReadChapterName ?: "Chapter 1",
                                 style = MaterialTheme.typography.bodySmall.copy(
-                                    color = NekoVioletPrimary,
+                                    color = proPrimary(),
                                     fontWeight = FontWeight.Bold
                                 ),
                                 maxLines = 1,
@@ -357,7 +432,7 @@ fun UpdatesList(
                     Icon(
                         imageVector = Icons.Default.NewReleases,
                         contentDescription = "New",
-                        tint = NekoVioletPrimary,
+                        tint = proPrimary(),
                         modifier = Modifier.size(24.dp)
                     )
                 }

@@ -10,16 +10,18 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import com.example.ui.components.LocalAppAccent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
-private val DarkColorScheme = darkColorScheme(
-    primary = SleekVioletPrimary,
+private fun darkScheme(accent: AppAccent) = darkColorScheme(
+    primary = accent.primary,
     onPrimary = Color.White,
-    primaryContainer = SleekVioletContainer,
+    primaryContainer = accent.container,
     onPrimaryContainer = Color(0xFFEADDFF),
-    secondary = SleekCyanAccent,
+    secondary = accent.gradientEnd,
     onSecondary = Color.Black,
     tertiary = SleekGoldBadge,
     onTertiary = Color.Black,
@@ -36,10 +38,10 @@ private val DarkColorScheme = darkColorScheme(
     scrim = GlassScrim
 )
 
-private val LightColorScheme = lightColorScheme(
+private fun lightScheme(accent: AppAccent) = lightColorScheme(
     primary = SleekVioletPrimary,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFECE6FF),
+    primaryContainer = accent.primary.copy(alpha = 0.18f),
     onPrimaryContainer = Color(0xFF260067),
     secondary = Color(0xFF00B8D4),
     onSecondary = Color.White,
@@ -69,6 +71,7 @@ private val AppShapes = Shapes(
 fun NekoReadTheme(
     darkTheme: Boolean = true, // Default to sleek dark theme like Mihon
     dynamicColor: Boolean = false,
+    accent: AppAccent = AppAccent.VIOLET,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -76,14 +79,16 @@ fun NekoReadTheme(
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+        darkTheme -> darkScheme(accent)
+        else -> lightScheme(accent)
     }
 
+    CompositionLocalProvider(LocalAppAccent provides accent) {
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
         shapes = AppShapes,
         content = content
     )
+    }
 }

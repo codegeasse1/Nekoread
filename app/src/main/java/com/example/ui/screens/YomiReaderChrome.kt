@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -67,6 +68,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -841,8 +843,12 @@ private fun ReaderSettingsSheet(
     val tabs = listOf("Reading mode", "General", "Color")
     val sheetMaxHeight = (LocalConfiguration.current.screenHeightDp * 0.62f).dp
 
+    // Open fully expanded: with the default half-expanded sheet the first drag only
+    // expands the sheet and chapter scrolling starts on the second gesture.
+    val chapterSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = chapterSheetState,
         containerColor = SheetColor,
         contentColor = OnDark,
     ) {
@@ -1756,8 +1762,12 @@ private fun ChapterListSheet(
     chapterCoverModel: Any? = null,
 ) {
     val ctx = LocalContext.current
+    // Open fully expanded: with the default half-expanded sheet the first drag only
+    // expands the sheet and chapter scrolling starts on the second gesture.
+    val chapterSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = chapterSheetState,
         containerColor = SheetColor,
         contentColor = OnDark,
     ) {
@@ -1766,10 +1776,19 @@ private fun ChapterListSheet(
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
         )
+        // Open scrolled to the chapter being read (a couple of rows above it for
+        // context), so picking a nearby chapter never means scrolling down from the top.
+        val activeIndex = remember(chapters, activeChapterId) {
+            chapters.indexOfFirst { it.id == activeChapterId }
+        }
+        val listState = rememberLazyListState(
+            initialFirstVisibleItemIndex = (activeIndex - 2).coerceAtLeast(0)
+        )
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = 460.dp),
+            state = listState,
         ) {
             items(chapters, key = { it.id }) { ch ->
                 val active = ch.id == activeChapterId
