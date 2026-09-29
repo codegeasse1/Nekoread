@@ -181,12 +181,20 @@ fun LibraryScreen(
                 }
             }
     }
-    // Keep the selected chip visible: swiping to a far category scrolls the chip row so
-    // the active chip is shown in front instead of sitting off-screen.
+    // Keep the selected chip visible with a normal sliding row: if the newly selected
+    // chip is already on screen nothing moves; otherwise the row shifts just enough to
+    // bring it into view (never yanks it to the front).
     val chipRowState = rememberLazyListState()
     LaunchedEffect(selectedCategory, libraryPages) {
         val idx = if (selectedCategory == "All") 0 else libraryPages.indexOf(selectedCategory).coerceAtLeast(0)
-        if (idx in libraryPages.indices) chipRowState.scrollToItem(idx)
+        if (idx !in libraryPages.indices) return@LaunchedEffect
+        val visible = chipRowState.layoutInfo.visibleItemsInfo.map { it.index }
+        val first = visible.minOrNull() ?: return@LaunchedEffect
+        val last = visible.maxOrNull() ?: return@LaunchedEffect
+        when {
+            idx < first -> chipRowState.animateScrollToItem(idx)
+            idx > last -> chipRowState.animateScrollToItem((idx - (last - first)).coerceAtLeast(0))
+        }
     }
 
     // Tadami-style home: a "Continue Reading" hero banner on top, a horizontal "Recently Read"
