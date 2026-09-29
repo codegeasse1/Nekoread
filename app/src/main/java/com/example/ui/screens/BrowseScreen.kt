@@ -229,6 +229,15 @@ fun BrowseScreen(
     // manga detail screen and back — with plain `remember` the whole Browse composable resets to
     // the Sources tab on return, which felt like being "thrown out" of the catalog.
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(TAB_SOURCES) }
+    // Programmatic tab target: set synchronously alongside selectedTabIndex by every tab
+    // writer (pill taps, source open, tag search, exit). The settle collector below adopts
+    // a swipe ONLY when no jump is pending - without this, a tap's own settle emission
+    // races the jump animation and eats the tap, and a swipe that settles unseen is lost.
+    var browseTarget by remember { mutableStateOf<Int?>(null) }
+    fun goToBrowseTab(i: Int) {
+        browseTarget = i
+        selectedTabIndex = i
+    }
     val tabs = listOf("Sources", "Global", "Catalog", "Extensions", "Repos")
 
     val extensionSources: List<ExtensionSourceEntity> by viewModel.extensionSources.collectAsStateWithLifecycle()
@@ -305,7 +314,7 @@ fun BrowseScreen(
         activeSourceId = sourceId
         activeSourceBaseUrl = extensionSources.firstOrNull { it.id == sourceId }?.baseUrl ?: ""
         searchQuery = "tag:$tag"
-        selectedTabIndex = TAB_CATALOG
+        goToBrowseTab(TAB_CATALOG)
         // "filter" so the catalog's Filter chip matches the filtered results being shown (the tag
         // branch of searchCatalog ignores the mode, but the chip is the user's only hint about what
         // the grid is showing).
@@ -319,7 +328,7 @@ fun BrowseScreen(
         val tag = globalTagSearch ?: return@LaunchedEffect
         if (tag.isBlank()) return@LaunchedEffect
         AppDiagnostics.log("global tag search apply tag=$tag (route)")
-        selectedTabIndex = TAB_GLOBAL
+        goToBrowseTab(TAB_GLOBAL)
         globalQuery = "tag:$tag"
         lastAppliedGlobalQuery = "tag:$tag"
         viewModel.globalSearch("tag:$tag")
@@ -365,11 +374,9 @@ fun BrowseScreen(
     val browseScope = rememberCoroutineScope()
     val browsePager = rememberPagerState(initialPage = selectedTabIndex) { 5 }
     // Pager/tab sync, all in ONE effect so a tab tap and a swipe can never fight.
-    // Tab jumps (pill taps, source open, tag search) animate to the tab; manual swipes
-    // are adopted only once the pager is fully settled (never mid-flight - adopting the
-    // transient currentPage mid-flight cancels the in-flight animation and either strands
-    // the pager half on each page or eats the tap entirely). The snap in `finally` guarantees the pager always ends exactly on a page, even when a second tap
-    // cancels the first animation midway.
+    // Manual swipes are adopted only once the pager is fully settled (never mid-flight).
+    // The snap in `finally` guarantees the pager always ends exactly on a page, even when
+    // a second tap cancels the first animation midway.
     LaunchedEffect(selectedTabIndex) {
         try {
             if (browsePager.currentPage != selectedTabIndex) {
@@ -378,16 +385,26 @@ fun BrowseScreen(
         } finally {
             withContext(NonCancellable) { browsePager.scrollToPage(selectedTabIndex) }
         }
-        snapshotFlow { browsePager.currentPage }.collect { p ->
-            if (!browsePager.isScrollInProgress && p != selectedTabIndex) {
-                selectedTabIndex = p
-                if (p == TAB_CATALOG && activeSourceId.isNotBlank() &&
-                    catalogResults.isEmpty() && !catalogLoading
-                ) {
-                    viewModel.loadCatalog(activeSourceId, searchQuery)
+        browseTarget = null
+        snapshotFlow { Triple(browsePager.isScrollInProgress, browsePager.currentPage, browseTarget) }
+            .collect { (scrolling, p, tgt) ->
+                if (scrolling) return@collect
+                if (tgt != null) {
+                    // A jump was grabbed mid-flight: finish the trip, then release it.
+                    if (p != selectedTabIndex || browsePager.currentPageOffsetFraction != 0f) {
+                        browsePager.animateScrollToPage(selectedTabIndex)
+                        browsePager.scrollToPage(selectedTabIndex)
+                    }
+                    browseTarget = null
+                } else if (p != selectedTabIndex) {
+                    selectedTabIndex = p
+                    if (p == TAB_CATALOG && activeSourceId.isNotBlank() &&
+                        catalogResults.isEmpty() && !catalogLoading
+                    ) {
+                        viewModel.loadCatalog(activeSourceId, searchQuery)
+                    }
                 }
             }
-        }
     }
     // Browsing a source's catalog hides the outer "Browse & Extensions" chrome (title + tab row)
     // and shows a minimal Tadami-style bar: back arrow + the source's name.
@@ -409,7 +426,7 @@ fun BrowseScreen(
             activeSourceId = ""
             activeSourceBaseUrl = ""
             searchQuery = ""
-            selectedTabIndex = TAB_SOURCES
+            goToBrowseTab(TAB_SOURCES)
         }
     }
 
@@ -499,7 +516,7 @@ fun BrowseScreen(
                                 badgeCount = pendingUpdates,
                                 badgeTab = TAB_EXTENSIONS,
                                 onSelect = { index ->
-                                    selectedTabIndex = index
+                                    goToBrowseTab(index)
                                     if (index == TAB_CATALOG && activeSourceId.isNotBlank() &&
                                         catalogResults.isEmpty() && !catalogLoading
                                     ) {
@@ -534,14 +551,14 @@ fun BrowseScreen(
                         activeSourceBaseUrl = source.baseUrl
                         searchQuery = ""
                         viewModel.loadCatalog(source.id, "")
-                        selectedTabIndex = TAB_CATALOG
+                        goToBrowseTab(TAB_CATALOG)
                     },
                     onBrowsePopular = { source ->
                         activeSourceId = source.id
                         activeSourceBaseUrl = source.baseUrl
                         searchQuery = ""
                         viewModel.loadCatalog(source.id, "", 1, "popular")
-                        selectedTabIndex = TAB_CATALOG
+                        goToBrowseTab(TAB_CATALOG)
                     },
                     onOpenWebView = { source ->
                         webviewTarget = source.baseUrl to sourceUserAgent(source.id)
