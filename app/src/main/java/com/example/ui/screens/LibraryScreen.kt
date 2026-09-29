@@ -61,6 +61,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -143,31 +145,23 @@ fun LibraryScreen(
     // mirroring the swipeable tabs on Browse and History.
     val libraryPages = remember(categories) { listOf("All") + categories.map { it.name } }
     val libraryPager = rememberPagerState { libraryPages.size }
-    // Category jumps (chip taps): animate there, then snap, so the pager can never
-    // rest between pages.
+    // Pager/category sync, all in ONE effect so a chip tap and a swipe can never fight.
+    // Chip taps animate to the category page; manual swipes switch the category only once
+    // the pager is fully settled (never mid-flight). The snap in `finally` guarantees
+    // the pager always ends exactly on a page, even when a second tap cancels the first.
     LaunchedEffect(selectedCategory, libraryPages) {
         val idx = libraryPages.indexOf(selectedCategory).coerceAtLeast(0)
-        if (libraryPager.currentPage != idx) {
-            libraryPager.animateScrollToPage(idx)
-            libraryPager.scrollToPage(idx)
+        try {
+            if (libraryPager.currentPage != idx) {
+                libraryPager.animateScrollToPage(idx)
+            }
+        } finally {
+            withContext(NonCancellable) { libraryPager.scrollToPage(idx) }
         }
-    }
-    // Manual swipes switch the category ONLY once the pager has fully settled. Adopting
-    // the transient currentPage mid-flight cancels the in-flight animation and strands
-    // the pager half on each page with nothing left to recover it - this settle collector
-    // is the only writer back to the category, so that state is unreachable.
-    LaunchedEffect(libraryPager, libraryPages) {
-        snapshotFlow { Triple(libraryPager.isScrollInProgress, libraryPager.currentPage, selectedCategory) }.collect { (scrolling, p, sel) ->
-            if (!scrolling) {
-                if (libraryPager.currentPageOffsetFraction != 0f) {
-                    // Interrupted-animation leftover: finish the trip to the selected category.
-                    val idx = libraryPages.indexOf(sel).coerceAtLeast(0)
-                    libraryPager.animateScrollToPage(idx)
-                    libraryPager.scrollToPage(idx)
-                } else {
-                    val name = libraryPages.getOrNull(p) ?: return@collect
-                    if (name != sel) viewModel.setSelectedCategory(name)
-                }
+        snapshotFlow { libraryPager.currentPage }.collect { p ->
+            if (!libraryPager.isScrollInProgress) {
+                val name = libraryPages.getOrNull(p) ?: return@collect
+                if (name != selectedCategory) viewModel.setSelectedCategory(name)
             }
         }
     }
@@ -295,7 +289,7 @@ fun LibraryScreen(
                     }
 
                     if (!selectionMode) {
-                        // Full-width category chips row â several fit at once, the rest scroll.
+                        // Full-width category chips row — several fit at once, the rest scroll.
                         LazyRow(
                             state = chipRowState,
                             modifier = Modifier.fillMaxWidth(),
@@ -648,7 +642,7 @@ private fun ContinueReadingHero(
 ) {
     AppDiagnostics.noteCompose("hero")
     // Plain surface instead of Material3 `Card`: a Card is a pointerInput + `Modifier.surface`
-    // + elevation shadow + a CompositionLocalProvider for its content colour â several nodes per
+    // + elevation shadow + a CompositionLocalProvider for its content colour — several nodes per
     // hero for what is a static rounded rectangle. The app-level frame logs showed the library
     // hero costing ~140ms to compose (`msg 143ms composed=herox1` -> `frame anim=145ms`), and the
     // hero is the one big cell that is always on screen, so cutting all of it is worth it.
@@ -674,7 +668,7 @@ private fun ContinueReadingHero(
                 .size(1080, 560)
                 // Its own memory-cache key: shared with the grid/list "cover:<id>" key it would
                 // hand a 1080x560 bitmap to a 130dp grid cell (and keep ~600k pixels resident
-                // per manga) â the grid must cache its own small bitmap.
+                // per manga) — the grid must cache its own small bitmap.
                 .memoryCacheKey("cover-hero:${manga.id}")
                 .diskCacheKey("cover:${manga.id}:${manga.coverUrl}")
                 .build()
@@ -718,7 +712,7 @@ private fun ContinueReadingHero(
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "Chapter ${manga.lastReadChapterName ?: "1"}",
+                text = manga.lastReadChapterName?.let { if (it.startsWith("chapter", ignoreCase = true)) it else "Chapter $it" } ?: "Chapter 1",
                 style = HeroChapterStyle,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -736,7 +730,7 @@ private fun ContinueReadingHero(
                     .padding(horizontal = 24.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(text = "â¶ Resume", style = HeroResumeStyle)
+                Text(text = "▶ Resume", style = HeroResumeStyle)
             }
         }
     }
